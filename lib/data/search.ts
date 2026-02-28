@@ -1,5 +1,5 @@
-import { electronicsComponents } from "./components";
-import type { ElectronicsComponent } from "./types";
+import { electronicsComponents } from './components';
+import type { ElectronicsComponent } from './types';
 
 export function lookupComponent(query: string): ElectronicsComponent | null {
   const q = query.toLowerCase().trim();
@@ -9,15 +9,12 @@ export function lookupComponent(query: string): ElectronicsComponent | null {
   if (exactId) return exactId;
 
   // Exact name match (case-insensitive)
-  const exactName = electronicsComponents.find(
-    (c) => c.name.toLowerCase() === q
-  );
+  const exactName = electronicsComponents.find((c) => c.name.toLowerCase() === q);
   if (exactName) return exactName;
 
   // Partial name match
   const partialName = electronicsComponents.find(
-    (c) =>
-      c.name.toLowerCase().includes(q) || c.id.includes(q) || q.includes(c.id)
+    (c) => c.name.toLowerCase().includes(q) || c.id.includes(q) || q.includes(c.id)
   );
   if (partialName) return partialName;
 

@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
-import { isImageFile, resizeImageToBase64 } from "@/lib/utils/image";
+import { useRef, useState, type KeyboardEvent, type ChangeEvent } from 'react';
+import { isImageFile, resizeImageToBase64 } from '@/lib/utils/image';
 
 interface ChatInputProps {
   onSend: (text: string, imageDataUrl?: string) => void;
@@ -9,7 +9,7 @@ interface ChatInputProps {
 }
 
 export function ChatInput({ onSend, isLoading }: ChatInputProps) {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageData, setImageData] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -24,13 +24,13 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleImageSelect(file);
-    e.target.value = "";
+    e.target.value = '';
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     for (const item of items) {
-      if (item.type.startsWith("image/")) {
+      if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (file) handleImageSelect(file);
         break;
@@ -48,13 +48,13 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
     e?.preventDefault();
     if (!input.trim() && !imageData) return;
     onSend(input, imageData ?? undefined);
-    setInput("");
+    setInput('');
     setImagePreview(null);
     setImageData(null);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
@@ -81,7 +81,7 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
             />
             <button
               onClick={removeImage}
-              className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white hover:bg-red-600"
+              className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white hover:bg-red-600"
             >
               x
             </button>
@@ -96,7 +96,17 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
           title="Upload image"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
             <circle cx="9" cy="9" r="2" />
             <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
@@ -127,11 +137,32 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
         >
           {isLoading ? (
             <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="m5 12 7-7 7 7" />
               <path d="M12 19V5" />
             </svg>

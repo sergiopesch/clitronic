@@ -1,13 +1,9 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import type { ElectronicsComponent } from "@/lib/data/types";
+import { useState } from 'react';
+import type { ElectronicsComponent } from '@/lib/data/types';
 
-export function ComponentCard({
-  component,
-}: {
-  component: ElectronicsComponent;
-}) {
+export function ComponentCard({ component }: { component: ElectronicsComponent }) {
   const [expanded, setExpanded] = useState(false);
   const ds = component.datasheetInfo;
 
@@ -16,9 +12,7 @@ export function ComponentCard({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-            {component.name}
-          </h3>
+          <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{component.name}</h3>
           <span className="inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
             {component.category}
           </span>
@@ -28,16 +22,9 @@ export function ComponentCard({
       {/* Specs */}
       <div className="mt-3 grid grid-cols-2 gap-2">
         {component.specs.map((spec) => (
-          <div
-            key={spec.label}
-            className="rounded-lg bg-zinc-50 p-2 dark:bg-zinc-800"
-          >
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">
-              {spec.label}
-            </div>
-            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              {spec.value}
-            </div>
+          <div key={spec.label} className="rounded-lg bg-zinc-50 p-2 dark:bg-zinc-800">
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">{spec.label}</div>
+            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{spec.value}</div>
           </div>
         ))}
       </div>
@@ -47,9 +34,7 @@ export function ComponentCard({
         <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
           Circuit Example
         </div>
-        <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-          {component.circuitExample}
-        </p>
+        <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">{component.circuitExample}</p>
       </div>
 
       {/* Expandable datasheet section */}
@@ -59,19 +44,15 @@ export function ComponentCard({
             onClick={() => setExpanded(!expanded)}
             className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           >
-            {expanded ? "Hide" : "Show"} datasheet details
+            {expanded ? 'Hide' : 'Show'} datasheet details
           </button>
 
           {expanded && (
             <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
               {/* Pinout */}
               <div>
-                <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                  Pinout
-                </div>
-                <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                  {ds.pinout}
-                </p>
+                <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Pinout</div>
+                <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">{ds.pinout}</p>
               </div>
 
               {/* Max Ratings */}
@@ -121,9 +102,7 @@ export function ComponentCard({
                         <th className="py-1 pr-3 text-left text-zinc-500 dark:text-zinc-400">
                           Max
                         </th>
-                        <th className="py-1 text-left text-zinc-500 dark:text-zinc-400">
-                          Unit
-                        </th>
+                        <th className="py-1 text-left text-zinc-500 dark:text-zinc-400">Unit</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -136,17 +115,15 @@ export function ComponentCard({
                             {c.parameter}
                           </td>
                           <td className="py-1 pr-3 text-zinc-900 dark:text-zinc-100">
-                            {c.min ?? "—"}
+                            {c.min ?? '—'}
                           </td>
                           <td className="py-1 pr-3 text-zinc-900 dark:text-zinc-100">
-                            {c.typical ?? "—"}
+                            {c.typical ?? '—'}
                           </td>
                           <td className="py-1 pr-3 text-zinc-900 dark:text-zinc-100">
-                            {c.max ?? "—"}
+                            {c.max ?? '—'}
                           </td>
-                          <td className="py-1 text-zinc-900 dark:text-zinc-100">
-                            {c.unit}
-                          </td>
+                          <td className="py-1 text-zinc-900 dark:text-zinc-100">{c.unit}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -173,12 +150,8 @@ export function ComponentCard({
 
               {/* Tips */}
               <div>
-                <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                  Tips
-                </div>
-                <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                  {ds.tips}
-                </p>
+                <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Tips</div>
+                <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">{ds.tips}</p>
               </div>
             </div>
           )}

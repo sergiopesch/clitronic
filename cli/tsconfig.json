@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "esModuleInterop": true,
@@ -13,5 +13,5 @@
       "@data/*": ["../lib/data/*"]
     }
   },
-  "include": ["bin/**/*.ts", "src/**/*.ts", "../lib/data/**/*.ts"]
+  "include": ["bin/**/*.ts", "src/**/*.ts"]
 }

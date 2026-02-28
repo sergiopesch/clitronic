@@ -1,22 +1,22 @@
-import chalk from "chalk";
-import { searchComponents } from "../../../lib/data/search.js";
+import chalk from 'chalk';
+import { searchComponents } from '../../../lib/data/search.js';
 
 export function listCommand(category?: string) {
   const components = searchComponents({ category });
 
   if (components.length === 0) {
     console.log(chalk.red(`\nNo components found for category: "${category}"`));
-    console.log(chalk.gray("Valid categories: passive, active, input, output"));
+    console.log(chalk.gray('Valid categories: passive, active, input, output'));
     return;
   }
 
-  console.log("");
+  console.log('');
   if (category) {
     console.log(chalk.bold(`${category.toUpperCase()} Components:`));
   } else {
-    console.log(chalk.bold("All Components:"));
+    console.log(chalk.bold('All Components:'));
   }
-  console.log("");
+  console.log('');
 
   const grouped = new Map<string, typeof components>();
   for (const c of components) {
@@ -32,6 +32,6 @@ export function listCommand(category?: string) {
         `    ${chalk.white(item.name.padEnd(22))} ${chalk.gray(item.description.slice(0, 60))}...`
       );
     }
-    console.log("");
+    console.log('');
   }
 }

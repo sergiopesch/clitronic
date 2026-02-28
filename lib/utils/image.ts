@@ -16,13 +16,13 @@ export async function resizeImageToBase64(file: File): Promise<string> {
           height = Math.round(height * ratio);
         }
 
-        const canvas = document.createElement("canvas");
+        const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext("2d")!;
+        const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, width, height);
 
-        const base64 = canvas.toDataURL("image/jpeg", QUALITY);
+        const base64 = canvas.toDataURL('image/jpeg', QUALITY);
         resolve(base64);
       };
       img.onerror = reject;
@@ -34,5 +34,5 @@ export async function resizeImageToBase64(file: File): Promise<string> {
 }
 
 export function isImageFile(file: File): boolean {
-  return file.type.startsWith("image/");
+  return file.type.startsWith('image/');
 }

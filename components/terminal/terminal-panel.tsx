@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 
 const HELP_TEXT = `Clitronic Terminal - Hardware Companion
 
@@ -18,17 +18,14 @@ Examples:
 `;
 
 export function TerminalPanel() {
-  const [lines, setLines] = useState<string[]>([
-    "Clitronic v0.1.0 - Type 'help' for commands",
-    "",
-  ]);
-  const [input, setInput] = useState("");
+  const [lines, setLines] = useState<string[]>(["Clitronic v0.1.0 - Type 'help' for commands", '']);
+  const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [lines]);
 
   const addLines = (...newLines: string[]) => {
@@ -39,104 +36,104 @@ export function TerminalPanel() {
     addLines(`> ${cmd}`);
     const parts = cmd.trim().split(/\s+/);
     const command = parts[0]?.toLowerCase();
-    const args = parts.slice(1).join(" ");
+    const args = parts.slice(1).join(' ');
 
     if (!command) return;
 
-    if (command === "help") {
+    if (command === 'help') {
       addLines(HELP_TEXT);
       return;
     }
 
-    if (command === "clear") {
-      setLines(["Clitronic v0.1.0 - Type 'help' for commands", ""]);
+    if (command === 'clear') {
+      setLines(["Clitronic v0.1.0 - Type 'help' for commands", '']);
       return;
     }
 
-    if (command === "list") {
+    if (command === 'list') {
       setIsProcessing(true);
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [
               {
-                role: "user",
+                role: 'user',
                 content: args
                   ? `List all ${args} components from your knowledge base. Be concise - just list the name and a one-line description for each.`
-                  : "List all components in your knowledge base. Be concise - just list the name and a one-line description for each, grouped by category.",
+                  : 'List all components in your knowledge base. Be concise - just list the name and a one-line description for each, grouped by category.',
               },
             ],
           }),
         });
         const text = await readStreamAsText(res);
-        addLines(text, "");
+        addLines(text, '');
       } catch {
-        addLines("Error: Failed to fetch component list", "");
+        addLines('Error: Failed to fetch component list', '');
       }
       setIsProcessing(false);
       return;
     }
 
-    if (command === "info") {
+    if (command === 'info') {
       if (!args) {
-        addLines("Usage: info <component-name>", "");
+        addLines('Usage: info <component-name>', '');
         return;
       }
       setIsProcessing(true);
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [
               {
-                role: "user",
+                role: 'user',
                 content: `Look up the component "${args}" and give me its full specs, pinout, circuit example, and tips. Use your lookup_component tool.`,
               },
             ],
           }),
         });
         const text = await readStreamAsText(res);
-        addLines(text, "");
+        addLines(text, '');
       } catch {
-        addLines("Error: Failed to fetch component info", "");
+        addLines('Error: Failed to fetch component info', '');
       }
       setIsProcessing(false);
       return;
     }
 
-    if (command === "ask") {
+    if (command === 'ask') {
       if (!args) {
-        addLines("Usage: ask <your question>", "");
+        addLines('Usage: ask <your question>', '');
         return;
       }
       setIsProcessing(true);
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: [{ role: "user", content: args }],
+            messages: [{ role: 'user', content: args }],
           }),
         });
         const text = await readStreamAsText(res);
-        addLines(text, "");
+        addLines(text, '');
       } catch {
-        addLines("Error: Failed to get response", "");
+        addLines('Error: Failed to get response', '');
       }
       setIsProcessing(false);
       return;
     }
 
-    addLines(`Unknown command: ${command}. Type 'help' for available commands.`, "");
+    addLines(`Unknown command: ${command}. Type 'help' for available commands.`, '');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !isProcessing) {
+    if (e.key === 'Enter' && !isProcessing) {
       handleCommand(input);
-      setInput("");
+      setInput('');
     }
   };
 
@@ -147,7 +144,7 @@ export function TerminalPanel() {
     >
       <div className="flex-1 overflow-y-auto p-4">
         {lines.map((line, i) => (
-          <div key={i} className="whitespace-pre-wrap leading-relaxed">
+          <div key={i} className="leading-relaxed whitespace-pre-wrap">
             {line}
           </div>
         ))}
@@ -162,9 +159,7 @@ export function TerminalPanel() {
             className="flex-1 border-none bg-transparent text-green-400 outline-none"
             autoFocus
           />
-          {isProcessing && (
-            <span className="animate-pulse text-yellow-400">thinking...</span>
-          )}
+          {isProcessing && <span className="animate-pulse text-yellow-400">thinking...</span>}
         </div>
         <div ref={bottomRef} />
       </div>
@@ -174,10 +169,10 @@ export function TerminalPanel() {
 
 async function readStreamAsText(response: Response): Promise<string> {
   const reader = response.body?.getReader();
-  if (!reader) return "Error: No response body";
+  if (!reader) return 'Error: No response body';
 
   const decoder = new TextDecoder();
-  let result = "";
+  let result = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -185,7 +180,7 @@ async function readStreamAsText(response: Response): Promise<string> {
     const chunk = decoder.decode(value, { stream: true });
     // Parse the Vercel AI SDK data stream format
     // Lines look like: 0:"text content"\n
-    const lines = chunk.split("\n");
+    const lines = chunk.split('\n');
     for (const line of lines) {
       if (line.startsWith('0:"')) {
         // Text delta
@@ -199,5 +194,5 @@ async function readStreamAsText(response: Response): Promise<string> {
     }
   }
 
-  return result || "(No response)";
+  return result || '(No response)';
 }

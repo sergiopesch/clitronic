@@ -15,7 +15,7 @@ export interface DatasheetInfo {
 export interface ElectronicsComponent {
   id: string;
   name: string;
-  category: "passive" | "active" | "input" | "output";
+  category: 'passive' | 'active' | 'input' | 'output';
   description: string;
   specs: {
     label: string;

@@ -1,30 +1,30 @@
-"use client";
+'use client';
 
-import type { UIMessage } from "ai";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { ComponentCard } from "./component-card";
-import type { ElectronicsComponent } from "@/lib/data/types";
+import type { UIMessage } from 'ai';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { ComponentCard } from './component-card';
+import type { ElectronicsComponent } from '@/lib/data/types';
 
 export function MessageBubble({ message }: { message: UIMessage }) {
-  const isUser = message.role === "user";
+  const isUser = message.role === 'user';
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-3 ${
           isUser
-            ? "bg-blue-600 text-white"
-            : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+            ? 'bg-blue-600 text-white'
+            : 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
         }`}
       >
         {message.parts.map((part, i) => {
-          if (part.type === "text") {
+          if (part.type === 'text') {
             return (
               <div
                 key={i}
                 className={`prose prose-sm max-w-none ${
-                  isUser ? "prose-invert" : "dark:prose-invert"
+                  isUser ? 'prose-invert' : 'dark:prose-invert'
                 }`}
               >
                 <ReactMarkdown
@@ -59,26 +59,22 @@ export function MessageBubble({ message }: { message: UIMessage }) {
             );
           }
 
-          if (part.type === "file") {
+          if (part.type === 'file') {
             const filePart = part as unknown as {
-              type: "file";
+              type: 'file';
               url: string;
               mediaType: string;
             };
-            if (filePart.mediaType?.startsWith("image/")) {
+            if (filePart.mediaType?.startsWith('image/')) {
               return (
                 <div key={i} className="mb-2">
-                  <img
-                    src={filePart.url}
-                    alt="Uploaded"
-                    className="max-h-48 rounded-lg"
-                  />
+                  <img src={filePart.url} alt="Uploaded" className="max-h-48 rounded-lg" />
                 </div>
               );
             }
           }
 
-          if (part.type === "tool-invocation") {
+          if (part.type === 'tool-invocation') {
             const inv = (
               part as unknown as {
                 toolInvocation: {
@@ -88,18 +84,15 @@ export function MessageBubble({ message }: { message: UIMessage }) {
                 };
               }
             ).toolInvocation;
-            if (!inv || inv.state !== "result") return null;
+            if (!inv || inv.state !== 'result') return null;
 
-            if (inv.toolName === "lookup_component" && inv.result?.found) {
+            if (inv.toolName === 'lookup_component' && inv.result?.found) {
               return (
-                <ComponentCard
-                  key={i}
-                  component={inv.result.component as ElectronicsComponent}
-                />
+                <ComponentCard key={i} component={inv.result.component as ElectronicsComponent} />
               );
             }
 
-            if (inv.toolName === "search_components" && inv.result) {
+            if (inv.toolName === 'search_components' && inv.result) {
               const components = (
                 inv.result as {
                   components: Array<{
@@ -124,9 +117,7 @@ export function MessageBubble({ message }: { message: UIMessage }) {
                             {c.category}
                           </span>
                         </div>
-                        <p className="mt-1 text-sm opacity-80">
-                          {c.description.slice(0, 120)}...
-                        </p>
+                        <p className="mt-1 text-sm opacity-80">{c.description.slice(0, 120)}...</p>
                       </div>
                     ))}
                   </div>
