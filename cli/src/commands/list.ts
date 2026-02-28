@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { searchComponents } from '../../../lib/data/search.js';
+import { searchComponents } from '../data/index.js';
 
 export function listCommand(category?: string) {
   const components = searchComponents({ category });

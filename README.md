@@ -81,6 +81,7 @@ clitronic/
 ```
 
 **Key Technologies:**
+
 - **Web**: Next.js 15, React 19, Tailwind CSS
 - **AI**: Claude Sonnet via Vercel AI SDK v5
 - **CLI**: Commander.js, @anthropic-ai/sdk

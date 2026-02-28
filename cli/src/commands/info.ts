@@ -1,6 +1,5 @@
 import chalk from 'chalk';
-import { electronicsComponents } from '../../../lib/data/components.js';
-import { lookupComponent } from '../../../lib/data/search.js';
+import { electronicsComponents, lookupComponent } from '../data/index.js';
 
 export function infoCommand(query: string) {
   const component = lookupComponent(query);
