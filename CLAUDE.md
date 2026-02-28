@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Clitronic is a multimodal AI companion for electronics enthusiasts. It features a terminal-style interface with voice, camera, and image input support, powered by Claude API.
+Clitronic is an AI-powered terminal companion for electronics enthusiasts. It features a keyboard-driven terminal interface with consistent cyan/blue branding, powered by Claude API.
 
 ## Architecture
 
@@ -17,20 +17,17 @@ clitronic/
 │   └── src/data/          # Local copy of component data
 ├── components/
 │   ├── api-key/           # API key provider and modal
-│   └── terminal/          # Rich terminal with multimodal input
-├── lib/
-│   ├── ai/                # System prompt & tool definitions
-│   └── data/              # Component knowledge base (16 components)
-└── types/
-    └── speech.d.ts        # Web Speech API TypeScript declarations
+│   └── terminal/          # Rich terminal interface
+└── lib/
+    ├── ai/                # System prompt & tool definitions
+    └── data/              # Component knowledge base (16 components)
 ```
 
 ### Key Design Decisions
 
 - **Web app**: Next.js 15 (App Router) + React 19 + Tailwind CSS
-- **Terminal UI**: Single rich-terminal component with multimodal action bar
-- **Voice Input**: Web Speech API with real-time transcription
-- **Camera**: HTML5 file input with `capture="environment"` for mobile
+- **Terminal UI**: Keyboard-driven with electronics-themed ASCII art
+- **Branding**: Consistent cyan/blue color scheme throughout
 - **API Key**: Bring Your Own Key (BYOK) - stored in localStorage only
 - **CLI**: Standalone package using `@anthropic-ai/sdk` directly
 
@@ -92,28 +89,29 @@ npm run start -- list active       # Filter by category
 - Streaming text output with chalk coloring
 - Model: `claude-sonnet-4-20250514`
 
-## Multimodal Features
+## Terminal Features
 
-### Voice Input
+### Commands
 
-- Web Speech API (`SpeechRecognition`)
-- Real-time transcription while speaking
-- Automatically sends command when speech ends
-- TypeScript declarations in `types/speech.d.ts`
+- `help` - Show available commands with ASCII box
+- `list [category]` - List components (passive, active, input, output)
+- `info <component>` - Component details
+- `identify` - Upload image for component identification
+- `key` - Set or update Anthropic API key
+- `clear` - Clear terminal
 
-### Camera/Image
+### Image Upload
 
-- File input with `capture="environment"` for rear camera
-- Supports upload from gallery
+- Triggered via `identify` command
 - Images sent as base64 data URLs to API
 - Claude analyzes and identifies components
 
-### Terminal Commands
+### UI Elements
 
-- `help` - Show available commands
-- `list [category]` - List components
-- `info <component>` - Component details
-- `clear` - Clear terminal
+- Circuit-themed ASCII art header
+- Status bar showing connection state
+- Command history with ↑↓ navigation
+- Consistent cyan/blue color scheme
 
 ## Component Database
 

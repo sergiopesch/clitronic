@@ -1,8 +1,8 @@
 # Clitronic
 
-**Multimodal AI companion for electronics — speak, snap, or type**
+**AI-powered terminal companion for electronics and robotics**
 
-A modern terminal interface that helps you understand electronic components, circuits, and calculations. Voice-first, camera-ready, powered by Claude AI.
+A beautiful terminal interface that helps you understand electronic components, circuits, and calculations. Keyboard-driven, powered by Claude AI.
 
 ## Quick Start
 
@@ -16,16 +16,18 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — click any action button and enter your API key when prompted.
+Open [http://localhost:3000](http://localhost:3000) and type `key` to enter your API key.
 
 ## Features
 
-### Multimodal Input
+### Terminal Commands
 
-- **🎤 Voice** — Speak your questions naturally using Web Speech API
-- **📷 Camera** — Point at a component and snap to identify (mobile)
-- **📁 Upload** — Drag and drop or select images to identify components
-- **⌨️ Type** — Classic terminal input for commands and questions
+- `help` — Show all available commands
+- `list [category]` — List components (passive, active, input, output)
+- `info <component>` — Component details (e.g., `info led`)
+- `identify` — Upload an image to identify a component
+- `key` — Set or update your Anthropic API key
+- `clear` — Clear the terminal
 
 ### AI Capabilities
 
@@ -36,10 +38,11 @@ Open [http://localhost:3000](http://localhost:3000) — click any action button 
 
 ### Terminal Experience
 
-- Beautiful ASCII art logo with gradient colors
+- Electronics-themed ASCII art with circuit diagrams
+- Consistent cyan/blue branding
 - Markdown rendering with syntax highlighting
-- Command history (arrow keys)
-- Color-coded output (commands, responses, errors)
+- Command history (↑↓ arrow keys)
+- Status bar with connection indicator
 
 ## Security
 
@@ -60,14 +63,7 @@ npm run build    # Production build
 npm start        # Start production server
 ```
 
-**Terminal Commands:**
-
-- `help` — Show available commands
-- `list [category]` — List components (passive, active, input, output)
-- `info <component>` — Component details (e.g., `info led`)
-- `clear` — Clear the terminal
-
-Or just ask anything: _"What resistor do I need for a 5V LED?"_
+Just ask anything: _"What resistor do I need for a 5V LED?"_
 
 ### CLI
 
@@ -103,25 +99,22 @@ clitronic/
 │   └── src/               # Commands and data
 ├── components/
 │   ├── api-key/           # API key management
-│   └── terminal/          # Rich terminal with multimodal input
-├── lib/
-│   ├── ai/                # System prompt & tool definitions
-│   └── data/              # Component knowledge base
-└── types/                  # TypeScript declarations (Web Speech API)
+│   └── terminal/          # Rich terminal interface
+└── lib/
+    ├── ai/                # System prompt & tool definitions
+    └── data/              # Component knowledge base
 ```
 
 **Technologies:**
 
 - **Web**: Next.js 15, React 19, Tailwind CSS
 - **AI**: Claude Sonnet via Vercel AI SDK v5
-- **Voice**: Web Speech API
 - **CLI**: Commander.js, @anthropic-ai/sdk
 
 ## Requirements
 
 - Node.js 20+
 - Anthropic API key ([get one here](https://console.anthropic.com/))
-- Modern browser with Web Speech API support (Chrome, Edge, Safari)
 
 ## Development
 
