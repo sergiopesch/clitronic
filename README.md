@@ -4,7 +4,15 @@
 
 An intelligent assistant that helps you understand electronic components, circuits, and calculations. Built with Claude AI, available as both a web app and CLI.
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/sergiopesch/clitronic)
+
 ## Quick Start
+
+### Hosted Version
+
+Just visit the deployed app and enter your Anthropic API key when prompted. Your key is stored locally in your browser and never sent to our servers.
+
+### Self-Hosted
 
 ```bash
 # Clone and install
@@ -12,24 +20,30 @@ git clone https://github.com/sergiopesch/clitronic.git
 cd clitronic
 npm install
 
-# Set your API key
-cp .env.example .env.local
-# Edit .env.local and add your ANTHROPIC_API_KEY
-
 # Run the web app
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to start chatting.
+Open [http://localhost:3000](http://localhost:3000) and enter your API key in the app.
 
 ## Features
 
-- **Component Knowledge Base** - Information on 16 common electronic components (resistors, capacitors, LEDs, transistors, etc.)
+- **Bring Your Own Key** - Use your own Anthropic API key, stored securely in your browser
+- **Component Knowledge Base** - Information on 16 common electronic components
 - **AI-Powered Chat** - Ask questions about electronics in natural language
 - **Component Lookup** - Quick access to specs, pinouts, and datasheets
 - **Circuit Examples** - Practical wiring examples for each component
-- **Image Identification** - Upload photos to identify components (CLI)
+- **Image Identification** - Upload photos to identify components
 - **Calculations** - Help with Ohm's law, voltage dividers, and more
+
+## Security
+
+Your API key is:
+
+- Stored only in your browser's localStorage
+- Never sent to or stored on our servers
+- Sent directly to Anthropic's API over HTTPS
+- Removable anytime from the settings
 
 ## Usage
 
@@ -45,21 +59,22 @@ npm start        # Start production server
 
 ```bash
 cd cli && npm install
+export ANTHROPIC_API_KEY=your_key_here
 
 # Interactive chat
-npx tsx bin/clitronic.ts chat
+npm run start -- chat
 
 # One-shot question
-npx tsx bin/clitronic.ts ask "What resistor do I need for a 5V LED?"
+npm run start -- ask "What resistor do I need for a 5V LED?"
 
 # Identify a component from an image
-npx tsx bin/clitronic.ts identify component.jpg
+npm run start -- identify component.jpg
 
-# Get component info
-npx tsx bin/clitronic.ts info resistor
+# Get component info (no API key needed)
+npm run start -- info resistor
 
-# List all known components
-npx tsx bin/clitronic.ts list
+# List all known components (no API key needed)
+npm run start -- list
 ```
 
 ## Architecture
@@ -73,6 +88,7 @@ clitronic/
 │   ├── bin/               # CLI entry point
 │   └── src/commands/      # Command implementations
 ├── components/            # React components
+│   ├── api-key/           # API key management
 │   ├── chat/              # Chat UI components
 │   └── terminal/          # Terminal-style panel
 └── lib/
