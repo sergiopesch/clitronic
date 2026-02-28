@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useApiKey, ApiKeyModal } from '../api-key';
+import { useApiKey } from '../api-key';
 
 interface TerminalLine {
-  type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome';
+  type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'listening';
   content: string;
   imageUrl?: string;
 }
@@ -20,47 +20,37 @@ const ASCII_LOGO = `
  ╚═════╝╚══════╝╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝ ╚═════╝
 `;
 
-const WELCOME_TEXT = `
-Your AI-powered hardware companion for electronics
+const WELCOME_TEXT = `Your AI-powered hardware companion for electronics
 
-Type a question or use these commands:
-  help              Show all commands
-  list [category]   List components (passive, active, input, output)
-  info <component>  Component details (e.g., info led)
-  clear             Clear terminal
+🎤 Speak  📷 Camera  📁 Upload  ⌨️  Type
 
-`;
-
-const HELP_TEXT = `
-Commands:
-  help                     Show this help message
-  list [category]          List components (categories: passive, active, input, output)
-  info <component>         Show detailed component information
-  identify                 Upload an image to identify a component
-  clear                    Clear the terminal
-  settings                 Open API key settings
-
-Ask anything about electronics:
-  "What resistor do I need for an LED?"
-  "How does a transistor work?"
-  "Calculate voltage divider for 5V to 3.3V"
-
+Ask anything about electronics or identify components!
 `;
 
 export function RichTerminal() {
-  const { apiKey, isConfigured } = useApiKey();
+  const { apiKey, isConfigured, setApiKey } = useApiKey();
   const [lines, setLines] = useState<TerminalLine[]>([
     { type: 'welcome', content: ASCII_LOGO },
     { type: 'system', content: WELCOME_TEXT },
   ]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const handleCommandRef = useRef<(cmd: string) => void>(() => {});
+
+  // Define addLine first since other functions depend on it
+  const addLine = useCallback((line: TerminalLine) => {
+    setLines((prev) => [...prev, line]);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -70,9 +60,106 @@ export function RichTerminal() {
     inputRef.current?.focus();
   }, []);
 
-  const addLine = useCallback((line: TerminalLine) => {
-    setLines((prev) => [...prev, line]);
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionAPI) {
+        const recognition = new SpeechRecognitionAPI();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+          const transcript = Array.from(event.results)
+            .map((result) => result[0].transcript)
+            .join('');
+
+          if (event.results[0]?.isFinal) {
+            setIsListening(false);
+            // Use queueMicrotask to defer command execution
+            queueMicrotask(() => {
+              handleCommandRef.current(transcript);
+            });
+          } else {
+            setInput(transcript);
+          }
+        };
+
+        recognition.onerror = () => {
+          setIsListening(false);
+          setLines((prev) => [
+            ...prev,
+            { type: 'error', content: '🎤 Voice recognition error. Please try again.' },
+          ]);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
   }, []);
+
+  const startVoiceInput = useCallback(() => {
+    if (!isConfigured) {
+      setShowApiKeyInput(true);
+      addLine({
+        type: 'error',
+        content: '⚠️  API key required. Enter your Anthropic API key below.',
+      });
+      return;
+    }
+
+    if (recognitionRef.current && !isListening) {
+      setIsListening(true);
+      setInput('');
+      addLine({ type: 'listening', content: '🎤 Listening... Speak now!' });
+      recognitionRef.current.start();
+    }
+  }, [isConfigured, isListening, addLine]);
+
+  const stopVoiceInput = useCallback(() => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  }, [isListening]);
+
+  const handleCameraCapture = useCallback(() => {
+    if (!isConfigured) {
+      setShowApiKeyInput(true);
+      addLine({
+        type: 'error',
+        content: '⚠️  API key required. Enter your Anthropic API key below.',
+      });
+      return;
+    }
+    cameraInputRef.current?.click();
+  }, [isConfigured, addLine]);
+
+  const handleFileUpload = useCallback(() => {
+    if (!isConfigured) {
+      setShowApiKeyInput(true);
+      addLine({
+        type: 'error',
+        content: '⚠️  API key required. Enter your Anthropic API key below.',
+      });
+      return;
+    }
+    fileInputRef.current?.click();
+  }, [isConfigured, addLine]);
+
+  const handleApiKeySave = useCallback(() => {
+    if (apiKeyInput.trim()) {
+      setApiKey(apiKeyInput.trim());
+      setApiKeyInput('');
+      setShowApiKeyInput(false);
+      addLine({ type: 'system', content: '✅ API key saved! You can now use all features.' });
+    }
+  }, [apiKeyInput, setApiKey, addLine]);
 
   const handleCommand = async (cmd: string) => {
     const trimmedCmd = cmd.trim();
@@ -90,7 +177,18 @@ export function RichTerminal() {
 
     // Handle built-in commands
     if (command === 'help') {
-      addLine({ type: 'system', content: HELP_TEXT });
+      addLine({
+        type: 'system',
+        content: `
+Commands:
+  help              Show this help message
+  list [category]   List components (passive, active, input, output)
+  info <component>  Component details
+  clear             Clear the terminal
+
+Or just ask anything about electronics!
+`,
+      });
       return;
     }
 
@@ -102,21 +200,12 @@ export function RichTerminal() {
       return;
     }
 
-    if (command === 'settings') {
-      setShowSettings(true);
-      return;
-    }
-
-    if (command === 'identify') {
-      fileInputRef.current?.click();
-      return;
-    }
-
     // Check for API key
     if (!isConfigured) {
+      setShowApiKeyInput(true);
       addLine({
         type: 'error',
-        content: '⚠️  API key required. Type "settings" to configure your Anthropic API key.',
+        content: '⚠️  API key required. Enter your Anthropic API key below.',
       });
       return;
     }
@@ -172,6 +261,11 @@ export function RichTerminal() {
 
     setIsProcessing(false);
   };
+
+  // Keep ref updated with latest handleCommand
+  useEffect(() => {
+    handleCommandRef.current = handleCommand;
+  });
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -260,27 +354,85 @@ export function RichTerminal() {
   };
 
   return (
-    <div
-      className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm"
-      onClick={() => inputRef.current?.focus()}
-    >
+    <div className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm">
       {/* Terminal content */}
-      <div className="flex-1 overflow-y-auto p-4 pb-0">
+      <div className="flex-1 overflow-y-auto p-4 pb-0" onClick={() => inputRef.current?.focus()}>
         {lines.map((line, i) => (
           <TerminalLineRenderer key={i} line={line} />
         ))}
 
+        {/* API Key inline input */}
+        {showApiKeyInput && !isConfigured && (
+          <div
+            className="my-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center gap-2 text-amber-400">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+              <span className="font-semibold">Enter your Anthropic API Key</span>
+            </div>
+            <p className="mb-3 text-xs text-gray-400">
+              Your key is stored locally and never sent to our servers.{' '}
+              <a
+                href="https://console.anthropic.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-cyan-400 hover:underline"
+              >
+                Get a key →
+              </a>
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleApiKeySave()}
+                placeholder="sk-ant-..."
+                className="flex-1 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-gray-100 placeholder:text-gray-500 focus:border-cyan-500 focus:outline-none"
+                autoFocus
+              />
+              <button
+                onClick={handleApiKeySave}
+                disabled={!apiKeyInput.trim()}
+                className="rounded-lg bg-cyan-600 px-4 py-2 font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setShowApiKeyInput(false)}
+                className="rounded-lg border border-gray-600 px-3 py-2 text-gray-400 transition-colors hover:bg-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Input line */}
         <div className="flex items-center gap-2 py-2">
-          <span className="text-emerald-400">❯</span>
+          <span className={isListening ? 'animate-pulse text-red-400' : 'text-emerald-400'}>❯</span>
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isProcessing}
+            disabled={isProcessing || isListening}
             className="flex-1 border-none bg-transparent text-gray-100 caret-emerald-400 outline-none placeholder:text-gray-600"
-            placeholder={isProcessing ? '' : 'Type a command or ask a question...'}
+            placeholder={
+              isListening
+                ? '🎤 Listening...'
+                : isProcessing
+                  ? ''
+                  : 'Ask anything about electronics...'
+            }
             autoFocus
           />
           {isProcessing && (
@@ -293,7 +445,94 @@ export function RichTerminal() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Hidden file input */}
+      {/* Multimodal Action Bar */}
+      <div className="border-t border-gray-800 bg-[#0d1117] p-4">
+        <div className="flex items-center justify-center gap-3">
+          {/* Voice Button */}
+          <button
+            onClick={isListening ? stopVoiceInput : startVoiceInput}
+            disabled={isProcessing}
+            className={`flex items-center gap-2 rounded-full px-6 py-3 font-medium transition-all ${
+              isListening
+                ? 'animate-pulse bg-red-500 text-white'
+                : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500'
+            } disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+              />
+            </svg>
+            {isListening ? 'Stop' : 'Speak'}
+          </button>
+
+          {/* Camera Button */}
+          <button
+            onClick={handleCameraCapture}
+            disabled={isProcessing}
+            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3 font-medium text-white transition-all hover:from-cyan-500 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            Camera
+          </button>
+
+          {/* Upload Button */}
+          <button
+            onClick={handleFileUpload}
+            disabled={isProcessing}
+            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 font-medium text-white transition-all hover:from-emerald-500 hover:to-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            Upload
+          </button>
+
+          {/* API Key indicator/button */}
+          {!isConfigured && (
+            <button
+              onClick={() => setShowApiKeyInput(true)}
+              className="flex items-center gap-2 rounded-full bg-amber-500/20 px-4 py-3 text-amber-400 transition-all hover:bg-amber-500/30"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
         type="file"
@@ -301,9 +540,14 @@ export function RichTerminal() {
         onChange={handleImageUpload}
         className="hidden"
       />
-
-      {/* Settings modal */}
-      <ApiKeyModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleImageUpload}
+        className="hidden"
+      />
     </div>
   );
 }
@@ -319,6 +563,14 @@ function TerminalLineRenderer({ line }: { line: TerminalLine }) {
 
     case 'system':
       return <pre className="whitespace-pre-wrap text-gray-400">{line.content}</pre>;
+
+    case 'listening':
+      return (
+        <div className="flex items-center gap-2 py-1 text-pink-400">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-pink-400"></span>
+          <span>{line.content}</span>
+        </div>
+      );
 
     case 'command':
       return (
