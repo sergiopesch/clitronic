@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Clitronic is an AI-powered hardware companion for electronics enthusiasts. It uses Claude API to provide conversational assistance with electronic components, circuits, and calculations.
+Clitronic is a multimodal AI companion for electronics enthusiasts. It features a terminal-style interface with voice, camera, and image input support, powered by Claude API.
 
 ## Architecture
 
@@ -10,37 +10,41 @@ Clitronic is an AI-powered hardware companion for electronics enthusiasts. It us
 clitronic/
 ├── app/                    # Next.js 15 App Router
 │   ├── api/chat/          # Streaming chat API endpoint
-│   └── page.tsx           # Main chat interface
+│   └── page.tsx           # Terminal interface entry point
 ├── cli/                    # Self-contained CLI package
 │   ├── bin/               # CLI entry point
 │   ├── src/commands/      # Command implementations
 │   └── src/data/          # Local copy of component data
-├── components/            # React components
-│   ├── chat/              # Chat UI (input, messages, cards)
-│   └── terminal/          # Terminal-style panel
-└── lib/
-    ├── ai/                # System prompt & tool definitions
-    └── data/              # Component knowledge base (16 components)
+├── components/
+│   ├── api-key/           # API key provider and modal
+│   └── terminal/          # Rich terminal with multimodal input
+├── lib/
+│   ├── ai/                # System prompt & tool definitions
+│   └── data/              # Component knowledge base (16 components)
+└── types/
+    └── speech.d.ts        # Web Speech API TypeScript declarations
 ```
 
 ### Key Design Decisions
 
 - **Web app**: Next.js 15 (App Router) + React 19 + Tailwind CSS
-- **Web AI**: Claude Sonnet via `@ai-sdk/anthropic` + Vercel AI SDK v5
+- **Terminal UI**: Single rich-terminal component with multimodal action bar
+- **Voice Input**: Web Speech API with real-time transcription
+- **Camera**: HTML5 file input with `capture="environment"` for mobile
+- **API Key**: Bring Your Own Key (BYOK) - stored in localStorage only
 - **CLI**: Standalone package using `@anthropic-ai/sdk` directly
-- **CLI Data**: Self-contained data module (copied from lib/data to avoid cross-package imports)
 
 ## Key Files
 
 ### Web App
 
-- `app/api/chat/route.ts` - Streaming chat API endpoint
+- `app/page.tsx` - Renders the RichTerminal component
+- `app/api/chat/route.ts` - Streaming chat API (accepts API key via header)
+- `components/terminal/rich-terminal.tsx` - **Main UI**: multimodal terminal with voice, camera, upload
+- `components/api-key/` - API key provider, modal, and context
 - `lib/ai/system-prompt.ts` - Electronics companion persona
-- `lib/ai/tools.ts` - Claude tool definitions (lookup, search, calculate, ohms_law)
+- `lib/ai/tools.ts` - Claude tool definitions (lookup, search, calculate)
 - `lib/data/components.ts` - Component knowledge base (16 components)
-- `lib/data/search.ts` - Component search/lookup logic
-- `components/chat/` - Chat UI components
-- `components/terminal/` - Terminal panel (xterm-style)
 
 ### CLI Package
 
@@ -69,15 +73,15 @@ npm run start -- list active       # Filter by category
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` - Required for both web and CLI
+- `ANTHROPIC_API_KEY` - Required for CLI; web app uses BYOK via header
 
 ## AI Integration
 
 ### Web (Vercel AI SDK v5)
 
 - Uses `@ai-sdk/anthropic` with `streamText()`
+- API key passed via `x-api-key` header from client
 - Tools defined with `zodSchema()` wrapper
-- Chat transport uses `DefaultChatTransport`
 - Response streaming via `toUIMessageStreamResponse()`
 - Model: `claude-sonnet-4-20250514`
 
@@ -87,6 +91,29 @@ npm run start -- list active       # Filter by category
 - Lazy client initialization (API key checked on first use)
 - Streaming text output with chalk coloring
 - Model: `claude-sonnet-4-20250514`
+
+## Multimodal Features
+
+### Voice Input
+
+- Web Speech API (`SpeechRecognition`)
+- Real-time transcription while speaking
+- Automatically sends command when speech ends
+- TypeScript declarations in `types/speech.d.ts`
+
+### Camera/Image
+
+- File input with `capture="environment"` for rear camera
+- Supports upload from gallery
+- Images sent as base64 data URLs to API
+- Claude analyzes and identifies components
+
+### Terminal Commands
+
+- `help` - Show available commands
+- `list [category]` - List components
+- `info <component>` - Component details
+- `clear` - Clear terminal
 
 ## Component Database
 
