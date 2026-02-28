@@ -4,15 +4,7 @@
 
 An intelligent assistant that helps you understand electronic components, circuits, and calculations. Built with Claude AI, available as both a web app and CLI.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/sergiopesch/clitronic)
-
 ## Quick Start
-
-### Hosted Version
-
-Just visit the deployed app and enter your Anthropic API key when prompted. Your key is stored locally in your browser and never sent to our servers.
-
-### Self-Hosted
 
 ```bash
 # Clone and install
