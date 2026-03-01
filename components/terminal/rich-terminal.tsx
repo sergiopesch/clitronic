@@ -168,14 +168,24 @@ export function RichTerminal() {
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        addLine({ type: 'error', content: `✗ Error: ${error.error || 'Request failed'}` });
+        let errorMsg = 'Request failed';
+        try {
+          const error = await res.json();
+          errorMsg = error.error || errorMsg;
+        } catch {
+          errorMsg = `HTTP ${res.status}: ${res.statusText || 'Server error'}`;
+        }
+        addLine({ type: 'error', content: `✗ Error: ${errorMsg}` });
         setIsProcessing(false);
         return;
       }
 
       const text = await readStreamAsText(res);
-      addLine({ type: 'response', content: text });
+      if (text.startsWith('Error:')) {
+        addLine({ type: 'error', content: `✗ ${text}` });
+      } else {
+        addLine({ type: 'response', content: text });
+      }
     } catch (err) {
       addLine({
         type: 'error',
@@ -227,8 +237,23 @@ export function RichTerminal() {
           }),
         });
 
-        const text = await readStreamAsText(res);
-        addLine({ type: 'response', content: text });
+        if (!res.ok) {
+          let errorMsg = 'Request failed';
+          try {
+            const error = await res.json();
+            errorMsg = error.error || errorMsg;
+          } catch {
+            errorMsg = `HTTP ${res.status}: ${res.statusText || 'Server error'}`;
+          }
+          addLine({ type: 'error', content: `✗ Error: ${errorMsg}` });
+        } else {
+          const text = await readStreamAsText(res);
+          if (text.startsWith('Error:')) {
+            addLine({ type: 'error', content: `✗ ${text}` });
+          } else {
+            addLine({ type: 'response', content: text });
+          }
+        }
       } catch (err) {
         addLine({
           type: 'error',
@@ -503,81 +528,22 @@ function TerminalLineRenderer({ line }: { line: TerminalLine }) {
   }
 }
 
-// Parse AI SDK v5 UIMessage SSE stream format
+// Read plain text stream response
 async function readStreamAsText(response: Response): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) return 'Error: No response body';
 
   const decoder = new TextDecoder();
   let result = '';
-  let buffer = '';
-  let errorMessage = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      // SSE format: "data: {...}" or "data: [DONE]"
-      if (trimmed.startsWith('data: ')) {
-        const data = trimmed.slice(6);
-
-        if (data === '[DONE]') {
-          continue;
-        }
-
-        try {
-          const parsed = JSON.parse(data);
-
-          // Handle error messages
-          if (parsed.type === 'error' && parsed.errorText) {
-            errorMessage = parsed.errorText;
-          }
-
-          // Handle text deltas (the actual content)
-          if (parsed.type === 'text-delta' && parsed.textDelta) {
-            result += parsed.textDelta;
-          }
-
-          // Handle full text (some responses send complete text)
-          if (parsed.type === 'text' && parsed.text) {
-            result += parsed.text;
-          }
-        } catch {
-          // Not JSON, skip
-        }
-      }
-    }
+    result += decoder.decode(value, { stream: true });
   }
 
-  // Process remaining buffer
-  if (buffer.trim().startsWith('data: ')) {
-    const data = buffer.trim().slice(6);
-    if (data !== '[DONE]') {
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.type === 'text-delta' && parsed.textDelta) {
-          result += parsed.textDelta;
-        }
-        if (parsed.type === 'error' && parsed.errorText) {
-          errorMessage = parsed.errorText;
-        }
-      } catch {
-        // skip
-      }
-    }
-  }
+  // Final decode
+  result += decoder.decode();
 
-  if (errorMessage) {
-    return `Error: ${errorMessage}`;
-  }
-
-  return result || '(No response received)';
+  return result.trim() || '(No response received)';
 }
