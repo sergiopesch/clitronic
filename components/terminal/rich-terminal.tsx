@@ -24,7 +24,7 @@ const WELCOME_CONTENT = `
 │                                                                        │
 │                  ⚡ AI-Powered Electronics Companion                   │
 │                                                                        │
-│    Commands:  help • identify • list • info • key • clear             │
+│    Commands:  help • identify • list • info • clear                   │
 │    Or just ask anything about electronics!                             │
 │    Drop an image to identify components.                               │
 │                                                                        │
@@ -40,7 +40,6 @@ const HELP_TEXT = `
   │  info <component>  Get component details                    │
   │  identify          Upload image to identify component       │
   │  clear             Clear terminal                           │
-  │  key               Configure API key                        │
   ├─────────────────────────────────────────────────────────────┤
   │  Or just ask a question! Examples:                          │
   │    "What resistor for a 5V LED?"                            │
@@ -62,6 +61,7 @@ export function RichTerminal() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [hasServerKey, setHasServerKey] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +73,17 @@ export function RichTerminal() {
     shouldScrollRef.current = true;
   }, []);
 
-  // Smooth scroll to bottom only when needed
+  // Check if server has API key configured
+  useEffect(() => {
+    fetch('/api/check-key')
+      .then(res => res.json())
+      .then(data => {
+        setHasServerKey(data.hasServerKey === true);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Scroll to bottom when needed
   useEffect(() => {
     if (shouldScrollRef.current && containerRef.current) {
       requestAnimationFrame(() => {
@@ -90,49 +100,102 @@ export function RichTerminal() {
     inputRef.current?.focus();
   }, []);
 
-  const handleApiKeySave = useCallback(() => {
-    if (apiKeyInput.trim()) {
-      setApiKey(apiKeyInput.trim());
+  const handleApiKeySave = useCallback(async () => {
+    const key = apiKeyInput.trim();
+    if (!key) return;
+
+    // Validate key format
+    if (!key.startsWith('sk-ant-')) {
+      addLine({ type: 'error', content: '✗ Invalid key format. Key should start with sk-ant-' });
+      return;
+    }
+
+    // Validate with server
+    try {
+      const res = await fetch('/api/check-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: key }),
+      });
+      const data = await res.json();
+
+      if (data.valid) {
+        setApiKey(key);
+        setApiKeyInput('');
+        setShowApiKeyInput(false);
+        addLine({ type: 'system', content: '✓ API key configured' });
+      } else {
+        addLine({ type: 'error', content: `✗ ${data.error || 'Invalid API key'}` });
+      }
+    } catch {
+      // If validation fails, still save it (validation is just format check)
+      setApiKey(key);
       setApiKeyInput('');
       setShowApiKeyInput(false);
-      addLine({ type: 'system', content: '✓ API key configured' });
+      addLine({ type: 'system', content: '✓ API key saved' });
     }
   }, [apiKeyInput, setApiKey, addLine]);
 
-  // Process image for API (extract base64 from data URL)
-  const processImageForApi = (dataUrl: string): { data: string; mediaType: string } => {
-    const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (matches) {
-      return { data: matches[2], mediaType: matches[1] };
-    }
-    return { data: dataUrl, mediaType: 'image/jpeg' };
+  // Check if we can make API calls
+  const canMakeApiCalls = isConfigured || hasServerKey;
+
+  // Resize image to reduce size
+  const resizeImage = async (dataUrl: string, maxWidth = 1024): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = dataUrl;
+    });
   };
 
   // Send image for analysis
   const analyzeImage = useCallback(async (dataUrl: string, fileName: string) => {
-    if (!isConfigured) {
+    if (!canMakeApiCalls) {
       addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
       setShowApiKeyInput(true);
       return;
     }
 
     addLine({ type: 'command', content: `identify ${fileName}` });
-    addLine({ type: 'image', content: '', imageUrl: dataUrl });
+
+    // Resize image before sending
+    const resizedDataUrl = await resizeImage(dataUrl);
+    addLine({ type: 'image', content: '', imageUrl: resizedDataUrl });
     setIsProcessing(true);
 
     try {
-      const { data: imageData, mediaType } = processImageForApi(dataUrl);
+      // Extract base64 from data URL
+      const match = resizedDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) {
+        throw new Error('Invalid image format');
+      }
+
+      const [, mediaType, imageData] = match;
 
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey || '',
+          ...(apiKey ? { 'x-api-key': apiKey } : {}),
         },
         body: JSON.stringify({
           messages: [
             {
-              id: Date.now().toString(),
               role: 'user',
               parts: [
                 {
@@ -180,7 +243,7 @@ export function RichTerminal() {
     }
 
     setIsProcessing(false);
-  }, [apiKey, isConfigured, addLine]);
+  }, [apiKey, canMakeApiCalls, addLine]);
 
   const handleCommand = async (cmd: string) => {
     const trimmedCmd = cmd.trim();
@@ -211,7 +274,7 @@ export function RichTerminal() {
     }
 
     if (command === 'identify') {
-      if (!isConfigured) {
+      if (!canMakeApiCalls) {
         addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
         setShowApiKeyInput(true);
         return;
@@ -221,7 +284,7 @@ export function RichTerminal() {
     }
 
     // Commands that require API key
-    if (!isConfigured) {
+    if (!canMakeApiCalls) {
       addLine({
         type: 'error',
         content: '✗ API key required. Type "key" to configure.',
@@ -252,12 +315,11 @@ export function RichTerminal() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey || '',
+          ...(apiKey ? { 'x-api-key': apiKey } : {}),
         },
         body: JSON.stringify({
           messages: [
             {
-              id: Date.now().toString(),
               role: 'user',
               parts: [{ type: 'text', text: prompt }],
             },
@@ -309,7 +371,6 @@ export function RichTerminal() {
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only set to false if we're leaving the container
     if (e.currentTarget === e.target) {
       setIsDragging(false);
     }
@@ -333,6 +394,28 @@ export function RichTerminal() {
     };
     reader.readAsDataURL(file);
   }, [addLine, analyzeImage]);
+
+  // Handle paste for images
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            analyzeImage(dataUrl, 'pasted-image.png');
+          };
+          reader.readAsDataURL(file);
+        }
+        return;
+      }
+    }
+  }, [analyzeImage]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -373,17 +456,17 @@ export function RichTerminal() {
 
   return (
     <div
-      className={`relative flex h-screen flex-col bg-[#0d1117] font-mono text-[13px] leading-relaxed ${
+      className={`relative flex h-screen flex-col bg-[#0d1117] font-mono text-[13px] leading-relaxed select-text ${
         isDragging ? 'ring-2 ring-inset ring-cyan-400' : ''
       }`}
-      onClick={() => inputRef.current?.focus()}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onPaste={handlePaste}
     >
       {/* Drop overlay */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0d1117]/90 backdrop-blur-sm">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0d1117]/90 backdrop-blur-sm pointer-events-none">
           <div className="rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-500/10 px-12 py-8 text-center">
             <div className="mb-3 text-5xl">📷</div>
             <div className="text-xl font-semibold text-cyan-400">Drop image</div>
@@ -392,8 +475,17 @@ export function RichTerminal() {
         </div>
       )}
 
-      {/* Terminal content */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto scroll-smooth px-4 py-3">
+      {/* Terminal content - selectable text */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto px-4 py-3 cursor-text"
+        onClick={(e) => {
+          // Only focus input if clicking on empty space
+          if (e.target === containerRef.current) {
+            inputRef.current?.focus();
+          }
+        }}
+      >
         {lines.map((line, i) => (
           <TerminalLine key={i} line={line} />
         ))}
@@ -416,8 +508,8 @@ export function RichTerminal() {
               <span>⚡</span>
               <span className="font-medium">Anthropic API Key</span>
             </div>
-            <p className="mb-3 text-xs text-gray-500">
-              Stored locally.{' '}
+            <p className="mb-2 text-xs text-gray-500">
+              Enter your API key (stored locally in browser).{' '}
               <a
                 href="https://console.anthropic.com/"
                 target="_blank"
@@ -436,7 +528,7 @@ export function RichTerminal() {
                   if (e.key === 'Enter') handleApiKeySave();
                   if (e.key === 'Escape') setShowApiKeyInput(false);
                 }}
-                placeholder="sk-ant-..."
+                placeholder="sk-ant-api03-..."
                 className="flex-1 rounded border border-gray-700 bg-[#161b22] px-3 py-2 text-gray-100 placeholder:text-gray-600 focus:border-cyan-500 focus:outline-none"
                 autoFocus
               />
@@ -448,12 +540,17 @@ export function RichTerminal() {
                 Save
               </button>
             </div>
+            <p className="mt-3 text-xs text-gray-600">
+              Tip: For persistent setup, create <code className="text-cyan-600">.env.local</code> with:
+              <br />
+              <code className="text-cyan-500">ANTHROPIC_API_KEY=your-key</code>
+            </p>
           </div>
         )}
 
         {/* Input line */}
         <div className="sticky bottom-0 flex items-center gap-2 bg-[#0d1117] py-2">
-          <span className="text-cyan-500">❯</span>
+          <span className="text-cyan-500 select-none">❯</span>
           <input
             ref={inputRef}
             value={input}
@@ -464,7 +561,7 @@ export function RichTerminal() {
             placeholder={isProcessing ? 'Processing...' : 'Ask about electronics...'}
           />
           {isProcessing && (
-            <span className="flex items-center gap-2 text-cyan-500 text-xs">
+            <span className="flex items-center gap-2 text-cyan-500 text-xs select-none">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
             </span>
           )}
@@ -472,17 +569,17 @@ export function RichTerminal() {
       </div>
 
       {/* Status bar */}
-      <div className="border-t border-gray-800 bg-[#0d1117] px-4 py-1.5">
+      <div className="border-t border-gray-800 bg-[#0d1117] px-4 py-1.5 select-none">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1 text-cyan-500">
               ⚡ clitronic
             </span>
-            <span className={isConfigured ? 'text-green-500' : 'text-amber-500'}>
-              {isConfigured ? '● ready' : '○ need key'}
+            <span className={canMakeApiCalls ? 'text-green-500' : 'text-amber-500'}>
+              {canMakeApiCalls ? '● ready' : '○ need key'}
             </span>
           </div>
-          <span className="text-gray-600">↑↓ history • help</span>
+          <span className="text-gray-600">↑↓ history • paste image • help</span>
         </div>
       </div>
 
@@ -501,34 +598,34 @@ function TerminalLine({ line }: { line: TerminalLine }) {
   switch (line.type) {
     case 'welcome':
       return (
-        <pre className="whitespace-pre text-cyan-500/90 text-xs leading-tight">
+        <pre className="whitespace-pre text-cyan-500/90 text-xs leading-tight select-text">
           {line.content}
         </pre>
       );
 
     case 'ascii':
       return (
-        <pre className="whitespace-pre text-cyan-600/60 text-xs leading-tight">
+        <pre className="whitespace-pre text-cyan-600/60 text-xs leading-tight select-text">
           {line.content}
         </pre>
       );
 
     case 'system':
       return (
-        <div className="py-1 text-green-400">{line.content}</div>
+        <div className="py-1 text-green-400 select-text">{line.content}</div>
       );
 
     case 'command':
       return (
-        <div className="flex items-center gap-2 py-1">
-          <span className="text-cyan-600">❯</span>
+        <div className="flex items-center gap-2 py-1 select-text">
+          <span className="text-cyan-600 select-none">❯</span>
           <span className="text-gray-300">{line.content}</span>
         </div>
       );
 
     case 'error':
       return (
-        <div className="py-1 text-red-400">{line.content}</div>
+        <div className="py-1 text-red-400 select-text">{line.content}</div>
       );
 
     case 'image':
@@ -540,14 +637,38 @@ function TerminalLine({ line }: { line: TerminalLine }) {
 
     case 'response':
       return (
-        <div className="my-2 text-gray-200">
+        <div className="my-2 text-gray-200 select-text">
           <MarkdownContent content={line.content} />
         </div>
       );
 
     default:
-      return <div className="py-1 text-gray-300">{line.content}</div>;
+      return <div className="py-1 text-gray-300 select-text">{line.content}</div>;
   }
+}
+
+// Copy button component
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="absolute right-2 top-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-600 transition-colors"
+    >
+      {copied ? '✓ Copied' : 'Copy'}
+    </button>
+  );
 }
 
 function MarkdownContent({ content }: { content: string }) {
@@ -564,12 +685,30 @@ function MarkdownContent({ content }: { content: string }) {
         li: ({ children }) => <li>{children}</li>,
         strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
         code: ({ className, children }) => {
-          if (!className) {
-            return <code className="rounded bg-gray-800 px-1.5 py-0.5 text-cyan-300 text-xs">{children}</code>;
+          const isBlock = className?.includes('language-');
+          const codeText = String(children).replace(/\n$/, '');
+
+          if (isBlock) {
+            return (
+              <div className="relative group">
+                <CopyButton text={codeText} />
+                <code className="block rounded bg-gray-900 p-3 text-cyan-300 text-xs overflow-x-auto">
+                  {children}
+                </code>
+              </div>
+            );
           }
-          return <code className="block rounded bg-gray-900 p-3 text-cyan-300 text-xs overflow-x-auto">{children}</code>;
+          return (
+            <code className="rounded bg-gray-800 px-1.5 py-0.5 text-cyan-300 text-xs cursor-text">
+              {children}
+            </code>
+          );
         },
-        pre: ({ children }) => <pre className="my-2 rounded bg-gray-900 p-3 overflow-x-auto">{children}</pre>,
+        pre: ({ children }) => (
+          <pre className="my-2 rounded bg-gray-900 overflow-x-auto">
+            {children}
+          </pre>
+        ),
         a: ({ href, children }) => (
           <a href={href} className="text-cyan-400 hover:underline" target="_blank" rel="noopener noreferrer">
             {children}
@@ -614,8 +753,8 @@ async function streamResponse(
   }
 
   const trimmed = result.trim();
-  if (!trimmed || trimmed.includes('No output generated')) {
-    return 'Error: Invalid API key or request failed. Please check your API key.';
+  if (!trimmed) {
+    return 'Error: No response from API. Please try again.';
   }
 
   return trimmed;
