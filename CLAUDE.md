@@ -129,9 +129,15 @@ Set `ANTHROPIC_API_KEY` in `.env.local` for persistent setup
 
 ### Image Upload
 
-- Triggered via `identify` command or drag-and-drop
-- Images sent as base64 data URLs to API
-- Claude analyzes and identifies components
+Multiple ways to upload images:
+- **Drag & drop** - Drop image directly into terminal
+- **Paste** - Cmd/Ctrl+V to paste from clipboard
+- **Upload** - Type `identify` to open file picker
+
+Features:
+- Images auto-resized before upload (max 1024px width)
+- Sent as base64 data URLs to API
+- Claude identifies components, decodes markings and color codes
 
 ### Voice Mode
 
@@ -156,9 +162,12 @@ Set `ANTHROPIC_API_KEY` in `.env.local` for persistent setup
 ### UI Elements
 
 - Circuit-themed ASCII art header
-- Status bar showing connection state
+- Status bar showing connection state and voice mode availability
 - Command history with ↑↓ navigation
 - Consistent cyan/blue color scheme
+- Copy buttons on code blocks
+- Full text selection support
+- Markdown rendering with syntax highlighting
 
 ## Component Database
 
