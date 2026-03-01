@@ -1,35 +1,88 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { streamText, convertToModelMessages, type UIMessage } from 'ai';
+import { streamText } from 'ai';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 import { electronicsTools } from '@/lib/ai/tools';
 
 export const maxDuration = 60;
 
+type ImageMimeType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
+interface TextContent {
+  type: 'text';
+  text: string;
+}
+
+interface ImageContent {
+  type: 'image';
+  image: string;
+  mimeType?: ImageMimeType;
+}
+
+type ContentPart = TextContent | ImageContent;
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: ContentPart[];
+}
+
 function formatError(error: unknown): string {
-  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  const msg = error instanceof Error ? error.message : 'Unknown error';
 
-  if (
-    errorMessage.includes('401') ||
-    errorMessage.includes('invalid_api_key') ||
-    errorMessage.includes('invalid x-api-key') ||
-    errorMessage.includes('Unauthorized')
-  ) {
-    return 'Invalid API key. Please check your Anthropic API key.';
+  if (msg.includes('401') || msg.includes('invalid') || msg.includes('Unauthorized')) {
+    return 'Invalid API key';
   }
-
-  if (errorMessage.includes('429') || errorMessage.includes('rate_limit')) {
-    return 'Rate limit exceeded. Please wait and try again.';
+  if (msg.includes('429') || msg.includes('rate')) {
+    return 'Rate limit exceeded';
   }
-
-  if (errorMessage.includes('500') || errorMessage.includes('overloaded')) {
-    return 'Anthropic API is currently unavailable. Please try again.';
+  if (msg.includes('500') || msg.includes('overloaded')) {
+    return 'API unavailable';
   }
-
-  if (errorMessage.includes('No output generated') || errorMessage.includes('Check the stream')) {
-    return 'API request failed. Please check your API key and try again.';
+  if (msg.includes('No output')) {
+    return 'Request failed';
   }
+  return msg;
+}
 
-  return errorMessage;
+interface IncomingPart {
+  type: string;
+  text?: string;
+  image?: string;
+  mimeType?: string;
+  url?: string;
+}
+
+interface IncomingMessage {
+  role: 'user' | 'assistant';
+  parts: IncomingPart[];
+}
+
+function convertMessages(incoming: IncomingMessage[]): Message[] {
+  return incoming.map((msg) => {
+    const content: ContentPart[] = [];
+
+    for (const part of msg.parts) {
+      if (part.type === 'text' && part.text) {
+        content.push({ type: 'text', text: part.text });
+      } else if (part.type === 'image' && part.image) {
+        content.push({
+          type: 'image',
+          image: part.image,
+          mimeType: (part.mimeType || 'image/jpeg') as ImageMimeType,
+        });
+      } else if (part.type === 'file' && part.url) {
+        const match = part.url.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          content.push({
+            type: 'image',
+            image: match[2],
+            mimeType: (match[1] || 'image/jpeg') as ImageMimeType,
+          });
+        }
+      }
+    }
+
+    return { role: msg.role, content };
+  });
 }
 
 export async function POST(req: Request) {
@@ -38,44 +91,40 @@ export async function POST(req: Request) {
 
   if (!apiKey) {
     return new Response(
-      JSON.stringify({
-        error: 'API key required. Please configure your Anthropic API key.',
-      }),
+      JSON.stringify({ error: 'API key required' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     );
   }
 
-  const anthropic = createAnthropic({ apiKey });
-
-  let messages;
+  let body: { messages: IncomingMessage[] };
   try {
-    messages = (await req.json()).messages;
+    body = await req.json();
   } catch {
-    return new Response('Error: Invalid request format', {
+    return new Response('Error: Invalid request', {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   }
 
-  const modelMessages = await convertToModelMessages(messages as UIMessage[]);
+  const anthropic = createAnthropic({ apiKey });
+  const messages = convertMessages(body.messages);
 
   const result = streamText({
     model: anthropic('claude-sonnet-4-20250514'),
     system: SYSTEM_PROMPT,
-    messages: modelMessages,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: messages as any,
     tools: electronicsTools,
     maxRetries: 0,
   });
 
-  // Get iterator from text stream
   const iterator = result.textStream[Symbol.asyncIterator]();
 
-  // Try to get first chunk to detect errors early
+  // Get first chunk to detect errors early
   let firstChunk: string;
   try {
     const first = await iterator.next();
     if (first.done) {
-      // Empty response usually means auth error - the SDK doesn't throw, just ends
-      return new Response('Error: Invalid API key. Please check your Anthropic API key.', {
+      return new Response('Error: Invalid API key', {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       });
     }
@@ -86,11 +135,9 @@ export async function POST(req: Request) {
     });
   }
 
-  // Stream the rest of the response
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
-      // Enqueue first chunk immediately
       controller.enqueue(encoder.encode(firstChunk));
     },
     async pull(controller) {

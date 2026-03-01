@@ -6,70 +6,53 @@ import remarkGfm from 'remark-gfm';
 import { useApiKey } from '../api-key';
 
 interface TerminalLine {
-  type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii' | 'streaming';
+  type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
   content: string;
   imageUrl?: string;
 }
 
-// Cool electronics-themed ASCII art
-const ASCII_LOGO = `
-    ╭─────────────────────────────────────────────────────────────────╮
-    │                                                                 │
-    │   ░█████╗░██╗░░░░░██╗████████╗██████╗░░█████╗░███╗░░██╗██╗░█████╗░   │
-    │   ██╔══██╗██║░░░░░██║╚══██╔══╝██╔══██╗██╔══██╗████╗░██║██║██╔══██╗   │
-    │   ██║░░╚═╝██║░░░░░██║░░░██║░░░██████╔╝██║░░██║██╔██╗██║██║██║░░╚═╝   │
-    │   ██║░░██╗██║░░░░░██║░░░██║░░░██╔══██╗██║░░██║██║╚████║██║██║░░██╗   │
-    │   ╚█████╔╝███████╗██║░░░██║░░░██║░░██║╚█████╔╝██║░╚███║██║╚█████╔╝   │
-    │   ░╚════╝░╚══════╝╚═╝░░░╚═╝░░░╚═╝░░╚═╝░╚════╝░╚═╝░░╚══╝╚═╝░╚════╝░   │
-    │                                                                 │
-    ╰─────────────────────────────────────────────────────────────────╯
-`;
-
-const CIRCUIT_ART = `
-      ┌────────────────────────────────────────────────────────────┐
-      │                                                            │
-      │     ┌──[470Ω]──┬────●────[100µF]────┐                      │
-      │     │          │                    │                      │
-      │    ─┴─        ╱│╲                  ─┴─                     │
-      │    ───   ────▶ │ ▶────            ───                     │
-      │     │    LED  ╲│╱  NPN             │                      │
-      │     │          │                    │                      │
-      │     └──────────┴────────────────────┘                      │
-      │                ⏚ GND                                       │
-      │                                                            │
-      │   ⚡ Your AI-powered hardware companion                    │
-      │   🔧 Identify components • Calculate circuits • Learn      │
-      │                                                            │
-      │   Type 'help' for commands, or just ask anything!          │
-      │   Drag & drop images to identify components                │
-      │                                                            │
-      └────────────────────────────────────────────────────────────┘
+// Clean, minimal welcome
+const WELCOME_CONTENT = `
+┌────────────────────────────────────────────────────────────────────────┐
+│                                                                        │
+│     ██████╗██╗     ██╗████████╗██████╗  ██████╗ ███╗   ██╗██╗ ██████╗  │
+│    ██╔════╝██║     ██║╚══██╔══╝██╔══██╗██╔═══██╗████╗  ██║██║██╔════╝  │
+│    ██║     ██║     ██║   ██║   ██████╔╝██║   ██║██╔██╗ ██║██║██║       │
+│    ██║     ██║     ██║   ██║   ██╔══██╗██║   ██║██║╚██╗██║██║██║       │
+│    ╚██████╗███████╗██║   ██║   ██║  ██║╚██████╔╝██║ ╚████║██║╚██████╗  │
+│     ╚═════╝╚══════╝╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚══╝╚═╝ ╚═════╝  │
+│                                                                        │
+│                  ⚡ AI-Powered Electronics Companion                   │
+│                                                                        │
+│    Commands:  help • identify • list • info • key • clear             │
+│    Or just ask anything about electronics!                             │
+│    Drop an image to identify components.                               │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
 `;
 
 const HELP_TEXT = `
-┌─────────────────────────────────────────────────────────────────┐
-│                        COMMANDS                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  help                Show this help message                     │
-│  list [category]     List components (passive/active/input/out) │
-│  info <component>    Component details (e.g., info led)         │
-│  identify            Upload an image to identify a component    │
-│  clear               Clear the terminal                         │
-│  key                 Set or update your Anthropic API key       │
-├─────────────────────────────────────────────────────────────────┤
-│  Or just type a question about electronics!                     │
-│  Examples:                                                      │
-│    "What resistor for a 5V LED?"                                │
-│    "How does a transistor work?"                                │
-│    "Calculate voltage divider 5V to 3.3V"                       │
-└─────────────────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────┐
+  │  COMMANDS                                                   │
+  ├─────────────────────────────────────────────────────────────┤
+  │  help              Show this help message                   │
+  │  list [category]   List components (passive/active/etc)    │
+  │  info <component>  Get component details                    │
+  │  identify          Upload image to identify component       │
+  │  clear             Clear terminal                           │
+  │  key               Configure API key                        │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Or just ask a question! Examples:                          │
+  │    "What resistor for a 5V LED?"                            │
+  │    "How does a transistor work?"                            │
+  │    "Calculate voltage divider 5V to 3.3V"                   │
+  └─────────────────────────────────────────────────────────────┘
 `;
 
 export function RichTerminal() {
   const { apiKey, isConfigured, setApiKey } = useApiKey();
   const [lines, setLines] = useState<TerminalLine[]>([
-    { type: 'welcome', content: ASCII_LOGO },
-    { type: 'ascii', content: CIRCUIT_ART },
+    { type: 'welcome', content: WELCOME_CONTENT },
   ]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -79,28 +62,30 @@ export function RichTerminal() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const shouldScrollRef = useRef(true);
 
   const addLine = useCallback((line: TerminalLine) => {
     setLines((prev) => [...prev, line]);
+    shouldScrollRef.current = true;
   }, []);
 
-  const updateLastLine = useCallback((content: string) => {
-    setLines((prev) => {
-      const newLines = [...prev];
-      if (newLines.length > 0) {
-        newLines[newLines.length - 1] = { ...newLines[newLines.length - 1], content };
-      }
-      return newLines;
-    });
-  }, []);
-
+  // Smooth scroll to bottom only when needed
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [lines]);
+    if (shouldScrollRef.current && containerRef.current) {
+      requestAnimationFrame(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTop = containerRef.current.scrollHeight;
+        }
+      });
+      shouldScrollRef.current = false;
+    }
+  }, [lines, streamingContent]);
 
+  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -110,9 +95,92 @@ export function RichTerminal() {
       setApiKey(apiKeyInput.trim());
       setApiKeyInput('');
       setShowApiKeyInput(false);
-      addLine({ type: 'system', content: '✓ API key saved successfully!' });
+      addLine({ type: 'system', content: '✓ API key configured' });
     }
   }, [apiKeyInput, setApiKey, addLine]);
+
+  // Process image for API (extract base64 from data URL)
+  const processImageForApi = (dataUrl: string): { data: string; mediaType: string } => {
+    const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (matches) {
+      return { data: matches[2], mediaType: matches[1] };
+    }
+    return { data: dataUrl, mediaType: 'image/jpeg' };
+  };
+
+  // Send image for analysis
+  const analyzeImage = useCallback(async (dataUrl: string, fileName: string) => {
+    if (!isConfigured) {
+      addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
+      setShowApiKeyInput(true);
+      return;
+    }
+
+    addLine({ type: 'command', content: `identify ${fileName}` });
+    addLine({ type: 'image', content: '', imageUrl: dataUrl });
+    setIsProcessing(true);
+
+    try {
+      const { data: imageData, mediaType } = processImageForApi(dataUrl);
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey || '',
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              id: Date.now().toString(),
+              role: 'user',
+              parts: [
+                {
+                  type: 'image',
+                  image: imageData,
+                  mimeType: mediaType,
+                },
+                {
+                  type: 'text',
+                  text: 'Identify this electronic component. Provide: 1) What it is, 2) Key specifications, 3) Common uses, 4) How to use it in a circuit. If there are markings or color codes, decode them.',
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        try {
+          const error = JSON.parse(errorText);
+          addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
+        } catch {
+          addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
+        }
+      } else {
+        const text = await streamResponse(res, (chunk) => {
+          setStreamingContent((prev) => prev + chunk);
+          shouldScrollRef.current = true;
+        });
+        setStreamingContent('');
+
+        if (text.startsWith('Error:')) {
+          addLine({ type: 'error', content: `✗ ${text}` });
+        } else {
+          addLine({ type: 'response', content: text });
+        }
+      }
+    } catch (err) {
+      setStreamingContent('');
+      addLine({
+        type: 'error',
+        content: `✗ ${err instanceof Error ? err.message : 'Failed to analyze image'}`,
+      });
+    }
+
+    setIsProcessing(false);
+  }, [apiKey, isConfigured, addLine]);
 
   const handleCommand = async (cmd: string) => {
     const trimmedCmd = cmd.trim();
@@ -133,10 +201,7 @@ export function RichTerminal() {
     }
 
     if (command === 'clear') {
-      setLines([
-        { type: 'welcome', content: ASCII_LOGO },
-        { type: 'ascii', content: CIRCUIT_ART },
-      ]);
+      setLines([{ type: 'welcome', content: WELCOME_CONTENT }]);
       return;
     }
 
@@ -159,7 +224,7 @@ export function RichTerminal() {
     if (!isConfigured) {
       addLine({
         type: 'error',
-        content: '✗ API key required. Type "key" to configure your Anthropic API key.',
+        content: '✗ API key required. Type "key" to configure.',
       });
       setShowApiKeyInput(true);
       return;
@@ -168,21 +233,19 @@ export function RichTerminal() {
     setIsProcessing(true);
 
     try {
-      let prompt = '';
+      let prompt = trimmedCmd;
 
       if (command === 'list') {
         prompt = args
-          ? `List all ${args} components from your knowledge base. Format as a clean list with name and one-line description.`
-          : 'List all components in your knowledge base grouped by category. Format as a clean list with name and one-line description.';
+          ? `List ${args} electronic components with brief descriptions.`
+          : 'List electronic components by category with brief descriptions.';
       } else if (command === 'info') {
         if (!args) {
-          addLine({ type: 'error', content: 'Usage: info <component-name>' });
+          addLine({ type: 'error', content: 'Usage: info <component>' });
           setIsProcessing(false);
           return;
         }
-        prompt = `Look up the component "${args}" using your lookup_component tool. Give me its full specs, pinout, circuit example, and tips.`;
-      } else {
-        prompt = trimmedCmd;
+        prompt = `Provide detailed info about "${args}": specs, pinout, circuit examples, and tips.`;
       }
 
       const res = await fetch('/api/chat', {
@@ -192,26 +255,31 @@ export function RichTerminal() {
           'x-api-key': apiKey || '',
         },
         body: JSON.stringify({
-          messages: [{ id: '1', role: 'user', parts: [{ type: 'text', text: prompt }] }],
+          messages: [
+            {
+              id: Date.now().toString(),
+              role: 'user',
+              parts: [{ type: 'text', text: prompt }],
+            },
+          ],
         }),
       });
 
       if (!res.ok) {
-        let errorMsg = 'Request failed';
+        const errorText = await res.text();
         try {
-          const error = await res.json();
-          errorMsg = error.error || errorMsg;
+          const error = JSON.parse(errorText);
+          addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
         } catch {
-          errorMsg = `HTTP ${res.status}: ${res.statusText || 'Server error'}`;
+          addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
         }
-        addLine({ type: 'error', content: `✗ Error: ${errorMsg}` });
         setIsProcessing(false);
         return;
       }
 
-      // Stream the response for real-time display
       const text = await streamResponse(res, (chunk) => {
         setStreamingContent((prev) => prev + chunk);
+        shouldScrollRef.current = true;
       });
       setStreamingContent('');
 
@@ -224,187 +292,56 @@ export function RichTerminal() {
       setStreamingContent('');
       addLine({
         type: 'error',
-        content: `✗ Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        content: `✗ ${err instanceof Error ? err.message : 'Unknown error'}`,
       });
     }
 
     setIsProcessing(false);
   };
 
-  // Handle drag and drop for images
+  // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
-  }, []);
+    if (!isDragging) setIsDragging(true);
+  }, [isDragging]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    // Only set to false if we're leaving the container
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
   }, []);
 
-  const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
 
-      const files = e.dataTransfer.files;
-      if (files.length === 0) return;
-
-      const file = files[0];
-      if (!file.type.startsWith('image/')) {
-        addLine({ type: 'error', content: '✗ Only image files are supported' });
-        return;
-      }
-
-      if (!isConfigured) {
-        addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
-        setShowApiKeyInput(true);
-        return;
-      }
-
-      // Process the dropped image
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const dataUrl = event.target?.result as string;
-        addLine({ type: 'command', content: `identify ${file.name}` });
-        addLine({ type: 'image', content: '', imageUrl: dataUrl });
-
-        setIsProcessing(true);
-
-        try {
-          const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey || '',
-            },
-            body: JSON.stringify({
-              messages: [
-                {
-                  id: '1',
-                  role: 'user',
-                  parts: [
-                    { type: 'file', url: dataUrl, mediaType: file.type || 'image/jpeg' },
-                    {
-                      type: 'text',
-                      text: 'Identify this electronic component. Tell me what it is, its specifications, how to use it, and any tips. If you can read markings or color codes, decode them.',
-                    },
-                  ],
-                },
-              ],
-            }),
-          });
-
-          if (!res.ok) {
-            let errorMsg = 'Request failed';
-            try {
-              const error = await res.json();
-              errorMsg = error.error || errorMsg;
-            } catch {
-              errorMsg = `HTTP ${res.status}: ${res.statusText || 'Server error'}`;
-            }
-            addLine({ type: 'error', content: `✗ Error: ${errorMsg}` });
-          } else {
-            const text = await streamResponse(res, (chunk) => {
-              setStreamingContent((prev) => prev + chunk);
-            });
-            setStreamingContent('');
-
-            if (text.startsWith('Error:')) {
-              addLine({ type: 'error', content: `✗ ${text}` });
-            } else {
-              addLine({ type: 'response', content: text });
-            }
-          }
-        } catch (err) {
-          setStreamingContent('');
-          addLine({
-            type: 'error',
-            content: `✗ Error: ${err instanceof Error ? err.message : 'Failed to identify'}`,
-          });
-        }
-
-        setIsProcessing(false);
-      };
-      reader.readAsDataURL(file);
-    },
-    [apiKey, isConfigured, addLine, setShowApiKeyInput]
-  );
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!isConfigured) {
-      addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
+    const file = e.dataTransfer.files[0];
+    if (!file?.type.startsWith('image/')) {
+      addLine({ type: 'error', content: '✗ Please drop an image file' });
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      addLine({ type: 'command', content: `identify ${file.name}` });
-      addLine({ type: 'image', content: '', imageUrl: dataUrl });
+      analyzeImage(dataUrl, file.name);
+    };
+    reader.readAsDataURL(file);
+  }, [addLine, analyzeImage]);
 
-      setIsProcessing(true);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey || '',
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                id: '1',
-                role: 'user',
-                parts: [
-                  { type: 'file', url: dataUrl, mediaType: file.type || 'image/jpeg' },
-                  {
-                    type: 'text',
-                    text: 'Identify this electronic component. Tell me what it is, its specifications, how to use it, and any tips. If you can read markings or color codes, decode them.',
-                  },
-                ],
-              },
-            ],
-          }),
-        });
-
-        if (!res.ok) {
-          let errorMsg = 'Request failed';
-          try {
-            const error = await res.json();
-            errorMsg = error.error || errorMsg;
-          } catch {
-            errorMsg = `HTTP ${res.status}: ${res.statusText || 'Server error'}`;
-          }
-          addLine({ type: 'error', content: `✗ Error: ${errorMsg}` });
-        } else {
-          const text = await streamResponse(res, (chunk) => {
-            setStreamingContent((prev) => prev + chunk);
-          });
-          setStreamingContent('');
-
-          if (text.startsWith('Error:')) {
-            addLine({ type: 'error', content: `✗ ${text}` });
-          } else {
-            addLine({ type: 'response', content: text });
-          }
-        }
-      } catch (err) {
-        setStreamingContent('');
-        addLine({
-          type: 'error',
-          content: `✗ Error: ${err instanceof Error ? err.message : 'Failed to identify'}`,
-        });
-      }
-
-      setIsProcessing(false);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      analyzeImage(dataUrl, file.name);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -416,8 +353,8 @@ export function RichTerminal() {
       setInput('');
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (commandHistory.length > 0) {
-        const newIndex = historyIndex < commandHistory.length - 1 ? historyIndex + 1 : historyIndex;
+      if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+        const newIndex = historyIndex + 1;
         setHistoryIndex(newIndex);
         setInput(commandHistory[commandHistory.length - 1 - newIndex] || '');
       }
@@ -427,7 +364,7 @@ export function RichTerminal() {
         const newIndex = historyIndex - 1;
         setHistoryIndex(newIndex);
         setInput(commandHistory[commandHistory.length - 1 - newIndex] || '');
-      } else {
+      } else if (historyIndex === 0) {
         setHistoryIndex(-1);
         setInput('');
       }
@@ -436,60 +373,58 @@ export function RichTerminal() {
 
   return (
     <div
-      className={`flex h-screen flex-col bg-[#0a0e14] font-mono text-sm transition-colors ${
-        isDragging ? 'ring-2 ring-inset ring-cyan-400 bg-cyan-500/5' : ''
+      className={`relative flex h-screen flex-col bg-[#0d1117] font-mono text-[13px] leading-relaxed ${
+        isDragging ? 'ring-2 ring-inset ring-cyan-400' : ''
       }`}
       onClick={() => inputRef.current?.focus()}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag overlay */}
+      {/* Drop overlay */}
       {isDragging && (
-        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#0a0e14]/80">
-          <div className="rounded-lg border-2 border-dashed border-cyan-400 bg-cyan-500/10 px-8 py-6 text-center">
-            <div className="mb-2 text-4xl">📷</div>
-            <div className="text-lg font-semibold text-cyan-400">Drop image to identify</div>
-            <div className="text-sm text-gray-400">Electronic component analysis</div>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0d1117]/90 backdrop-blur-sm">
+          <div className="rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-500/10 px-12 py-8 text-center">
+            <div className="mb-3 text-5xl">📷</div>
+            <div className="text-xl font-semibold text-cyan-400">Drop image</div>
+            <div className="mt-1 text-sm text-gray-400">to identify component</div>
           </div>
         </div>
       )}
 
       {/* Terminal content */}
-      <div className="flex-1 overflow-y-auto p-4 pb-0">
+      <div ref={containerRef} className="flex-1 overflow-y-auto scroll-smooth px-4 py-3">
         {lines.map((line, i) => (
-          <TerminalLineRenderer key={i} line={line} />
+          <TerminalLine key={i} line={line} />
         ))}
 
-        {/* Streaming content display */}
+        {/* Streaming content */}
         {streamingContent && (
-          <div className="prose prose-invert prose-sm max-w-none py-2">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {streamingContent}
-            </ReactMarkdown>
-            <span className="inline-block h-3 w-1 animate-pulse bg-cyan-400 ml-1" />
+          <div className="my-2 text-gray-200">
+            <MarkdownContent content={streamingContent} />
+            <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-400" />
           </div>
         )}
 
-        {/* API Key inline input */}
+        {/* API Key input */}
         {showApiKeyInput && (
           <div
-            className="my-3 rounded border border-cyan-500/30 bg-cyan-500/5 p-4"
+            className="my-3 max-w-lg rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-center gap-2 text-cyan-400">
-              <span className="text-lg">⚡</span>
-              <span className="font-semibold">Enter your Anthropic API Key</span>
+              <span>⚡</span>
+              <span className="font-medium">Anthropic API Key</span>
             </div>
             <p className="mb-3 text-xs text-gray-500">
-              Stored locally in your browser.{' '}
+              Stored locally.{' '}
               <a
                 href="https://console.anthropic.com/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-cyan-500 hover:underline"
               >
-                Get a key →
+                Get one →
               </a>
             </p>
             <div className="flex gap-2">
@@ -502,73 +437,55 @@ export function RichTerminal() {
                   if (e.key === 'Escape') setShowApiKeyInput(false);
                 }}
                 placeholder="sk-ant-..."
-                className="flex-1 rounded border border-cyan-500/30 bg-[#0a0e14] px-3 py-2 text-gray-100 placeholder:text-gray-600 focus:border-cyan-400 focus:outline-none"
+                className="flex-1 rounded border border-gray-700 bg-[#161b22] px-3 py-2 text-gray-100 placeholder:text-gray-600 focus:border-cyan-500 focus:outline-none"
                 autoFocus
               />
               <button
                 onClick={handleApiKeySave}
                 disabled={!apiKeyInput.trim()}
-                className="rounded bg-cyan-600 px-4 py-2 font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded bg-cyan-600 px-4 py-2 font-medium text-white hover:bg-cyan-500 disabled:opacity-40"
               >
                 Save
-              </button>
-              <button
-                onClick={() => setShowApiKeyInput(false)}
-                className="rounded border border-gray-600 px-3 py-2 text-gray-400 transition-colors hover:bg-gray-800"
-              >
-                ✕
               </button>
             </div>
           </div>
         )}
 
         {/* Input line */}
-        <div className="flex items-center gap-2 py-2">
-          <span className="text-cyan-400">❯</span>
+        <div className="sticky bottom-0 flex items-center gap-2 bg-[#0d1117] py-2">
+          <span className="text-cyan-500">❯</span>
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isProcessing}
-            className="flex-1 border-none bg-transparent text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
-            placeholder={isProcessing ? '' : 'Type a command or ask about electronics...'}
-            autoFocus
+            className="flex-1 bg-transparent text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
+            placeholder={isProcessing ? 'Processing...' : 'Ask about electronics...'}
           />
           {isProcessing && (
-            <span className="flex items-center gap-2 text-cyan-400">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-400"></span>
-              processing...
+            <span className="flex items-center gap-2 text-cyan-500 text-xs">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
             </span>
           )}
         </div>
-        <div ref={bottomRef} />
       </div>
 
       {/* Status bar */}
-      <div className="border-t border-gray-800 bg-[#0a0e14] px-4 py-2">
+      <div className="border-t border-gray-800 bg-[#0d1117] px-4 py-1.5">
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1">
-              <span className="text-cyan-500">⚡</span>
-              clitronic
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1 text-cyan-500">
+              ⚡ clitronic
             </span>
-            <span>
-              {isConfigured ? (
-                <span className="text-green-500">● connected</span>
-              ) : (
-                <span className="text-amber-500">○ no api key</span>
-              )}
+            <span className={isConfigured ? 'text-green-500' : 'text-amber-500'}>
+              {isConfigured ? '● ready' : '○ need key'}
             </span>
           </div>
-          <div className="flex items-center gap-4">
-            <span>↑↓ history</span>
-            <span>help for commands</span>
-          </div>
+          <span className="text-gray-600">↑↓ history • help</span>
         </div>
       </div>
 
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -580,154 +497,125 @@ export function RichTerminal() {
   );
 }
 
-function TerminalLineRenderer({ line }: { line: TerminalLine }) {
+function TerminalLine({ line }: { line: TerminalLine }) {
   switch (line.type) {
     case 'welcome':
       return (
-        <pre className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
+        <pre className="whitespace-pre text-cyan-500/90 text-xs leading-tight">
           {line.content}
         </pre>
       );
 
     case 'ascii':
-      return <pre className="whitespace-pre text-cyan-600/70">{line.content}</pre>;
+      return (
+        <pre className="whitespace-pre text-cyan-600/60 text-xs leading-tight">
+          {line.content}
+        </pre>
+      );
 
     case 'system':
-      return <pre className="whitespace-pre-wrap text-green-400">{line.content}</pre>;
+      return (
+        <div className="py-1 text-green-400">{line.content}</div>
+      );
 
     case 'command':
       return (
-        <div className="flex items-center gap-2 text-gray-500">
+        <div className="flex items-center gap-2 py-1">
           <span className="text-cyan-600">❯</span>
           <span className="text-gray-300">{line.content}</span>
         </div>
       );
 
     case 'error':
-      return <div className="whitespace-pre-wrap text-red-400">{line.content}</div>;
+      return (
+        <div className="py-1 text-red-400">{line.content}</div>
+      );
 
     case 'image':
       return (
-        <div className="my-2 max-w-sm overflow-hidden rounded border border-cyan-500/30">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={line.imageUrl} alt="Uploaded component" className="w-full" />
+        <div className="my-2 max-w-xs overflow-hidden rounded-lg border border-gray-700">
+          <img src={line.imageUrl} alt="Component" className="w-full" />
         </div>
       );
 
     case 'response':
       return (
-        <div className="prose prose-invert prose-sm max-w-none py-2">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              h1: ({ children }) => (
-                <h1 className="mb-2 text-lg font-bold text-cyan-400">{children}</h1>
-              ),
-              h2: ({ children }) => (
-                <h2 className="mb-2 text-base font-bold text-cyan-400">{children}</h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="mb-1 text-sm font-bold text-cyan-300">{children}</h3>
-              ),
-              p: ({ children }) => <p className="mb-2 text-gray-300">{children}</p>,
-              ul: ({ children }) => (
-                <ul className="mb-2 list-inside list-disc text-gray-300">{children}</ul>
-              ),
-              ol: ({ children }) => (
-                <ol className="mb-2 list-inside list-decimal text-gray-300">{children}</ol>
-              ),
-              li: ({ children }) => <li className="text-gray-300">{children}</li>,
-              strong: ({ children }) => (
-                <strong className="font-bold text-white">{children}</strong>
-              ),
-              em: ({ children }) => <em className="text-gray-200">{children}</em>,
-              code: ({ className, children }) => {
-                const isInline = !className;
-                if (isInline) {
-                  return (
-                    <code className="rounded bg-gray-800 px-1 py-0.5 text-cyan-300">
-                      {children}
-                    </code>
-                  );
-                }
-                return (
-                  <code className="block overflow-x-auto rounded bg-gray-900 p-3 text-cyan-300">
-                    {children}
-                  </code>
-                );
-              },
-              pre: ({ children }) => (
-                <pre className="my-2 overflow-x-auto rounded bg-gray-900 p-3">{children}</pre>
-              ),
-              table: ({ children }) => (
-                <table className="my-2 w-full border-collapse text-sm">{children}</table>
-              ),
-              th: ({ children }) => (
-                <th className="border border-gray-700 bg-gray-800 px-3 py-1 text-left text-cyan-400">
-                  {children}
-                </th>
-              ),
-              td: ({ children }) => (
-                <td className="border border-gray-700 px-3 py-1 text-gray-300">{children}</td>
-              ),
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  className="text-cyan-400 underline hover:text-cyan-300"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {children}
-                </a>
-              ),
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-2 border-cyan-500 pl-3 text-gray-400 italic">
-                  {children}
-                </blockquote>
-              ),
-            }}
-          >
-            {line.content}
-          </ReactMarkdown>
+        <div className="my-2 text-gray-200">
+          <MarkdownContent content={line.content} />
         </div>
       );
 
     default:
-      return <div className="whitespace-pre-wrap text-gray-300">{line.content}</div>;
+      return <div className="py-1 text-gray-300">{line.content}</div>;
   }
 }
 
-// Stream response with callback for each chunk
+function MarkdownContent({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ children }) => <h1 className="mb-2 text-lg font-bold text-cyan-400">{children}</h1>,
+        h2: ({ children }) => <h2 className="mb-2 font-bold text-cyan-400">{children}</h2>,
+        h3: ({ children }) => <h3 className="mb-1 font-semibold text-cyan-300">{children}</h3>,
+        p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+        ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1">{children}</ul>,
+        ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1">{children}</ol>,
+        li: ({ children }) => <li>{children}</li>,
+        strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+        code: ({ className, children }) => {
+          if (!className) {
+            return <code className="rounded bg-gray-800 px-1.5 py-0.5 text-cyan-300 text-xs">{children}</code>;
+          }
+          return <code className="block rounded bg-gray-900 p-3 text-cyan-300 text-xs overflow-x-auto">{children}</code>;
+        },
+        pre: ({ children }) => <pre className="my-2 rounded bg-gray-900 p-3 overflow-x-auto">{children}</pre>,
+        a: ({ href, children }) => (
+          <a href={href} className="text-cyan-400 hover:underline" target="_blank" rel="noopener noreferrer">
+            {children}
+          </a>
+        ),
+        table: ({ children }) => <table className="my-2 text-sm border-collapse">{children}</table>,
+        th: ({ children }) => <th className="border border-gray-700 bg-gray-800 px-3 py-1 text-left text-cyan-400">{children}</th>,
+        td: ({ children }) => <td className="border border-gray-700 px-3 py-1">{children}</td>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
+
 async function streamResponse(
   response: Response,
   onChunk: (chunk: string) => void
 ): Promise<string> {
   const reader = response.body?.getReader();
-  if (!reader) return 'Error: No response body';
+  if (!reader) return 'Error: No response';
 
   const decoder = new TextDecoder();
   let result = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    result += chunk;
-    onChunk(chunk);
-  }
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      result += chunk;
+      onChunk(chunk);
+    }
 
-  // Final decode
-  const finalChunk = decoder.decode();
-  if (finalChunk) {
-    result += finalChunk;
-    onChunk(finalChunk);
+    const final = decoder.decode();
+    if (final) {
+      result += final;
+      onChunk(final);
+    }
+  } catch (err) {
+    return `Error: ${err instanceof Error ? err.message : 'Stream error'}`;
   }
 
   const trimmed = result.trim();
-
-  // Handle AI SDK error messages
-  if (!trimmed || trimmed.includes('No output generated') || trimmed.includes('Check the stream')) {
-    return 'Error: API request failed. Please check your API key and try again.';
+  if (!trimmed || trimmed.includes('No output generated')) {
+    return 'Error: Invalid API key or request failed. Please check your API key.';
   }
 
   return trimmed;
