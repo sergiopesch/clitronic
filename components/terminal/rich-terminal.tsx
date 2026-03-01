@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useApiKey } from '../api-key';
+import { useLongPress, useVoiceRecording } from '@/hooks';
+import { VoiceIndicator, type VoiceState } from '@/components/voice';
+import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 
 interface TerminalLine {
   type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
@@ -73,6 +76,61 @@ export function RichTerminal() {
     shouldScrollRef.current = true;
   }, []);
 
+  // Voice mode state
+  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+
+  // Voice recording hook
+  const {
+    isRecording,
+    isTranscribing,
+    isSupported: voiceSupported,
+    startRecording,
+    stopRecording,
+  } = useVoiceRecording({
+    onTranscription: useCallback((text: string) => {
+      setInput(text);
+      // Auto-focus the input so user can see the transcribed text
+      inputRef.current?.focus();
+      addLine({ type: 'system', content: `🎤 "${text}"` });
+    }, [addLine]),
+    onError: useCallback((error: string) => {
+      addLine({ type: 'error', content: `✗ Voice: ${error}` });
+    }, [addLine]),
+  });
+
+  // Update voice state based on recording/transcribing status
+  useEffect(() => {
+    if (isRecording) {
+      setVoiceState('recording');
+    } else if (isTranscribing) {
+      setVoiceState('transcribing');
+    } else {
+      setVoiceState('idle');
+    }
+  }, [isRecording, isTranscribing]);
+
+  // Check if we can make API calls (for voice to work, we need both chat and STT API)
+  const canMakeApiCalls = isConfigured || hasServerKey;
+
+  // Long-press spacebar for voice recording
+  useLongPress({
+    onStart: useCallback(() => {
+      if (!canMakeApiCalls || isProcessing) return;
+      playAudioFeedback('start');
+      startRecording();
+    }, [canMakeApiCalls, isProcessing, startRecording]),
+    onEnd: useCallback(() => {
+      playAudioFeedback('end');
+      stopRecording();
+    }, [stopRecording]),
+    enabled: voiceSupported && canMakeApiCalls && !isProcessing && !showApiKeyInput,
+  });
+
+  // Preload audio feedback on mount
+  useEffect(() => {
+    preloadAudioFeedback();
+  }, []);
+
   // Check if server has API key configured
   useEffect(() => {
     fetch('/api/check-key')
@@ -135,9 +193,6 @@ export function RichTerminal() {
       addLine({ type: 'system', content: '✓ API key saved' });
     }
   }, [apiKeyInput, setApiKey, addLine]);
-
-  // Check if we can make API calls
-  const canMakeApiCalls = isConfigured || hasServerKey;
 
   // Resize image to reduce size
   const resizeImage = async (dataUrl: string, maxWidth = 1024): Promise<string> => {
@@ -475,6 +530,9 @@ export function RichTerminal() {
         </div>
       )}
 
+      {/* Voice mode indicator */}
+      <VoiceIndicator state={voiceState} />
+
       {/* Terminal content - selectable text */}
       <div
         ref={containerRef}
@@ -620,7 +678,10 @@ export function RichTerminal() {
                 : '○ need key'}
             </span>
           </div>
-          <span className="text-gray-600">↑↓ history • paste image • help</span>
+          <span className="text-gray-600">
+            {voiceSupported && canMakeApiCalls && '🎤 hold space • '}
+            ↑↓ history • paste image • help
+          </span>
         </div>
       </div>
 
