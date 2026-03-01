@@ -13,10 +13,8 @@ interface UseLongPressOptions {
   enabled?: boolean;
 }
 
-interface UseLongPressReturn {
-  /** Whether currently in long press state */
-  isPressed: boolean;
-}
+// Note: This hook uses callbacks (onStart/onEnd) for state communication
+// so the return value is minimal - just for potential status checking
 
 /**
  * Hook to detect Control+Spacebar for voice recording.
@@ -28,7 +26,7 @@ export function useLongPress({
   onStart,
   onEnd,
   enabled = true,
-}: UseLongPressOptions = {}): UseLongPressReturn {
+}: UseLongPressOptions = {}): void {
   const isPressedRef = useRef(false);
   const thresholdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasTriggeredRef = useRef(false);
@@ -133,7 +131,4 @@ export function useLongPress({
     };
   }, [enabled, handleKeyDown, handleKeyUp, handleBlur, handleVisibilityChange, clearTimer]);
 
-  return {
-    isPressed: isPressedRef.current,
-  };
 }

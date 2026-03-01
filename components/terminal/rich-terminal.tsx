@@ -7,32 +7,13 @@ import { useApiKey } from '../api-key';
 import { useLongPress, useVoiceRecording } from '@/hooks';
 import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
+import { AnimatedWelcome } from './animated-welcome';
 
 interface TerminalLine {
   type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
   content: string;
   imageUrl?: string;
 }
-
-// Clean, minimal welcome
-const WELCOME_CONTENT = `
-┌────────────────────────────────────────────────────────────────────────┐
-│                                                                        │
-│     ██████╗██╗     ██╗████████╗██████╗  ██████╗ ███╗   ██╗██╗ ██████╗  │
-│    ██╔════╝██║     ██║╚══██╔══╝██╔══██╗██╔═══██╗████╗  ██║██║██╔════╝  │
-│    ██║     ██║     ██║   ██║   ██████╔╝██║   ██║██╔██╗ ██║██║██║       │
-│    ██║     ██║     ██║   ██║   ██╔══██╗██║   ██║██║╚██╗██║██║██║       │
-│    ╚██████╗███████╗██║   ██║   ██║  ██║╚██████╔╝██║ ╚████║██║╚██████╗  │
-│     ╚═════╝╚══════╝╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚══╝╚═╝ ╚═════╝  │
-│                                                                        │
-│                  ⚡ AI-Powered Electronics Companion                   │
-│                                                                        │
-│    Commands:  help • identify • list • info • clear                   │
-│    Or just ask anything about electronics!                             │
-│    Drop an image to identify components.                               │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-`;
 
 const HELP_TEXT = `
   ┌─────────────────────────────────────────────────────────────┐
@@ -54,7 +35,7 @@ const HELP_TEXT = `
 export function RichTerminal() {
   const { apiKey, isConfigured, setApiKey } = useApiKey();
   const [lines, setLines] = useState<TerminalLine[]>([
-    { type: 'welcome', content: WELCOME_CONTENT },
+    { type: 'welcome', content: '' },
   ]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -319,7 +300,7 @@ export function RichTerminal() {
     }
 
     if (command === 'clear') {
-      setLines([{ type: 'welcome', content: WELCOME_CONTENT }]);
+      setLines([{ type: 'welcome', content: '' }]);
       return;
     }
 
@@ -664,11 +645,7 @@ export function RichTerminal() {
 function TerminalLine({ line }: { line: TerminalLine }) {
   switch (line.type) {
     case 'welcome':
-      return (
-        <pre className="whitespace-pre text-cyan-500/90 text-xs leading-tight select-text">
-          {line.content}
-        </pre>
-      );
+      return <AnimatedWelcome />;
 
     case 'ascii':
       return (
