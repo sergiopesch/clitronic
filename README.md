@@ -31,12 +31,13 @@ Open [http://localhost:3000](http://localhost:3000) — if you have Claude Code 
 
 ### Voice Mode
 
-**Hold Ctrl+Space** (or Cmd+Space on Mac) to record, release to transcribe, then **Enter to send**.
+**Hold spacebar** to record, release to transcribe, then **Enter to send**.
 
+- Works when not typing in the input field
+- Hold Ctrl+Space (or Cmd+Space) when focused in input
 - Visual indicator shows recording (pulsing red) and transcribing
 - Audio chimes for start/end feedback
-- Transcribed text appears in input field for review before sending
-- Press Enter to send, or edit the text first
+- Transcribed text appears in input field for review
 - Requires OpenAI API key for Whisper transcription
 
 ### Image Analysis

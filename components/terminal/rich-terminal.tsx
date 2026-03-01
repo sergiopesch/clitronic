@@ -625,7 +625,7 @@ export function RichTerminal() {
             </span>
           </div>
           <span className="text-gray-600">
-            {voiceSupported && canMakeApiCalls && '🎤 ctrl+space • '}
+            {voiceSupported && '🎤 hold space • '}
             ↑↓ history • paste image • help
           </span>
         </div>
