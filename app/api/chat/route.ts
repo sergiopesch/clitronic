@@ -25,7 +25,6 @@ function formatError(error: unknown): string {
     return 'Anthropic API is currently unavailable. Please try again.';
   }
 
-  // AI SDK returns this when there's an underlying stream error
   if (errorMessage.includes('No output generated') || errorMessage.includes('Check the stream')) {
     return 'API request failed. Please check your API key and try again.';
   }
@@ -34,7 +33,6 @@ function formatError(error: unknown): string {
 }
 
 export async function POST(req: Request) {
-  // Get API key from header (user-provided) or environment variable (fallback)
   const userApiKey = req.headers.get('x-api-key');
   const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
 
@@ -47,47 +45,70 @@ export async function POST(req: Request) {
     );
   }
 
+  const anthropic = createAnthropic({ apiKey });
+
+  let messages;
   try {
-    // Create Anthropic provider with the API key
-    const anthropic = createAnthropic({ apiKey });
-
-    const { messages } = await req.json();
-
-    // Convert UIMessage format (with parts) to model messages format (with content)
-    const modelMessages = await convertToModelMessages(messages as UIMessage[]);
-
-    const result = streamText({
-      model: anthropic('claude-sonnet-4-20250514'),
-      system: SYSTEM_PROMPT,
-      messages: modelMessages,
-      tools: electronicsTools,
-      maxRetries: 2,
-    });
-
-    // Await the full response text
-    const text = await result.text;
-
-    // Check if the response indicates an error (no output means API error occurred)
-    if (!text || text.includes('No output generated') || text.includes('Check the stream')) {
-      // Try to get more error details
-      return new Response('Error: Invalid API key. Please check your Anthropic API key.', {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-        },
-      });
-    }
-
-    return new Response(text, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-      },
-    });
-  } catch (error) {
-    // Return error as plain text so client can display it
-    return new Response(`Error: ${formatError(error)}`, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-      },
+    messages = (await req.json()).messages;
+  } catch {
+    return new Response('Error: Invalid request format', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   }
+
+  const modelMessages = await convertToModelMessages(messages as UIMessage[]);
+
+  const result = streamText({
+    model: anthropic('claude-sonnet-4-20250514'),
+    system: SYSTEM_PROMPT,
+    messages: modelMessages,
+    tools: electronicsTools,
+    maxRetries: 0,
+  });
+
+  // Get iterator from text stream
+  const iterator = result.textStream[Symbol.asyncIterator]();
+
+  // Try to get first chunk to detect errors early
+  let firstChunk: string;
+  try {
+    const first = await iterator.next();
+    if (first.done) {
+      // Empty response usually means auth error - the SDK doesn't throw, just ends
+      return new Response('Error: Invalid API key. Please check your Anthropic API key.', {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+    firstChunk = first.value;
+  } catch (error) {
+    return new Response(`Error: ${formatError(error)}`, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
+
+  // Stream the rest of the response
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      // Enqueue first chunk immediately
+      controller.enqueue(encoder.encode(firstChunk));
+    },
+    async pull(controller) {
+      try {
+        const { done, value } = await iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(encoder.encode(value));
+        }
+      } catch (error) {
+        controller.enqueue(encoder.encode(`\nError: ${formatError(error)}`));
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
 }

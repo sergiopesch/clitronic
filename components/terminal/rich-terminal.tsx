@@ -6,28 +6,45 @@ import remarkGfm from 'remark-gfm';
 import { useApiKey } from '../api-key';
 
 interface TerminalLine {
-  type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
+  type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii' | 'streaming';
   content: string;
   imageUrl?: string;
 }
 
-// Clitronic branded ASCII art with circuit theme
+// Cool electronics-themed ASCII art
 const ASCII_LOGO = `
- ██████╗██╗     ██╗████████╗██████╗  ██████╗ ███╗   ██╗██╗ ██████╗
-██╔════╝██║     ██║╚══██╔══╝██╔══██╗██╔═══██╗████╗  ██║██║██╔════╝
-██║     ██║     ██║   ██║   ██████╔╝██║   ██║██╔██╗ ██║██║██║
-██║     ██║     ██║   ██║   ██╔══██╗██║   ██║██║╚██╗██║██║██║
-╚██████╗███████╗██║   ██║   ██║  ██║╚██████╔╝██║ ╚████║██║╚██████╗
- ╚═════╝╚══════╝╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝ ╚═════╝
+    ╭─────────────────────────────────────────────────────────────────╮
+    │                                                                 │
+    │   ░█████╗░██╗░░░░░██╗████████╗██████╗░░█████╗░███╗░░██╗██╗░█████╗░   │
+    │   ██╔══██╗██║░░░░░██║╚══██╔══╝██╔══██╗██╔══██╗████╗░██║██║██╔══██╗   │
+    │   ██║░░╚═╝██║░░░░░██║░░░██║░░░██████╔╝██║░░██║██╔██╗██║██║██║░░╚═╝   │
+    │   ██║░░██╗██║░░░░░██║░░░██║░░░██╔══██╗██║░░██║██║╚████║██║██║░░██╗   │
+    │   ╚█████╔╝███████╗██║░░░██║░░░██║░░██║╚█████╔╝██║░╚███║██║╚█████╔╝   │
+    │   ░╚════╝░╚══════╝╚═╝░░░╚═╝░░░╚═╝░░╚═╝░╚════╝░╚═╝░░╚══╝╚═╝░╚════╝░   │
+    │                                                                 │
+    ╰─────────────────────────────────────────────────────────────────╯
 `;
 
-const CIRCUIT_ART = `┌──────────────────────────────────────────────────────────────────┐
-│  ┌─[R1]─┬──●──[C1]──┐    Your AI-powered hardware companion     │
-│  │      │           │    for electronics and robotics           │
-│ [+]    [LED]       ─┴─                                          │
-│  │      │          ───   Type 'help' for commands               │
-│  └──────┴───────────┴─   or just ask anything!                  │
-└──────────────────────────────────────────────────────────────────┘`;
+const CIRCUIT_ART = `
+      ┌────────────────────────────────────────────────────────────┐
+      │                                                            │
+      │     ┌──[470Ω]──┬────●────[100µF]────┐                      │
+      │     │          │                    │                      │
+      │    ─┴─        ╱│╲                  ─┴─                     │
+      │    ───   ────▶ │ ▶────            ───                     │
+      │     │    LED  ╲│╱  NPN             │                      │
+      │     │          │                    │                      │
+      │     └──────────┴────────────────────┘                      │
+      │                ⏚ GND                                       │
+      │                                                            │
+      │   ⚡ Your AI-powered hardware companion                    │
+      │   🔧 Identify components • Calculate circuits • Learn      │
+      │                                                            │
+      │   Type 'help' for commands, or just ask anything!          │
+      │   Drag & drop images to identify components                │
+      │                                                            │
+      └────────────────────────────────────────────────────────────┘
+`;
 
 const HELP_TEXT = `
 ┌─────────────────────────────────────────────────────────────────┐
@@ -60,12 +77,24 @@ export function RichTerminal() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isDragging, setIsDragging] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addLine = useCallback((line: TerminalLine) => {
     setLines((prev) => [...prev, line]);
+  }, []);
+
+  const updateLastLine = useCallback((content: string) => {
+    setLines((prev) => {
+      const newLines = [...prev];
+      if (newLines.length > 0) {
+        newLines[newLines.length - 1] = { ...newLines[newLines.length - 1], content };
+      }
+      return newLines;
+    });
   }, []);
 
   useEffect(() => {
@@ -180,13 +209,19 @@ export function RichTerminal() {
         return;
       }
 
-      const text = await readStreamAsText(res);
+      // Stream the response for real-time display
+      const text = await streamResponse(res, (chunk) => {
+        setStreamingContent((prev) => prev + chunk);
+      });
+      setStreamingContent('');
+
       if (text.startsWith('Error:')) {
         addLine({ type: 'error', content: `✗ ${text}` });
       } else {
         addLine({ type: 'response', content: text });
       }
     } catch (err) {
+      setStreamingContent('');
       addLine({
         type: 'error',
         content: `✗ Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
@@ -195,6 +230,109 @@ export function RichTerminal() {
 
     setIsProcessing(false);
   };
+
+  // Handle drag and drop for images
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      const files = e.dataTransfer.files;
+      if (files.length === 0) return;
+
+      const file = files[0];
+      if (!file.type.startsWith('image/')) {
+        addLine({ type: 'error', content: '✗ Only image files are supported' });
+        return;
+      }
+
+      if (!isConfigured) {
+        addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
+        setShowApiKeyInput(true);
+        return;
+      }
+
+      // Process the dropped image
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const dataUrl = event.target?.result as string;
+        addLine({ type: 'command', content: `identify ${file.name}` });
+        addLine({ type: 'image', content: '', imageUrl: dataUrl });
+
+        setIsProcessing(true);
+
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey || '',
+            },
+            body: JSON.stringify({
+              messages: [
+                {
+                  id: '1',
+                  role: 'user',
+                  parts: [
+                    { type: 'file', url: dataUrl, mediaType: file.type || 'image/jpeg' },
+                    {
+                      type: 'text',
+                      text: 'Identify this electronic component. Tell me what it is, its specifications, how to use it, and any tips. If you can read markings or color codes, decode them.',
+                    },
+                  ],
+                },
+              ],
+            }),
+          });
+
+          if (!res.ok) {
+            let errorMsg = 'Request failed';
+            try {
+              const error = await res.json();
+              errorMsg = error.error || errorMsg;
+            } catch {
+              errorMsg = `HTTP ${res.status}: ${res.statusText || 'Server error'}`;
+            }
+            addLine({ type: 'error', content: `✗ Error: ${errorMsg}` });
+          } else {
+            const text = await streamResponse(res, (chunk) => {
+              setStreamingContent((prev) => prev + chunk);
+            });
+            setStreamingContent('');
+
+            if (text.startsWith('Error:')) {
+              addLine({ type: 'error', content: `✗ ${text}` });
+            } else {
+              addLine({ type: 'response', content: text });
+            }
+          }
+        } catch (err) {
+          setStreamingContent('');
+          addLine({
+            type: 'error',
+            content: `✗ Error: ${err instanceof Error ? err.message : 'Failed to identify'}`,
+          });
+        }
+
+        setIsProcessing(false);
+      };
+      reader.readAsDataURL(file);
+    },
+    [apiKey, isConfigured, addLine, setShowApiKeyInput]
+  );
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -247,7 +385,11 @@ export function RichTerminal() {
           }
           addLine({ type: 'error', content: `✗ Error: ${errorMsg}` });
         } else {
-          const text = await readStreamAsText(res);
+          const text = await streamResponse(res, (chunk) => {
+            setStreamingContent((prev) => prev + chunk);
+          });
+          setStreamingContent('');
+
           if (text.startsWith('Error:')) {
             addLine({ type: 'error', content: `✗ ${text}` });
           } else {
@@ -255,6 +397,7 @@ export function RichTerminal() {
           }
         }
       } catch (err) {
+        setStreamingContent('');
         addLine({
           type: 'error',
           content: `✗ Error: ${err instanceof Error ? err.message : 'Failed to identify'}`,
@@ -293,14 +436,40 @@ export function RichTerminal() {
 
   return (
     <div
-      className="flex h-screen flex-col bg-[#0a0e14] font-mono text-sm"
+      className={`flex h-screen flex-col bg-[#0a0e14] font-mono text-sm transition-colors ${
+        isDragging ? 'ring-2 ring-inset ring-cyan-400 bg-cyan-500/5' : ''
+      }`}
       onClick={() => inputRef.current?.focus()}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#0a0e14]/80">
+          <div className="rounded-lg border-2 border-dashed border-cyan-400 bg-cyan-500/10 px-8 py-6 text-center">
+            <div className="mb-2 text-4xl">📷</div>
+            <div className="text-lg font-semibold text-cyan-400">Drop image to identify</div>
+            <div className="text-sm text-gray-400">Electronic component analysis</div>
+          </div>
+        </div>
+      )}
+
       {/* Terminal content */}
       <div className="flex-1 overflow-y-auto p-4 pb-0">
         {lines.map((line, i) => (
           <TerminalLineRenderer key={i} line={line} />
         ))}
+
+        {/* Streaming content display */}
+        {streamingContent && (
+          <div className="prose prose-invert prose-sm max-w-none py-2">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {streamingContent}
+            </ReactMarkdown>
+            <span className="inline-block h-3 w-1 animate-pulse bg-cyan-400 ml-1" />
+          </div>
+        )}
 
         {/* API Key inline input */}
         {showApiKeyInput && (
@@ -528,8 +697,11 @@ function TerminalLineRenderer({ line }: { line: TerminalLine }) {
   }
 }
 
-// Read plain text stream response
-async function readStreamAsText(response: Response): Promise<string> {
+// Stream response with callback for each chunk
+async function streamResponse(
+  response: Response,
+  onChunk: (chunk: string) => void
+): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) return 'Error: No response body';
 
@@ -539,11 +711,24 @@ async function readStreamAsText(response: Response): Promise<string> {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    result += decoder.decode(value, { stream: true });
+    const chunk = decoder.decode(value, { stream: true });
+    result += chunk;
+    onChunk(chunk);
   }
 
   // Final decode
-  result += decoder.decode();
+  const finalChunk = decoder.decode();
+  if (finalChunk) {
+    result += finalChunk;
+    onChunk(finalChunk);
+  }
 
-  return result.trim() || '(No response received)';
+  const trimmed = result.trim();
+
+  // Handle AI SDK error messages
+  if (!trimmed || trimmed.includes('No output generated') || trimmed.includes('Check the stream')) {
+    return 'Error: API request failed. Please check your API key and try again.';
+  }
+
+  return trimmed;
 }
