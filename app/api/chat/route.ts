@@ -153,7 +153,6 @@ export async function POST(req: Request) {
       messages: messages as any,
       tools: electronicsTools,
       maxRetries: 2,
-      maxSteps: 3, // Allow multi-step tool use
     });
 
     // Collect the full text response (handles tools automatically)
@@ -167,10 +166,10 @@ export async function POST(req: Request) {
           for await (const part of result.fullStream) {
             if (part.type === 'text-delta') {
               hasContent = true;
-              controller.enqueue(encoder.encode(part.textDelta));
+              controller.enqueue(encoder.encode(part.text));
             } else if (part.type === 'tool-result') {
               // Tool results are processed internally, text will follow
-              console.log('Tool result:', part.toolName);
+              console.log('Tool result:', part.toolName as string);
             } else if (part.type === 'error') {
               console.error('Stream part error:', part.error);
               controller.enqueue(encoder.encode(`\n\nError: ${formatError(part.error)}`));
