@@ -127,6 +127,15 @@ export async function POST(req: Request) {
     });
   }
 
+  // Validate API key format - must be Anthropic API key (sk-ant-*)
+  // Note: Claude Code OAuth tokens are NOT supported - they're for claude.ai, not the API
+  if (!apiKey.startsWith('sk-ant-')) {
+    return new Response(
+      'Error: Invalid API key format. Please use an Anthropic API key (starts with sk-ant-).',
+      { status: 401, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+    );
+  }
+
   const anthropic = createAnthropic({ apiKey });
   const messages = convertMessages(body.messages);
 
@@ -143,51 +152,40 @@ export async function POST(req: Request) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       messages: messages as any,
       tools: electronicsTools,
-      maxRetries: 1,
+      maxRetries: 2,
+      maxSteps: 3, // Allow multi-step tool use
     });
 
-    const iterator = result.textStream[Symbol.asyncIterator]();
-
-    // Try to get first chunk
-    let firstChunk: string;
-    try {
-      const first = await iterator.next();
-      if (first.done) {
-        // Empty response - could be various reasons
-        console.error('Empty stream response');
-        return new Response('Error: No response from API. The image might be unsupported or too large.', {
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        });
-      }
-      firstChunk = first.value;
-    } catch (error) {
-      console.error('Stream error:', error);
-      const errorMsg = formatError(error);
-      // Return 401 for auth errors so client can prompt for key
-      const status = errorMsg.includes('API key') ? 401 : 500;
-      return new Response(`Error: ${errorMsg}`, {
-        status,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      });
-    }
-
-    // Stream the response
+    // Collect the full text response (handles tools automatically)
     const encoder = new TextEncoder();
+    let hasContent = false;
+
     const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(firstChunk));
-      },
-      async pull(controller) {
+      async start(controller) {
         try {
-          const { done, value } = await iterator.next();
-          if (done) {
-            controller.close();
-          } else {
-            controller.enqueue(encoder.encode(value));
+          // Use fullStream to handle both text and tool results
+          for await (const part of result.fullStream) {
+            if (part.type === 'text-delta') {
+              hasContent = true;
+              controller.enqueue(encoder.encode(part.textDelta));
+            } else if (part.type === 'tool-result') {
+              // Tool results are processed internally, text will follow
+              console.log('Tool result:', part.toolName);
+            } else if (part.type === 'error') {
+              console.error('Stream part error:', part.error);
+              controller.enqueue(encoder.encode(`\n\nError: ${formatError(part.error)}`));
+            }
           }
+
+          if (!hasContent) {
+            controller.enqueue(encoder.encode('Error: No response generated. Please try again.'));
+          }
+
+          controller.close();
         } catch (error) {
-          console.error('Stream pull error:', error);
-          controller.enqueue(encoder.encode(`\n\nError: ${formatError(error)}`));
+          console.error('Stream error:', error);
+          const errorMsg = formatError(error);
+          controller.enqueue(encoder.encode(`Error: ${errorMsg}`));
           controller.close();
         }
       },
@@ -198,7 +196,10 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('API call error:', error);
-    return new Response(`Error: ${formatError(error)}`, {
+    const errorMsg = formatError(error);
+    const status = errorMsg.includes('API key') ? 401 : 500;
+    return new Response(`Error: ${errorMsg}`, {
+      status,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   }

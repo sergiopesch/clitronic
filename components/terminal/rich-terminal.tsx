@@ -52,7 +52,7 @@ const HELP_TEXT = `
 `;
 
 export function RichTerminal() {
-  const { apiKey, isConfigured, setApiKey, claudeCodeAvailable, useClaudeCodeAuth, isCheckingClaudeCode, authSource } = useApiKey();
+  const { apiKey, isConfigured, setApiKey } = useApiKey();
   const [lines, setLines] = useState<TerminalLine[]>([
     { type: 'welcome', content: WELCOME_CONTENT },
   ]);
@@ -567,41 +567,8 @@ export function RichTerminal() {
               <span className="font-medium">Authentication</span>
             </div>
 
-            {/* Claude Code Option */}
-            {claudeCodeAvailable && (
-              <>
-                <button
-                  onClick={async () => {
-                    const result = await useClaudeCodeAuth();
-                    if (result.success) {
-                      setShowApiKeyInput(false);
-                      addLine({ type: 'system', content: '✓ Connected via Claude Code' });
-                    } else {
-                      addLine({ type: 'error', content: `✗ ${result.error}` });
-                    }
-                  }}
-                  disabled={isCheckingClaudeCode}
-                  className="mb-3 w-full rounded bg-purple-600 py-2.5 font-medium text-white hover:bg-purple-500 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isCheckingClaudeCode ? (
-                    <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <span>🔗</span>
-                      Use Claude Code Credentials
-                    </>
-                  )}
-                </button>
-                <div className="mb-3 flex items-center gap-2">
-                  <div className="h-px flex-1 bg-gray-700" />
-                  <span className="text-xs text-gray-500">or enter manually</span>
-                  <div className="h-px flex-1 bg-gray-700" />
-                </div>
-              </>
-            )}
+            {/* Note: Claude Code OAuth tokens don't work with direct API calls */}
+            {/* Users need to use an Anthropic API key (sk-ant-*) */}
 
             <p className="mb-2 text-xs text-gray-500">
               Enter your API key (stored locally in browser).{' '}
@@ -625,7 +592,7 @@ export function RichTerminal() {
                 }}
                 placeholder="sk-ant-api03-..."
                 className="flex-1 rounded border border-gray-700 bg-[#161b22] px-3 py-2 text-gray-100 placeholder:text-gray-600 focus:border-cyan-500 focus:outline-none"
-                autoFocus={!claudeCodeAvailable}
+                autoFocus
               />
               <button
                 onClick={handleApiKeySave}
@@ -672,14 +639,12 @@ export function RichTerminal() {
             </span>
             <span className={canMakeApiCalls ? 'text-green-500' : 'text-amber-500'}>
               {canMakeApiCalls
-                ? authSource === 'claude-code'
-                  ? '● claude code'
-                  : '● ready'
+                ? '● ready'
                 : '○ need key'}
             </span>
           </div>
           <span className="text-gray-600">
-            {voiceSupported && canMakeApiCalls && '🎤 hold space • '}
+            {voiceSupported && canMakeApiCalls && '🎤 ctrl+space • '}
             ↑↓ history • paste image • help
           </span>
         </div>

@@ -31,11 +31,12 @@ Open [http://localhost:3000](http://localhost:3000) — if you have Claude Code 
 
 ### Voice Mode
 
-**Hold spacebar** to record, release to send.
+**Hold Ctrl+Space** (or Cmd+Space on Mac) to record, release to transcribe, then **Enter to send**.
 
 - Visual indicator shows recording (pulsing red) and transcribing
 - Audio chimes for start/end feedback
-- Transcribed text auto-populates the input field
+- Transcribed text appears in input field for review before sending
+- Press Enter to send, or edit the text first
 - Requires OpenAI API key for Whisper transcription
 
 ### Image Analysis
@@ -44,14 +45,6 @@ Open [http://localhost:3000](http://localhost:3000) — if you have Claude Code 
 - **Paste** images from clipboard (Cmd/Ctrl+V)
 - **Upload** via `identify` command
 - Claude identifies components, decodes markings and color codes
-
-### Claude Code Integration
-
-One-click authentication for Claude Code users:
-
-1. Click "Use Claude Code Credentials" button
-2. Reads credentials from macOS Keychain or `~/.claude/.credentials.json`
-3. Status bar shows "● claude code" when connected
 
 ### AI Capabilities
 
@@ -71,21 +64,7 @@ One-click authentication for Claude Code users:
 
 ## Authentication
 
-### Option 1: Claude Code (Recommended)
-
-If you have [Claude Code](https://claude.ai/code) installed and authenticated:
-
-1. Type `key` in the terminal
-2. Click "Use Claude Code Credentials"
-3. Done! Your existing credentials are used automatically.
-
-### Option 2: Manual API Key
-
-1. Type `key` in the terminal
-2. Enter your Anthropic API key (starts with `sk-ant-`)
-3. Key is stored in browser localStorage
-
-### Option 3: Environment Variable
+### Option 1: Environment Variable (Recommended)
 
 Create `.env.local` for server-side configuration:
 
@@ -93,6 +72,12 @@ Create `.env.local` for server-side configuration:
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 OPENAI_API_KEY=sk-your-openai-key  # Optional: for voice mode
 ```
+
+### Option 2: Browser API Key
+
+1. Type `key` in the terminal
+2. Enter your Anthropic API key (starts with `sk-ant-`)
+3. Key is stored in browser localStorage
 
 ## Security
 

@@ -19,9 +19,9 @@ interface UseLongPressReturn {
 }
 
 /**
- * Hook to detect spacebar long-press for voice recording.
+ * Hook to detect Control+Spacebar for voice recording.
  * Only triggers after holding for the threshold duration.
- * Ignores presses when focus is in text input fields.
+ * Works even when focus is in input fields (Ctrl+Space is not a typing action).
  */
 export function useLongPress({
   threshold = 200,
@@ -44,24 +44,14 @@ export function useLongPress({
     (event: KeyboardEvent) => {
       if (!enabled) return;
 
-      // Only handle spacebar
-      if (event.code !== 'Space') return;
+      // Only handle Control+Spacebar (Ctrl on Windows/Linux, Ctrl or Cmd on Mac)
+      const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+      if (event.code !== 'Space' || !isCtrlOrCmd) return;
 
       // Ignore if already pressed (prevent repeat events)
       if (isPressedRef.current) return;
 
-      // Don't trigger when typing in input fields
-      const target = event.target as HTMLElement;
-      const tagName = target.tagName.toLowerCase();
-      const isEditable =
-        tagName === 'input' ||
-        tagName === 'textarea' ||
-        tagName === 'select' ||
-        target.isContentEditable;
-
-      if (isEditable) return;
-
-      // Prevent default spacebar behavior (scrolling)
+      // Prevent default behavior
       event.preventDefault();
 
       isPressedRef.current = true;
@@ -80,7 +70,7 @@ export function useLongPress({
     (event: KeyboardEvent) => {
       if (!enabled) return;
 
-      // Only handle spacebar
+      // Handle spacebar release (don't require Ctrl to still be held)
       if (event.code !== 'Space') return;
 
       // Only process if we were tracking this press
