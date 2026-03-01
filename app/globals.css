@@ -3,6 +3,13 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Clitronic brand colors */
+  --brand-cyan: #22d3ee;
+  --brand-cyan-dark: #06b6d4;
+  --brand-bg: #0d1117;
+  --brand-bg-light: #161b22;
+  --brand-accent: #22d3ee;
 }
 
 @theme inline {
@@ -10,6 +17,12 @@
   --color-foreground: var(--foreground);
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  /* Brand colors for Tailwind */
+  --color-brand-cyan: var(--brand-cyan);
+  --color-brand-cyan-dark: var(--brand-cyan-dark);
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-bg-light: var(--brand-bg-light);
 }
 
 @media (prefers-color-scheme: dark) {

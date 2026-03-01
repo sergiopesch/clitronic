@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1117"/>
+      <stop offset="100%" style="stop-color:#161b22"/>
+    </linearGradient>
+    <linearGradient id="circuit" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22d3ee"/>
+      <stop offset="100%" style="stop-color:#06b6d4"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bg)" stroke="url(#circuit)" stroke-width="8"/>
+
+  <!-- Circuit traces -->
+  <g fill="none" stroke="url(#circuit)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <!-- Horizontal main line -->
+    <path d="M100 256 L200 256"/>
+    <path d="M312 256 L412 256"/>
+
+    <!-- Vertical connections -->
+    <path d="M256 100 L256 180"/>
+    <path d="M256 332 L256 412"/>
+
+    <!-- Diagonal traces -->
+    <path d="M180 180 L200 200"/>
+    <path d="M312 200 L332 180"/>
+    <path d="M180 332 L200 312"/>
+    <path d="M312 312 L332 332"/>
+  </g>
+
+  <!-- Central IC chip -->
+  <rect x="200" y="200" width="112" height="112" rx="8" fill="#0d1117" stroke="url(#circuit)" stroke-width="6"/>
+
+  <!-- IC pins -->
+  <g fill="url(#circuit)">
+    <!-- Top pins -->
+    <rect x="220" y="188" width="16" height="20" rx="2"/>
+    <rect x="248" y="188" width="16" height="20" rx="2"/>
+    <rect x="276" y="188" width="16" height="20" rx="2"/>
+
+    <!-- Bottom pins -->
+    <rect x="220" y="304" width="16" height="20" rx="2"/>
+    <rect x="248" y="304" width="16" height="20" rx="2"/>
+    <rect x="276" y="304" width="16" height="20" rx="2"/>
+
+    <!-- Left pins -->
+    <rect x="188" y="220" width="20" height="16" rx="2"/>
+    <rect x="188" y="248" width="20" height="16" rx="2"/>
+    <rect x="188" y="276" width="20" height="16" rx="2"/>
+
+    <!-- Right pins -->
+    <rect x="304" y="220" width="20" height="16" rx="2"/>
+    <rect x="304" y="248" width="20" height="16" rx="2"/>
+    <rect x="304" y="276" width="20" height="16" rx="2"/>
+  </g>
+
+  <!-- IC dot marker -->
+  <circle cx="224" cy="224" r="8" fill="url(#circuit)" opacity="0.6"/>
+
+  <!-- Connection nodes -->
+  <g fill="url(#circuit)" filter="url(#glow)">
+    <circle cx="100" cy="256" r="12"/>
+    <circle cx="412" cy="256" r="12"/>
+    <circle cx="256" cy="100" r="12"/>
+    <circle cx="256" cy="412" r="12"/>
+    <circle cx="180" cy="180" r="8"/>
+    <circle cx="332" cy="180" r="8"/>
+    <circle cx="180" cy="332" r="8"/>
+    <circle cx="332" cy="332" r="8"/>
+  </g>
+</svg>
