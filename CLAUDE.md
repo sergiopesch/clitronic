@@ -9,7 +9,11 @@ Clitronic is an AI-powered terminal companion for electronics enthusiasts. It fe
 ```
 clitronic/
 ├── app/                    # Next.js 15 App Router
-│   ├── api/chat/          # Streaming chat API endpoint
+│   ├── api/
+│   │   ├── chat/          # Streaming chat API endpoint
+│   │   ├── check-key/     # API key validation
+│   │   ├── claude-code-auth/ # Claude Code credentials
+│   │   └── speech-to-text/   # Voice transcription (Whisper)
 │   └── page.tsx           # Terminal interface entry point
 ├── cli/                    # Self-contained CLI package
 │   ├── bin/               # CLI entry point
@@ -17,10 +21,16 @@ clitronic/
 │   └── src/data/          # Local copy of component data
 ├── components/
 │   ├── api-key/           # API key provider and modal
-│   └── terminal/          # Rich terminal interface
+│   ├── terminal/          # Rich terminal interface
+│   └── voice/             # Voice mode indicator
+├── hooks/                  # Custom React hooks
+│   ├── useLongPress.ts    # Spacebar long-press detection
+│   └── useVoiceRecording.ts # Browser audio capture
 └── lib/
     ├── ai/                # System prompt & tool definitions
-    └── data/              # Component knowledge base (16 components)
+    ├── auth/              # Claude Code credentials reader
+    ├── data/              # Component knowledge base (16 components)
+    └── utils/             # Audio utilities
 ```
 
 ### Key Design Decisions
@@ -70,7 +80,24 @@ npm run start -- list active       # Filter by category
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` - Required for CLI; web app uses BYOK via header
+- `ANTHROPIC_API_KEY` - Required for CLI; web app uses BYOK via header or Claude Code auth
+- `OPENAI_API_KEY` - Optional; required for voice mode (speech-to-text)
+
+## Authentication
+
+### Claude Code Integration
+Users with Claude Code installed can authenticate with one click:
+1. Click "Use Claude Code Credentials" button
+2. Credentials are read from macOS Keychain or ~/.claude/.credentials.json
+3. Status bar shows "● claude code" when connected
+
+### Manual API Key
+1. Type `key` command in terminal
+2. Enter Anthropic API key (starts with `sk-ant-`)
+3. Key is stored in browser localStorage
+
+### Server-Side Key
+Set `ANTHROPIC_API_KEY` in `.env.local` for persistent setup
 
 ## AI Integration
 
@@ -102,9 +129,29 @@ npm run start -- list active       # Filter by category
 
 ### Image Upload
 
-- Triggered via `identify` command
+- Triggered via `identify` command or drag-and-drop
 - Images sent as base64 data URLs to API
 - Claude analyzes and identifies components
+
+### Voice Mode
+
+**Activation**: Hold spacebar to record, release to send
+
+**Requirements**:
+- Browser with MediaRecorder support (Chrome, Firefox, Safari)
+- Microphone permission
+- OpenAI API key (for Whisper transcription)
+
+**Features**:
+- Visual indicator shows recording (pulsing red) and transcribing (spinner)
+- Audio chimes for start/end feedback
+- Auto-populates input with transcribed text
+
+**Implementation**:
+- `useLongPress` hook detects spacebar hold (200ms threshold)
+- `useVoiceRecording` hook captures audio via MediaRecorder
+- Audio sent to `/api/speech-to-text` (OpenAI Whisper)
+- Chimes generated programmatically with Web Audio API
 
 ### UI Elements
 
