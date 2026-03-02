@@ -44,15 +44,15 @@ export async function GET() {
 
 /**
  * POST /api/claude-code-auth
- * Retrieve the Claude Code access token
+ * Validate Claude Code credentials without exposing raw tokens
  */
 export async function POST() {
   try {
-    const token = await getAccessToken();
+    await getAccessToken();
 
     return Response.json({
       success: true,
-      token,
+      connected: true,
     });
   } catch (error) {
     if (error instanceof ClaudeCodeCredentialsError) {
@@ -92,7 +92,8 @@ export async function POST() {
           return Response.json(
             {
               success: false,
-              error: 'Keychain access denied. Please grant permission to access Claude Code credentials.',
+              error:
+                'Keychain access denied. Please grant permission to access Claude Code credentials.',
             },
             { status: 403 }
           );

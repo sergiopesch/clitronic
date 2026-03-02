@@ -7,6 +7,8 @@ type PermissionState = 'granted' | 'denied' | 'prompt' | 'unsupported';
 interface UseVoiceRecordingOptions {
   /** API endpoint for speech-to-text (default: /api/speech-to-text) */
   endpoint?: string;
+  /** Selected auth provider forwarded to the server */
+  authProvider?: 'claude-code' | 'openai-codex' | null;
   /** Callback when transcription completes */
   onTranscription?: (text: string) => void;
   /** Callback on error */
@@ -34,6 +36,7 @@ interface UseVoiceRecordingReturn {
  */
 export function useVoiceRecording({
   endpoint = '/api/speech-to-text',
+  authProvider = null,
   onTranscription,
   onError,
 }: UseVoiceRecordingOptions = {}): UseVoiceRecordingReturn {
@@ -83,12 +86,7 @@ export function useVoiceRecording({
 
   const getMimeType = useCallback((): string => {
     // Prefer WebM with Opus codec
-    const types = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/mp4',
-    ];
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
 
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) {
@@ -98,6 +96,14 @@ export function useVoiceRecording({
 
     // Fallback - let browser choose
     return '';
+  }, []);
+
+  const cleanupStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
   }, []);
 
   const startRecording = useCallback(async () => {
@@ -158,15 +164,7 @@ export function useVoiceRecording({
         onError?.('Failed to start recording');
       }
     }
-  }, [isSupported, isRecording, getMimeType, onError]);
-
-  const cleanupStream = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    mediaRecorderRef.current = null;
-  }, []);
+  }, [isSupported, isRecording, getMimeType, cleanupStream, onError]);
 
   const stopRecording = useCallback(async () => {
     if (!isRecording || !mediaRecorderRef.current) return;
@@ -203,6 +201,7 @@ export function useVoiceRecording({
 
           const response = await fetch(endpoint, {
             method: 'POST',
+            headers: authProvider ? { 'x-auth-provider': authProvider } : undefined,
             body: formData,
           });
 
@@ -219,9 +218,7 @@ export function useVoiceRecording({
             onError?.('No transcription received');
           }
         } catch (error) {
-          onError?.(
-            error instanceof Error ? error.message : 'Transcription failed'
-          );
+          onError?.(error instanceof Error ? error.message : 'Transcription failed');
         } finally {
           setIsTranscribing(false);
         }
@@ -237,7 +234,7 @@ export function useVoiceRecording({
         mediaRecorder.onstop?.(new Event('stop'));
       }
     });
-  }, [isRecording, endpoint, cleanupStream, onTranscription, onError]);
+  }, [isRecording, endpoint, authProvider, cleanupStream, onTranscription, onError]);
 
   // Cleanup on unmount
   useEffect(() => {

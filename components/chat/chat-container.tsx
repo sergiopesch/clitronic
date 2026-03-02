@@ -8,16 +8,16 @@ import { ChatInput } from './chat-input';
 import { useApiKey, ApiKeyModal } from '../api-key';
 
 export function ChatContainer() {
-  const { apiKey, isConfigured } = useApiKey();
-  const [showKeyPrompt, setShowKeyPrompt] = useState(false);
+  const { authSource, isConfigured } = useApiKey();
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
-  // Create transport with API key in headers
+  // Create transport with selected auth provider in headers
   const transport = useMemo(() => {
     return new DefaultChatTransport({
       api: '/api/chat',
-      headers: apiKey ? { 'x-api-key': apiKey } : undefined,
+      headers: authSource ? { 'x-auth-provider': authSource } : undefined,
     });
-  }, [apiKey]);
+  }, [authSource]);
 
   const { messages, sendMessage, status } = useChat({ transport });
 
@@ -26,9 +26,9 @@ export function ChatContainer() {
   const handleSend = async (text: string, imageDataUrl?: string) => {
     if (!text.trim() && !imageDataUrl) return;
 
-    // Prompt for API key if not configured
+    // Prompt for provider authentication if not configured
     if (!isConfigured) {
-      setShowKeyPrompt(true);
+      setShowAuthPrompt(true);
       return;
     }
 
@@ -52,7 +52,7 @@ export function ChatContainer() {
     <div className="flex h-full flex-col">
       <MessageList messages={messages as UIMessage[]} />
       <ChatInput onSend={handleSend} isLoading={isLoading} />
-      <ApiKeyModal isOpen={showKeyPrompt} onClose={() => setShowKeyPrompt(false)} />
+      <ApiKeyModal isOpen={showAuthPrompt} onClose={() => setShowAuthPrompt(false)} />
     </div>
   );
 }

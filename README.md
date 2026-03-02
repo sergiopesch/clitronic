@@ -2,7 +2,7 @@
 
 **AI-powered terminal companion for electronics and robotics**
 
-A beautiful terminal interface that helps you understand electronic components, circuits, and calculations. Keyboard-driven, multimodal, powered by Claude AI.
+A beautiful terminal interface that helps you understand electronic components, circuits, and calculations. Keyboard-driven, multimodal, powered by Claude + OpenAI.
 
 ## Quick Start
 
@@ -16,17 +16,17 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — if you have Claude Code installed, click "Use Claude Code Credentials" to authenticate instantly.
+Open [http://localhost:3000](http://localhost:3000), use the first-run coachmark or run `auth`, then choose `Claude Code` or `OpenAI Codex`.
 
 ## Features
 
 ### Terminal Commands
 
 - `help` — Show all available commands
+- `auth` — Connect Claude Code or OpenAI Codex
 - `list [category]` — List components (passive, active, input, output)
 - `info <component>` — Component details (e.g., `info led`)
 - `identify` — Upload an image to identify a component
-- `key` — Set or update your API key
 - `clear` — Clear the terminal
 
 ### Voice Mode
@@ -38,7 +38,7 @@ Open [http://localhost:3000](http://localhost:3000) — if you have Claude Code 
 - Visual indicator shows recording (pulsing red) and transcribing
 - Audio chimes for start/end feedback
 - Transcribed text appears in input field for review
-- Requires OpenAI API key for Whisper transcription
+- Requires OpenAI credentials (OpenAI Codex auth or server-side OpenAI env credentials)
 
 ### Image Analysis
 
@@ -57,6 +57,10 @@ Open [http://localhost:3000](http://localhost:3000) — if you have Claude Code 
 ### Terminal Experience
 
 - Electronics-themed ASCII art
+- First-run coachmark with guided setup actions
+- Clear provider/voice status chips
+- Quick-command rail (`help`, `list`, `info resistor`, `identify`, `auth`)
+- Mobile-friendly touch targets and safe-area-aware footer
 - Consistent cyan/blue branding
 - Markdown rendering with syntax highlighting
 - Command history (↑↓ arrow keys)
@@ -65,29 +69,33 @@ Open [http://localhost:3000](http://localhost:3000) — if you have Claude Code 
 
 ## Authentication
 
-### Option 1: Environment Variable (Recommended)
+No end-user API keys required.
 
-Create `.env.local` for server-side configuration:
+Users authenticate by running `auth` and selecting:
+
+- `Claude Code` (uses local Claude Code credentials or server-side Anthropic env credentials)
+- `OpenAI Codex` (uses local Codex credentials or server-side OpenAI env credentials)
+
+The first-run coachmark opens the auth panel automatically for new users.
+
+Optional server-side fallback configuration:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-OPENAI_API_KEY=sk-your-openai-key  # Optional: for voice mode
+# Anthropic
+ANTHROPIC_API_KEY=sk-ant-...          # or ANTHROPIC_AUTH_TOKEN
+
+# OpenAI
+OPENAI_API_KEY=sk-...                 # or OPENAI_ACCESS_TOKEN
 ```
-
-### Option 2: Browser API Key
-
-1. Type `key` in the terminal
-2. Enter your Anthropic API key (starts with `sk-ant-`)
-3. Key is stored in browser localStorage
 
 ## Security
 
-Your API keys are:
+Authentication tokens are resolved server-side from trusted sources:
 
-- Stored only in your browser's localStorage (manual entry)
-- Or read from your local Claude Code credentials (one-click auth)
-- Never sent to or stored on our servers
-- Sent directly to Anthropic/OpenAI APIs over HTTPS
+- local Claude Code / Codex credential stores
+- or server environment variables
+
+The browser stores only the selected provider (`claude-code` or `openai-codex`), not raw API keys.
 
 ## Usage
 
@@ -130,13 +138,14 @@ clitronic/
 ├── app/                    # Next.js App Router
 │   ├── api/
 │   │   ├── chat/          # Streaming chat API
-│   │   ├── check-key/     # API key validation
+│   │   ├── auth/providers/ # Provider availability and selection validation
+│   │   ├── check-key/     # Backward-compatible auth status endpoint
 │   │   ├── claude-code-auth/  # Claude Code credentials
 │   │   └── speech-to-text/    # Voice transcription
 │   └── page.tsx           # Terminal interface
 ├── cli/                    # Standalone CLI package
 ├── components/
-│   ├── api-key/           # API key management
+│   ├── api-key/           # Auth provider selection UI
 │   ├── terminal/          # Rich terminal interface
 │   └── voice/             # Voice mode indicator
 ├── hooks/                  # React hooks
@@ -144,14 +153,14 @@ clitronic/
 │   └── useVoiceRecording.ts  # Audio capture
 └── lib/
     ├── ai/                # System prompt & tools
-    ├── auth/              # Claude Code credentials
+    ├── auth/              # Claude/Codex credential resolution
     ├── data/              # Component knowledge base
     └── utils/             # Audio utilities
 ```
 
 **Technologies:**
 
-- **Web**: Next.js 15, React 19, Tailwind CSS
+- **Web**: Next.js 16, React 19, Tailwind CSS
 - **AI**: Claude Sonnet via Vercel AI SDK v5
 - **Voice**: OpenAI Whisper, Web Audio API, MediaRecorder
 - **CLI**: Commander.js, @anthropic-ai/sdk
@@ -159,18 +168,20 @@ clitronic/
 ## Requirements
 
 - Node.js 20+
-- Anthropic API key ([get one here](https://console.anthropic.com/)) or Claude Code installed
-- OpenAI API key (optional, for voice mode)
+- Claude Code or OpenAI Codex credentials for local auth flow
+- Optional server credentials via environment variables (for hosted deployments)
 - Browser with MediaRecorder support (for voice mode)
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | No* | Claude API key for chat |
-| `OPENAI_API_KEY` | No | OpenAI API key for voice mode |
+| Variable               | Required | Description                                               |
+| ---------------------- | -------- | --------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`    | No       | Anthropic API key fallback for Claude provider            |
+| `ANTHROPIC_AUTH_TOKEN` | No       | Anthropic bearer token fallback for Claude provider       |
+| `OPENAI_API_KEY`       | No       | OpenAI API key fallback for Codex provider and voice      |
+| `OPENAI_ACCESS_TOKEN`  | No       | OpenAI bearer token fallback for Codex provider and voice |
 
-*Not required if using Claude Code authentication or browser-based API key entry.
+None are required for local testing if users have Claude Code or OpenAI Codex already authenticated.
 
 ## Development
 

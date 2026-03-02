@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import type { UIMessage } from 'ai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -68,7 +69,14 @@ export function MessageBubble({ message }: { message: UIMessage }) {
             if (filePart.mediaType?.startsWith('image/')) {
               return (
                 <div key={i} className="mb-2">
-                  <img src={filePart.url} alt="Uploaded" className="max-h-48 rounded-lg" />
+                  <Image
+                    src={filePart.url}
+                    alt="Uploaded"
+                    width={640}
+                    height={480}
+                    unoptimized
+                    className="h-auto max-h-48 w-auto rounded-lg"
+                  />
                 </div>
               );
             }

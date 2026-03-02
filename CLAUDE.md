@@ -2,16 +2,17 @@
 
 ## Project Overview
 
-Clitronic is an AI-powered terminal companion for electronics enthusiasts. It features a keyboard-driven terminal interface with consistent cyan/blue branding, powered by Claude API.
+Clitronic is an AI-powered terminal companion for electronics enthusiasts. It features a keyboard-driven terminal interface with consistent cyan/blue branding, powered by Claude + OpenAI.
 
 ## Architecture
 
 ```
 clitronic/
-├── app/                    # Next.js 15 App Router
+├── app/                    # Next.js 16 App Router
 │   ├── api/
 │   │   ├── chat/          # Streaming chat API endpoint
-│   │   ├── check-key/     # API key validation
+│   │   ├── auth/providers/ # Auth provider availability endpoint
+│   │   ├── check-key/     # Backward-compatible auth status endpoint
 │   │   ├── claude-code-auth/ # Claude Code credentials
 │   │   └── speech-to-text/   # Voice transcription (Whisper)
 │   └── page.tsx           # Terminal interface entry point
@@ -20,7 +21,7 @@ clitronic/
 │   ├── src/commands/      # Command implementations
 │   └── src/data/          # Local copy of component data
 ├── components/
-│   ├── api-key/           # API key provider and modal
+│   ├── api-key/           # Auth provider selection state + modal
 │   ├── terminal/          # Rich terminal interface
 │   └── voice/             # Voice mode indicator
 ├── hooks/                  # Custom React hooks
@@ -35,10 +36,10 @@ clitronic/
 
 ### Key Design Decisions
 
-- **Web app**: Next.js 15 (App Router) + React 19 + Tailwind CSS
+- **Web app**: Next.js 16 (App Router) + React 19 + Tailwind CSS
 - **Terminal UI**: Keyboard-driven with electronics-themed ASCII art
 - **Branding**: Consistent cyan/blue color scheme throughout
-- **API Key**: Bring Your Own Key (BYOK) - stored in localStorage only
+- **Authentication**: Provider-based auth (`claude-code` or `openai-codex`), no user API key entry
 - **CLI**: Standalone package using `@anthropic-ai/sdk` directly
 
 ## Key Files
@@ -46,9 +47,9 @@ clitronic/
 ### Web App
 
 - `app/page.tsx` - Renders the RichTerminal component
-- `app/api/chat/route.ts` - Streaming chat API (accepts API key via header)
+- `app/api/chat/route.ts` - Streaming chat API (uses `x-auth-provider` header)
 - `components/terminal/rich-terminal.tsx` - **Main UI**: multimodal terminal with voice, camera, upload
-- `components/api-key/` - API key provider, modal, and context
+- `components/api-key/` - Authentication provider state, modal, and context
 - `lib/ai/system-prompt.ts` - Electronics companion persona
 - `lib/ai/tools.ts` - Claude tool definitions (lookup, search, calculate)
 - `lib/data/components.ts` - Component knowledge base (16 components)
@@ -80,39 +81,32 @@ npm run start -- list active       # Filter by category
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` - Required for CLI; web app uses BYOK via header or Claude Code auth
-- `OPENAI_API_KEY` - Optional; required for voice mode (speech-to-text)
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` - Optional server fallback for Claude provider
+- `OPENAI_API_KEY` / `OPENAI_ACCESS_TOKEN` - Optional server fallback for OpenAI provider + voice
 
 ## Authentication
 
-### Claude Code Integration
-Users with Claude Code installed can authenticate with one click:
-1. Click "Use Claude Code Credentials" button
-2. Credentials are read from macOS Keychain or ~/.claude/.credentials.json
-3. Status bar shows "● claude code" when connected
+Users authenticate with the `auth` command in the terminal and choose:
 
-### Manual API Key
-1. Type `key` command in terminal
-2. Enter Anthropic API key (starts with `sk-ant-`)
-3. Key is stored in browser localStorage
+1. `Claude Code` (local Claude credentials or server Anthropic env fallback)
+2. `OpenAI Codex` (local Codex credentials or server OpenAI env fallback)
 
-### Server-Side Key
-Set `ANTHROPIC_API_KEY` in `.env.local` for persistent setup
+The browser stores only the selected provider id, not raw tokens.
 
 ## AI Integration
 
 ### Web (Vercel AI SDK v5)
 
 - Uses `@ai-sdk/anthropic` with `streamText()`
-- API key passed via `x-api-key` header from client
+- Provider selected via `x-auth-provider` header from client
 - Tools defined with `zodSchema()` wrapper
-- Response streaming via `toUIMessageStreamResponse()`
+- Response streaming via plain text stream
 - Model: `claude-sonnet-4-20250514`
 
 ### CLI (Direct Anthropic SDK)
 
 - Uses `@anthropic-ai/sdk` with `messages.stream()`
-- Lazy client initialization (API key checked on first use)
+- Lazy client initialization (credentials checked on first use)
 - Streaming text output with chalk coloring
 - Model: `claude-sonnet-4-20250514`
 
@@ -121,20 +115,22 @@ Set `ANTHROPIC_API_KEY` in `.env.local` for persistent setup
 ### Commands
 
 - `help` - Show available commands with ASCII box
+- `auth` - Connect Claude Code or OpenAI Codex
 - `list [category]` - List components (passive, active, input, output)
 - `info <component>` - Component details
 - `identify` - Upload image for component identification
-- `key` - Set or update Anthropic API key
 - `clear` - Clear terminal
 
 ### Image Upload
 
 Multiple ways to upload images:
+
 - **Drag & drop** - Drop image directly into terminal
 - **Paste** - Cmd/Ctrl+V to paste from clipboard
 - **Upload** - Type `identify` to open file picker
 
 Features:
+
 - Images auto-resized before upload (max 1024px width)
 - Sent as base64 data URLs to API
 - Claude identifies components, decodes markings and color codes
@@ -144,16 +140,19 @@ Features:
 **Activation**: Hold spacebar to record, release to send
 
 **Requirements**:
+
 - Browser with MediaRecorder support (Chrome, Firefox, Safari)
 - Microphone permission
-- OpenAI API key (for Whisper transcription)
+- OpenAI Codex auth or OpenAI server credentials (for Whisper transcription)
 
 **Features**:
+
 - Visual indicator shows recording (pulsing red) and transcribing (spinner)
 - Audio chimes for start/end feedback
 - Auto-populates input with transcribed text
 
 **Implementation**:
+
 - `useLongPress` hook detects spacebar hold (200ms threshold)
 - `useVoiceRecording` hook captures audio via MediaRecorder
 - Audio sent to `/api/speech-to-text` (OpenAI Whisper)
@@ -162,7 +161,10 @@ Features:
 ### UI Elements
 
 - Circuit-themed ASCII art header
-- Status bar showing connection state and voice mode availability
+- First-run coachmark with connect/example actions (dismiss persisted in localStorage)
+- Header status chips showing connection state and voice mode availability
+- Quick-command rail for common actions
+- Safe-area-aware footer and touch-friendly controls on mobile
 - Command history with ↑↓ navigation
 - Consistent cyan/blue color scheme
 - Copy buttons on code blocks

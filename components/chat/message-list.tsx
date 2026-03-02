@@ -6,10 +6,9 @@ import { MessageBubble } from './message-bubble';
 
 interface MessageListProps {
   messages: UIMessage[];
-  onSuggestionClick?: (text: string) => void;
 }
 
-export function MessageList({ messages, onSuggestionClick }: MessageListProps) {
+export function MessageList({ messages }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

@@ -4,7 +4,7 @@
  */
 
 import sharp from 'sharp';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -25,10 +25,7 @@ async function generateIcons() {
   for (const { name, size } of sizes) {
     const outputPath = join(publicDir, name);
 
-    await sharp(Buffer.from(svgContent))
-      .resize(size, size)
-      .png()
-      .toFile(outputPath);
+    await sharp(Buffer.from(svgContent)).resize(size, size).png().toFile(outputPath);
 
     console.log(`  Created ${name} (${size}x${size})`);
   }

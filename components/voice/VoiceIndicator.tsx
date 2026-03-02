@@ -21,9 +21,7 @@ export function VoiceIndicator({ state }: VoiceIndicatorProps) {
     if (state !== 'recording') return;
 
     const interval = setInterval(() => {
-      setWaveHeights(
-        Array.from({ length: 5 }, () => 0.2 + Math.random() * 0.8)
-      );
+      setWaveHeights(Array.from({ length: 5 }, () => 0.2 + Math.random() * 0.8));
     }, 100);
 
     return () => clearInterval(interval);
@@ -36,20 +34,20 @@ export function VoiceIndicator({ state }: VoiceIndicatorProps) {
       <div
         className={`flex items-center gap-3 rounded-full px-5 py-3 shadow-lg backdrop-blur-sm ${
           state === 'recording'
-            ? 'bg-red-950/90 border border-red-500/50'
-            : 'bg-zinc-900/90 border border-cyan-500/50'
+            ? 'border border-red-500/50 bg-red-950/90'
+            : 'border border-cyan-500/50 bg-zinc-900/90'
         }`}
       >
         {state === 'recording' ? (
           <>
             {/* Pulsing red dot */}
             <div className="relative">
-              <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse" />
-              <div className="absolute inset-0 h-3 w-3 rounded-full bg-red-500 animate-ping opacity-75" />
+              <div className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
+              <div className="absolute inset-0 h-3 w-3 animate-ping rounded-full bg-red-500 opacity-75" />
             </div>
 
             {/* Animated waveform bars */}
-            <div className="flex items-center gap-[3px] h-5">
+            <div className="flex h-5 items-center gap-[3px]">
               {waveHeights.map((height, i) => (
                 <div
                   key={i}
@@ -60,22 +58,18 @@ export function VoiceIndicator({ state }: VoiceIndicatorProps) {
             </div>
 
             {/* Recording text */}
-            <span className="text-sm font-medium text-red-400">
-              Recording...
-            </span>
+            <span className="text-sm font-medium text-red-400">Recording...</span>
           </>
         ) : (
           <>
             {/* Spinner */}
             <div className="relative h-4 w-4">
               <div className="absolute inset-0 rounded-full border-2 border-cyan-500/30" />
-              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 animate-spin" />
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-cyan-400" />
             </div>
 
             {/* Transcribing text */}
-            <span className="text-sm font-medium text-cyan-400">
-              Transcribing...
-            </span>
+            <span className="text-sm font-medium text-cyan-400">Transcribing...</span>
           </>
         )}
       </div>

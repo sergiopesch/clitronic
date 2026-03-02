@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useRef, useState, type KeyboardEvent, type ChangeEvent } from 'react';
 import { isImageFile, resizeImageToBase64 } from '@/lib/utils/image';
 
@@ -73,11 +74,13 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
     >
       {imagePreview && (
         <div className="mb-3 flex items-start gap-2">
-          <div className="relative">
-            <img
+          <div className="relative h-20 w-20">
+            <Image
               src={imagePreview}
               alt="To upload"
-              className="h-20 rounded-lg border border-zinc-200 object-cover dark:border-zinc-700"
+              fill
+              unoptimized
+              className="rounded-lg border border-zinc-200 object-cover dark:border-zinc-700"
             />
             <button
               onClick={removeImage}

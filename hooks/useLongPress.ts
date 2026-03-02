@@ -145,5 +145,4 @@ export function useLongPress({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [enabled, handleKeyDown, handleKeyUp, handleBlur, handleVisibilityChange, clearTimer]);
-
 }

@@ -31,11 +31,7 @@ export class ClaudeCodeCredentialsError extends Error {
   public readonly code: CredentialsErrorCode;
   public readonly expiresAt?: number;
 
-  constructor(
-    message: string,
-    code: CredentialsErrorCode,
-    expiresAt?: number
-  ) {
+  constructor(message: string, code: CredentialsErrorCode, expiresAt?: number) {
     super(message);
     this.name = 'ClaudeCodeCredentialsError';
     this.code = code;
@@ -86,13 +82,10 @@ export interface CredentialsUnavailableResult {
   reason: string;
 }
 
-export type CheckCredentialsResult =
-  | CredentialsAvailableResult
-  | CredentialsUnavailableResult;
+export type CheckCredentialsResult = CredentialsAvailableResult | CredentialsUnavailableResult;
 
 // Constants for credential storage
 const KEYCHAIN_SERVICE = 'Claude Code-credentials';
-const KEYCHAIN_ACCOUNT = 'default';
 const LINUX_CREDENTIALS_PATH = '.claude/.credentials.json';
 
 /**
@@ -187,10 +180,7 @@ async function readFromFilesystem(): Promise<ClaudeCodeCredentials | null> {
     }
     // JSON parse errors
     if (error instanceof SyntaxError) {
-      throw new ClaudeCodeCredentialsError(
-        'Failed to parse credentials file',
-        'PARSE_ERROR'
-      );
+      throw new ClaudeCodeCredentialsError('Failed to parse credentials file', 'PARSE_ERROR');
     }
     throw error;
   }
@@ -339,11 +329,7 @@ export async function getAccessToken(): Promise<string> {
   const oauth = credentials.claudeAiOauth;
 
   if (isExpired(oauth.expiresAt)) {
-    throw new ClaudeCodeCredentialsError(
-      'Token has expired',
-      'TOKEN_EXPIRED',
-      oauth.expiresAt
-    );
+    throw new ClaudeCodeCredentialsError('Token has expired', 'TOKEN_EXPIRED', oauth.expiresAt);
   }
 
   return oauth.accessToken;

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,11 +16,32 @@ interface TerminalLine {
   imageUrl?: string;
 }
 
+interface ProviderAvailability {
+  id: 'claude-code' | 'openai-codex';
+  name: string;
+  available: boolean;
+  reason?: string;
+  source?: string;
+}
+
+interface AuthPanelProps {
+  isCheckingAuth: boolean;
+  isConfigured: boolean;
+  authSource: 'claude-code' | 'openai-codex' | null;
+  claudeProvider?: ProviderAvailability;
+  codexProvider?: ProviderAvailability;
+  onConnectClaude: () => void;
+  onConnectCodex: () => void;
+  onDisconnect: () => void;
+  onClose: () => void;
+}
+
 const HELP_TEXT = `
   ┌─────────────────────────────────────────────────────────────┐
   │  COMMANDS                                                   │
   ├─────────────────────────────────────────────────────────────┤
   │  help              Show this help message                   │
+  │  auth              Connect Claude Code or OpenAI Codex      │
   │  list [category]   List components (passive/active/etc)    │
   │  info <component>  Get component details                    │
   │  identify          Upload image to identify component       │
@@ -32,25 +54,65 @@ const HELP_TEXT = `
   └─────────────────────────────────────────────────────────────┘
 `;
 
+const AUTH_REQUIRED_MESSAGE = '✗ Authentication required. Type "auth" to connect.';
+const QUICK_COMMANDS = ['help', 'list', 'info resistor', 'identify', 'auth'];
+const COACHMARK_DISMISSED_KEY = 'clitronic_coachmark_dismissed_v1';
+
+function authLabel(authSource: 'claude-code' | 'openai-codex' | null): string {
+  if (authSource === 'claude-code') return 'Claude Code';
+  if (authSource === 'openai-codex') return 'OpenAI Codex';
+  return 'Not connected';
+}
+
+function providerSourceLabel(source?: string): string {
+  switch (source) {
+    case 'claude-code':
+      return 'Claude Code local credentials';
+    case 'codex-access-token':
+      return 'Codex local access token';
+    case 'codex-api-key':
+      return 'Codex local API key';
+    case 'env-auth-token':
+      return 'Server environment auth token';
+    case 'env-access-token':
+      return 'Server environment access token';
+    case 'env-api-key':
+      return 'Server environment API key';
+    default:
+      return 'Credential source unavailable';
+  }
+}
+
 export function RichTerminal() {
-  const { apiKey, isConfigured, setApiKey } = useApiKey();
-  const [lines, setLines] = useState<TerminalLine[]>([
-    { type: 'welcome', content: '' },
-  ]);
+  const {
+    authSource,
+    isConfigured,
+    clearApiKey,
+    connectClaudeCode,
+    connectOpenAICodex,
+    claudeCodeAvailable,
+    codexAvailable,
+    isCheckingAuth,
+    providers,
+    refreshProviders,
+  } = useApiKey();
+  const [lines, setLines] = useState<TerminalLine[]>([{ type: 'welcome', content: '' }]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showAuthPanel, setShowAuthPanel] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [hasServerKey, setHasServerKey] = useState(false);
+  const [showCoachmark, setShowCoachmark] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shouldScrollRef = useRef(true);
+
+  const claudeProvider = providers.find((provider) => provider.id === 'claude-code');
+  const codexProvider = providers.find((provider) => provider.id === 'openai-codex');
 
   const addLine = useCallback((line: TerminalLine) => {
     setLines((prev) => [...prev, line]);
@@ -60,6 +122,22 @@ export function RichTerminal() {
   // Voice mode state
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
 
+  // Consider auth "available" unless provider check explicitly marks it unavailable.
+  const currentAuthAvailable =
+    authSource === 'claude-code'
+      ? claudeCodeAvailable !== false
+      : authSource === 'openai-codex'
+        ? codexAvailable !== false
+        : false;
+
+  const canMakeApiCalls = isConfigured && currentAuthAvailable;
+  const voiceAvailable = codexAvailable === true;
+
+  const showAuthRequiredError = useCallback(() => {
+    addLine({ type: 'error', content: AUTH_REQUIRED_MESSAGE });
+    setShowAuthPanel(true);
+  }, [addLine]);
+
   // Voice recording hook
   const {
     isRecording,
@@ -68,15 +146,21 @@ export function RichTerminal() {
     startRecording,
     stopRecording,
   } = useVoiceRecording({
-    onTranscription: useCallback((text: string) => {
-      setInput(text);
-      // Auto-focus the input so user can see the transcribed text
-      inputRef.current?.focus();
-      addLine({ type: 'system', content: `🎤 "${text}"` });
-    }, [addLine]),
-    onError: useCallback((error: string) => {
-      addLine({ type: 'error', content: `✗ Voice: ${error}` });
-    }, [addLine]),
+    authProvider: authSource,
+    onTranscription: useCallback(
+      (text: string) => {
+        setInput(text);
+        inputRef.current?.focus();
+        addLine({ type: 'system', content: `🎤 "${text}"` });
+      },
+      [addLine]
+    ),
+    onError: useCallback(
+      (error: string) => {
+        addLine({ type: 'error', content: `✗ Voice: ${error}` });
+      },
+      [addLine]
+    ),
   });
 
   // Update voice state based on recording/transcribing status
@@ -90,21 +174,18 @@ export function RichTerminal() {
     }
   }, [isRecording, isTranscribing]);
 
-  // Check if we can make API calls (for voice to work, we need both chat and STT API)
-  const canMakeApiCalls = isConfigured || hasServerKey;
-
   // Long-press spacebar for voice recording
   useLongPress({
     onStart: useCallback(() => {
-      if (!canMakeApiCalls || isProcessing) return;
-      playAudioFeedback('start');
-      startRecording();
-    }, [canMakeApiCalls, isProcessing, startRecording]),
+      if (!canMakeApiCalls || !voiceAvailable || isProcessing) return;
+      void playAudioFeedback('start');
+      void startRecording();
+    }, [canMakeApiCalls, voiceAvailable, isProcessing, startRecording]),
     onEnd: useCallback(() => {
-      playAudioFeedback('end');
-      stopRecording();
+      void playAudioFeedback('end');
+      void stopRecording();
     }, [stopRecording]),
-    enabled: voiceSupported && canMakeApiCalls && !isProcessing && !showApiKeyInput,
+    enabled: voiceSupported && voiceAvailable && canMakeApiCalls && !isProcessing && !showAuthPanel,
   });
 
   // Preload audio feedback on mount
@@ -112,15 +193,37 @@ export function RichTerminal() {
     preloadAudioFeedback();
   }, []);
 
-  // Check if server has API key configured
+  // First-run coachmark: visible until dismissed or auth is configured.
   useEffect(() => {
-    fetch('/api/check-key')
-      .then(res => res.json())
-      .then(data => {
-        setHasServerKey(data.hasServerKey === true);
-      })
-      .catch(() => {});
-  }, []);
+    if (isConfigured) {
+      setShowCoachmark(false);
+      localStorage.setItem(COACHMARK_DISMISSED_KEY, '1');
+      return;
+    }
+
+    const dismissed = localStorage.getItem(COACHMARK_DISMISSED_KEY) === '1';
+    setShowCoachmark(!dismissed);
+  }, [isConfigured]);
+
+  // Refresh providers whenever auth panel opens to keep availability current.
+  useEffect(() => {
+    if (!showAuthPanel) return;
+    void refreshProviders();
+  }, [refreshProviders, showAuthPanel]);
+
+  // Allow Esc to quickly close auth panel.
+  useEffect(() => {
+    if (!showAuthPanel) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowAuthPanel(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showAuthPanel]);
 
   // Scroll to bottom when needed
   useEffect(() => {
@@ -139,46 +242,35 @@ export function RichTerminal() {
     inputRef.current?.focus();
   }, []);
 
-  const handleApiKeySave = useCallback(async () => {
-    const key = apiKeyInput.trim();
-    if (!key) return;
-
-    // Validate key format
-    if (!key.startsWith('sk-ant-')) {
-      addLine({ type: 'error', content: '✗ Invalid key format. Key should start with sk-ant-' });
+  const handleConnectClaudeCode = useCallback(async () => {
+    const result = await connectClaudeCode();
+    if (!result.success) {
+      addLine({ type: 'error', content: `✗ ${result.error || 'Failed to connect Claude Code'}` });
       return;
     }
+    setShowAuthPanel(false);
+    addLine({ type: 'system', content: '✓ Connected with Claude Code' });
+  }, [addLine, connectClaudeCode]);
 
-    // Validate with server
-    try {
-      const res = await fetch('/api/check-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: key }),
-      });
-      const data = await res.json();
-
-      if (data.valid) {
-        setApiKey(key);
-        setApiKeyInput('');
-        setShowApiKeyInput(false);
-        addLine({ type: 'system', content: '✓ API key configured' });
-      } else {
-        addLine({ type: 'error', content: `✗ ${data.error || 'Invalid API key'}` });
-      }
-    } catch {
-      // If validation fails, still save it (validation is just format check)
-      setApiKey(key);
-      setApiKeyInput('');
-      setShowApiKeyInput(false);
-      addLine({ type: 'system', content: '✓ API key saved' });
+  const handleConnectOpenAICodex = useCallback(async () => {
+    const result = await connectOpenAICodex();
+    if (!result.success) {
+      addLine({ type: 'error', content: `✗ ${result.error || 'Failed to connect OpenAI Codex'}` });
+      return;
     }
-  }, [apiKeyInput, setApiKey, addLine]);
+    setShowAuthPanel(false);
+    addLine({ type: 'system', content: '✓ Connected with OpenAI Codex' });
+  }, [addLine, connectOpenAICodex]);
+
+  const disconnectAuth = useCallback(() => {
+    clearApiKey();
+    addLine({ type: 'system', content: '✓ Disconnected authentication provider' });
+  }, [addLine, clearApiKey]);
 
   // Resize image to reduce size
   const resizeImage = async (dataUrl: string, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve) => {
-      const img = new Image();
+      const img = new window.Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
         let width = img.width;
@@ -200,64 +292,175 @@ export function RichTerminal() {
   };
 
   // Send image for analysis
-  const analyzeImage = useCallback(async (dataUrl: string, fileName: string) => {
-    if (!canMakeApiCalls) {
-      addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
-      setShowApiKeyInput(true);
-      return;
-    }
-
-    addLine({ type: 'command', content: `identify ${fileName}` });
-
-    // Resize image before sending
-    const resizedDataUrl = await resizeImage(dataUrl);
-    addLine({ type: 'image', content: '', imageUrl: resizedDataUrl });
-    setIsProcessing(true);
-
-    try {
-      // Extract base64 from data URL
-      const match = resizedDataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (!match) {
-        throw new Error('Invalid image format');
+  const analyzeImage = useCallback(
+    async (dataUrl: string, fileName: string) => {
+      if (!canMakeApiCalls) {
+        showAuthRequiredError();
+        return;
       }
 
-      const [, mediaType, imageData] = match;
+      addLine({ type: 'command', content: `identify ${fileName}` });
 
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { 'x-api-key': apiKey } : {}),
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  type: 'image',
-                  image: imageData,
-                  mimeType: mediaType,
-                },
-                {
-                  type: 'text',
-                  text: 'Identify this electronic component. Provide: 1) What it is, 2) Key specifications, 3) Common uses, 4) How to use it in a circuit. If there are markings or color codes, decode them.',
-                },
-              ],
-            },
-          ],
-        }),
-      });
+      const resizedDataUrl = await resizeImage(dataUrl);
+      addLine({ type: 'image', content: '', imageUrl: resizedDataUrl });
+      setIsProcessing(true);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        try {
-          const error = JSON.parse(errorText);
-          addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
-        } catch {
-          addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
+      try {
+        const match = resizedDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) {
+          throw new Error('Invalid image format');
         }
-      } else {
+
+        const [, mediaType, imageData] = match;
+
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authSource ? { 'x-auth-provider': authSource } : {}),
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    type: 'image',
+                    image: imageData,
+                    mimeType: mediaType,
+                  },
+                  {
+                    type: 'text',
+                    text: 'Identify this electronic component. Provide: 1) What it is, 2) Key specifications, 3) Common uses, 4) How to use it in a circuit. If there are markings or color codes, decode them.',
+                  },
+                ],
+              },
+            ],
+          }),
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          try {
+            const error = JSON.parse(errorText);
+            addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
+          } catch {
+            addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
+          }
+        } else {
+          const text = await streamResponse(res, (chunk) => {
+            setStreamingContent((prev) => prev + chunk);
+            shouldScrollRef.current = true;
+          });
+          setStreamingContent('');
+
+          if (text.startsWith('Error:')) {
+            addLine({ type: 'error', content: `✗ ${text}` });
+          } else {
+            addLine({ type: 'response', content: text });
+          }
+        }
+      } catch (err) {
+        setStreamingContent('');
+        addLine({
+          type: 'error',
+          content: `✗ ${err instanceof Error ? err.message : 'Failed to analyze image'}`,
+        });
+      }
+
+      setIsProcessing(false);
+    },
+    [addLine, authSource, canMakeApiCalls, showAuthRequiredError]
+  );
+
+  const handleCommand = useCallback(
+    async (cmd: string) => {
+      const trimmedCmd = cmd.trim();
+      if (!trimmedCmd) return;
+
+      setCommandHistory((prev) => [...prev, trimmedCmd]);
+      setHistoryIndex(-1);
+      addLine({ type: 'command', content: trimmedCmd });
+
+      const parts = trimmedCmd.split(/\s+/);
+      const command = parts[0]?.toLowerCase();
+      const args = parts.slice(1).join(' ');
+
+      if (command === 'help') {
+        addLine({ type: 'ascii', content: HELP_TEXT });
+        return;
+      }
+
+      if (command === 'clear') {
+        setLines([{ type: 'welcome', content: '' }]);
+        return;
+      }
+
+      if (command === 'auth' || command === 'key') {
+        setShowAuthPanel(true);
+        return;
+      }
+
+      if (command === 'identify') {
+        if (!canMakeApiCalls) {
+          showAuthRequiredError();
+          return;
+        }
+        fileInputRef.current?.click();
+        return;
+      }
+
+      if (!canMakeApiCalls) {
+        showAuthRequiredError();
+        return;
+      }
+
+      setIsProcessing(true);
+
+      try {
+        let prompt = trimmedCmd;
+
+        if (command === 'list') {
+          prompt = args
+            ? `List ${args} electronic components with brief descriptions.`
+            : 'List electronic components by category with brief descriptions.';
+        } else if (command === 'info') {
+          if (!args) {
+            addLine({ type: 'error', content: 'Usage: info <component>' });
+            setIsProcessing(false);
+            return;
+          }
+          prompt = `Provide detailed info about "${args}": specs, pinout, circuit examples, and tips.`;
+        }
+
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authSource ? { 'x-auth-provider': authSource } : {}),
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: 'user',
+                parts: [{ type: 'text', text: prompt }],
+              },
+            ],
+          }),
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          try {
+            const error = JSON.parse(errorText);
+            addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
+          } catch {
+            addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
+          }
+          setIsProcessing(false);
+          return;
+        }
+
         const text = await streamResponse(res, (chunk) => {
           setStreamingContent((prev) => prev + chunk);
           shouldScrollRef.current = true;
@@ -269,140 +472,42 @@ export function RichTerminal() {
         } else {
           addLine({ type: 'response', content: text });
         }
-      }
-    } catch (err) {
-      setStreamingContent('');
-      addLine({
-        type: 'error',
-        content: `✗ ${err instanceof Error ? err.message : 'Failed to analyze image'}`,
-      });
-    }
-
-    setIsProcessing(false);
-  }, [apiKey, canMakeApiCalls, addLine]);
-
-  const handleCommand = async (cmd: string) => {
-    const trimmedCmd = cmd.trim();
-    if (!trimmedCmd) return;
-
-    setCommandHistory((prev) => [...prev, trimmedCmd]);
-    setHistoryIndex(-1);
-    addLine({ type: 'command', content: trimmedCmd });
-
-    const parts = trimmedCmd.split(/\s+/);
-    const command = parts[0]?.toLowerCase();
-    const args = parts.slice(1).join(' ');
-
-    // Built-in commands
-    if (command === 'help') {
-      addLine({ type: 'ascii', content: HELP_TEXT });
-      return;
-    }
-
-    if (command === 'clear') {
-      setLines([{ type: 'welcome', content: '' }]);
-      return;
-    }
-
-    if (command === 'key') {
-      setShowApiKeyInput(true);
-      return;
-    }
-
-    if (command === 'identify') {
-      if (!canMakeApiCalls) {
-        addLine({ type: 'error', content: '✗ API key required. Type "key" to configure.' });
-        setShowApiKeyInput(true);
-        return;
-      }
-      fileInputRef.current?.click();
-      return;
-    }
-
-    // Commands that require API key
-    if (!canMakeApiCalls) {
-      addLine({
-        type: 'error',
-        content: '✗ API key required. Type "key" to configure.',
-      });
-      setShowApiKeyInput(true);
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      let prompt = trimmedCmd;
-
-      if (command === 'list') {
-        prompt = args
-          ? `List ${args} electronic components with brief descriptions.`
-          : 'List electronic components by category with brief descriptions.';
-      } else if (command === 'info') {
-        if (!args) {
-          addLine({ type: 'error', content: 'Usage: info <component>' });
-          setIsProcessing(false);
-          return;
-        }
-        prompt = `Provide detailed info about "${args}": specs, pinout, circuit examples, and tips.`;
+      } catch (err) {
+        setStreamingContent('');
+        addLine({
+          type: 'error',
+          content: `✗ ${err instanceof Error ? err.message : 'Unknown error'}`,
+        });
       }
 
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { 'x-api-key': apiKey } : {}),
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              parts: [{ type: 'text', text: prompt }],
-            },
-          ],
-        }),
-      });
+      setIsProcessing(false);
+    },
+    [addLine, authSource, canMakeApiCalls, showAuthRequiredError]
+  );
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        try {
-          const error = JSON.parse(errorText);
-          addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
-        } catch {
-          addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
-        }
-        setIsProcessing(false);
-        return;
-      }
+  const submitCurrentInput = useCallback(() => {
+    if (isProcessing || !input.trim()) return;
+    const currentInput = input;
+    setInput('');
+    void handleCommand(currentInput);
+  }, [handleCommand, input, isProcessing]);
 
-      const text = await streamResponse(res, (chunk) => {
-        setStreamingContent((prev) => prev + chunk);
-        shouldScrollRef.current = true;
-      });
-      setStreamingContent('');
-
-      if (text.startsWith('Error:')) {
-        addLine({ type: 'error', content: `✗ ${text}` });
-      } else {
-        addLine({ type: 'response', content: text });
-      }
-    } catch (err) {
-      setStreamingContent('');
-      addLine({
-        type: 'error',
-        content: `✗ ${err instanceof Error ? err.message : 'Unknown error'}`,
-      });
+  const dismissCoachmark = useCallback((persist = true) => {
+    setShowCoachmark(false);
+    if (persist) {
+      localStorage.setItem(COACHMARK_DISMISSED_KEY, '1');
     }
-
-    setIsProcessing(false);
-  };
+  }, []);
 
   // Drag and drop handlers
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isDragging) setIsDragging(true);
-  }, [isDragging]);
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isDragging) setIsDragging(true);
+    },
+    [isDragging]
+  );
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -412,46 +517,52 @@ export function RichTerminal() {
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const file = e.dataTransfer.files[0];
-    if (!file?.type.startsWith('image/')) {
-      addLine({ type: 'error', content: '✗ Please drop an image file' });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      analyzeImage(dataUrl, file.name);
-    };
-    reader.readAsDataURL(file);
-  }, [addLine, analyzeImage]);
-
-  // Handle paste for images
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const dataUrl = event.target?.result as string;
-            analyzeImage(dataUrl, 'pasted-image.png');
-          };
-          reader.readAsDataURL(file);
-        }
+      const file = e.dataTransfer.files[0];
+      if (!file?.type.startsWith('image/')) {
+        addLine({ type: 'error', content: '✗ Please drop an image file' });
         return;
       }
-    }
-  }, [analyzeImage]);
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        void analyzeImage(dataUrl, file.name);
+      };
+      reader.readAsDataURL(file);
+    },
+    [addLine, analyzeImage]
+  );
+
+  // Handle paste for images
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const dataUrl = event.target?.result as string;
+              void analyzeImage(dataUrl, 'pasted-image.png');
+            };
+            reader.readAsDataURL(file);
+          }
+          return;
+        }
+      }
+    },
+    [analyzeImage]
+  );
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -460,16 +571,16 @@ export function RichTerminal() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      analyzeImage(dataUrl, file.name);
+      void analyzeImage(dataUrl, file.name);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !isProcessing) {
-      handleCommand(input);
-      setInput('');
+      e.preventDefault();
+      submitCurrentInput();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
@@ -492,143 +603,204 @@ export function RichTerminal() {
 
   return (
     <div
-      className={`relative flex h-screen flex-col bg-[#0d1117] font-mono text-[13px] leading-relaxed select-text ${
-        isDragging ? 'ring-2 ring-inset ring-cyan-400' : ''
+      className={`relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#070b11] font-mono text-[13px] leading-relaxed text-gray-200 select-text sm:text-[14px] ${
+        isDragging ? 'ring-2 ring-cyan-400 ring-inset' : ''
       }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onPaste={handlePaste}
     >
-      {/* Drop overlay */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.08),transparent_35%)]" />
+
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0d1117]/90 backdrop-blur-sm pointer-events-none">
-          <div className="rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-500/10 px-12 py-8 text-center">
-            <div className="mb-3 text-5xl">📷</div>
-            <div className="text-xl font-semibold text-cyan-400">Drop image</div>
-            <div className="mt-1 text-sm text-gray-400">to identify component</div>
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#070b11]/90 backdrop-blur-sm">
+          <div className="rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-500/10 px-8 py-6 text-center">
+            <div className="mb-3 text-4xl">📷</div>
+            <div className="text-lg font-semibold text-cyan-300">Drop image to identify component</div>
+            <div className="mt-1 text-xs text-gray-400">JPEG, PNG, WEBP supported</div>
           </div>
         </div>
       )}
 
-      {/* Voice mode indicator */}
       <VoiceIndicator state={voiceState} />
 
-      {/* Terminal content - selectable text */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-y-auto px-4 py-3 cursor-text"
-        onClick={(e) => {
-          // Only focus input if clicking on empty space
-          if (e.target === containerRef.current) {
-            inputRef.current?.focus();
-          }
-        }}
-      >
-        {lines.map((line, i) => (
-          <TerminalLine key={i} line={line} />
-        ))}
-
-        {/* Streaming content */}
-        {streamingContent && (
-          <div className="my-2 text-gray-200">
-            <MarkdownContent content={streamingContent} />
-            <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-400" />
-          </div>
-        )}
-
-        {/* API Key input */}
-        {showApiKeyInput && (
-          <div
-            className="my-3 max-w-lg rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-2 flex items-center gap-2 text-cyan-400">
-              <span>⚡</span>
-              <span className="font-medium">Authentication</span>
+      <div className="relative z-10 flex min-h-[100dvh] flex-col">
+        <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] tracking-[0.22em] text-cyan-400 uppercase">Clitronic</div>
+              <h1 className="text-sm font-semibold tracking-[0.04em] text-cyan-200">
+                Electronics Copilot Terminal
+              </h1>
+              <p className="mt-1 text-xs text-gray-500">
+                Connect once, then ask questions, run commands, or drop component photos.
+              </p>
             </div>
 
-            {/* Note: Claude Code OAuth tokens don't work with direct API calls */}
-            {/* Users need to use an Anthropic API key (sk-ant-*) */}
-
-            <p className="mb-2 text-xs text-gray-500">
-              Enter your API key (stored locally in browser).{' '}
-              <a
-                href="https://console.anthropic.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-cyan-500 hover:underline"
-              >
-                Get one →
-              </a>
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleApiKeySave();
-                  if (e.key === 'Escape') setShowApiKeyInput(false);
-                }}
-                placeholder="sk-ant-api03-..."
-                className="flex-1 rounded border border-gray-700 bg-[#161b22] px-3 py-2 text-gray-100 placeholder:text-gray-600 focus:border-cyan-500 focus:outline-none"
-                autoFocus
-              />
+            <div className="flex items-center gap-2 text-xs">
               <button
-                onClick={handleApiKeySave}
-                disabled={!apiKeyInput.trim()}
-                className="rounded bg-cyan-600 px-4 py-2 font-medium text-white hover:bg-cyan-500 disabled:opacity-40"
+                onClick={() => {
+                  void handleCommand('help');
+                }}
+                className="rounded border border-cyan-800/50 bg-cyan-900/15 px-2.5 py-1.5 text-cyan-300 hover:bg-cyan-900/30"
               >
-                Save
+                help
+              </button>
+              <button
+                onClick={() => {
+                  void handleCommand('identify');
+                }}
+                className="rounded border border-cyan-800/50 bg-cyan-900/15 px-2.5 py-1.5 text-cyan-300 hover:bg-cyan-900/30"
+              >
+                identify
+              </button>
+              <button
+                onClick={() => setShowAuthPanel((prev) => !prev)}
+                className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1.5 text-emerald-300 hover:bg-emerald-900/30"
+              >
+                auth
               </button>
             </div>
-            <p className="mt-3 text-xs text-gray-600">
-              Tip: For persistent setup, create <code className="text-cyan-600">.env.local</code> with:
-              <br />
-              <code className="text-cyan-500">ANTHROPIC_API_KEY=your-key</code>
-            </p>
           </div>
-        )}
 
-        {/* Input line */}
-        <div className="sticky bottom-0 flex items-center gap-2 bg-[#0d1117] py-2">
-          <span className="text-cyan-500 select-none">❯</span>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isProcessing}
-            className="flex-1 bg-transparent text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
-            placeholder={isProcessing ? 'Processing...' : 'Ask about electronics...'}
-          />
-          {isProcessing && (
-            <span className="flex items-center gap-2 text-cyan-500 text-xs select-none">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            <span
+              className={`rounded-full border px-2 py-0.5 ${
+                canMakeApiCalls
+                  ? 'border-green-500/30 bg-green-950/50 text-green-300'
+                  : 'border-amber-500/30 bg-amber-950/40 text-amber-300'
+              }`}
+            >
+              {canMakeApiCalls ? `Connected: ${authLabel(authSource)}` : 'Authentication required'}
             </span>
+            <span
+              className={`rounded-full border px-2 py-0.5 ${
+                voiceSupported && voiceAvailable && canMakeApiCalls
+                  ? 'border-cyan-500/30 bg-cyan-950/40 text-cyan-300'
+                  : 'border-gray-600/40 bg-gray-900/60 text-gray-400'
+              }`}
+            >
+              {voiceSupported && voiceAvailable && canMakeApiCalls
+                ? 'Voice ready (hold space)'
+                : 'Voice unavailable'}
+            </span>
+            <span className="rounded-full border border-gray-700/50 bg-gray-900/60 px-2 py-0.5 text-gray-400">
+              Drag/drop or paste images enabled
+            </span>
+          </div>
+        </header>
+
+        <div
+          ref={containerRef}
+          className="flex-1 cursor-text overflow-y-auto px-4 py-3"
+          onClick={(e) => {
+            if (e.target === containerRef.current) {
+              inputRef.current?.focus();
+            }
+          }}
+        >
+          {lines.map((line, i) => (
+            <TerminalLine key={i} line={line} />
+          ))}
+
+          {streamingContent && (
+            <div className="my-2 text-gray-200" aria-live="polite">
+              <MarkdownContent content={streamingContent} />
+              <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-400" />
+            </div>
+          )}
+
+          {showAuthPanel && (
+            <AuthPanel
+              isCheckingAuth={isCheckingAuth}
+              isConfigured={isConfigured}
+              authSource={authSource}
+              claudeProvider={claudeProvider as ProviderAvailability | undefined}
+              codexProvider={codexProvider as ProviderAvailability | undefined}
+              onConnectClaude={() => {
+                void handleConnectClaudeCode();
+              }}
+              onConnectCodex={() => {
+                void handleConnectOpenAICodex();
+              }}
+              onDisconnect={disconnectAuth}
+              onClose={() => setShowAuthPanel(false)}
+            />
+          )}
+
+          {showCoachmark && !showAuthPanel && (
+            <Coachmark
+              onConnect={() => {
+                setShowAuthPanel(true);
+                dismissCoachmark(false);
+              }}
+              onTryPrompt={() => {
+                setInput('What resistor do I need for a 5V LED?');
+                inputRef.current?.focus();
+                dismissCoachmark();
+              }}
+              onDismiss={() => dismissCoachmark()}
+            />
           )}
         </div>
-      </div>
 
-      {/* Status bar */}
-      <div className="border-t border-gray-800 bg-[#0d1117] px-4 py-1.5 select-none">
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-cyan-500">
-              ⚡ clitronic
-            </span>
-            <span className={canMakeApiCalls ? 'text-green-500' : 'text-amber-500'}>
-              {canMakeApiCalls
-                ? '● ready'
-                : '○ need key'}
-            </span>
+        <footer
+          className="border-t border-cyan-900/30 bg-[#070b11]/90 px-3 pt-3 backdrop-blur"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+        >
+          <div className="-mx-1 mb-2 overflow-x-auto pb-1">
+            <div className="flex min-w-max gap-2 px-1">
+              {QUICK_COMMANDS.map((command) => (
+                <button
+                  key={command}
+                  onClick={() => {
+                    void handleCommand(command);
+                  }}
+                  className="rounded border border-gray-700/70 bg-gray-900/80 px-2 py-1 text-[11px] text-gray-300 hover:border-cyan-700 hover:text-cyan-300"
+                >
+                  {command}
+                </button>
+              ))}
+            </div>
           </div>
-          <span className="text-gray-600">
-            {voiceSupported && '🎤 hold space • '}
-            ↑↓ history • paste image • help
-          </span>
-        </div>
+
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-900/40 bg-[#0d1117] px-3 py-2 sm:flex-nowrap">
+            <span className="text-cyan-500 select-none">❯</span>
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isProcessing}
+              aria-label="Terminal command input"
+              className="flex-1 bg-transparent text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
+              placeholder={isProcessing ? 'Processing...' : 'Ask about electronics or run a command...'}
+            />
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              className="rounded border border-gray-700/80 px-2 py-1.5 text-xs text-gray-300 hover:border-cyan-700 hover:text-cyan-300 disabled:opacity-40"
+              title="Upload image"
+            >
+              Upload
+            </button>
+
+            <button
+              onClick={submitCurrentInput}
+              disabled={isProcessing || !input.trim()}
+              className="rounded bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-[#032a31] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-cyan-500"
+            >
+              Send
+            </button>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+            <span>{voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' : ''}</span>
+            <span>↑↓ command history • paste image • ESC closes auth panel</span>
+          </div>
+        </footer>
       </div>
 
       <input
@@ -642,6 +814,166 @@ export function RichTerminal() {
   );
 }
 
+function Coachmark({
+  onConnect,
+  onTryPrompt,
+  onDismiss,
+}: {
+  onConnect: () => void;
+  onTryPrompt: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="my-3 max-w-3xl rounded-xl border border-amber-500/30 bg-amber-950/30 p-3 shadow-[0_0_0_1px_rgba(251,191,36,0.08)]">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.08em] text-amber-200 uppercase">Quick Start</p>
+          <p className="mt-1 text-sm text-amber-100/95">
+            Connect a provider first, then ask questions or run commands.
+          </p>
+          <p className="mt-1 text-xs text-amber-300/85">
+            {'Recommended: "auth" -> choose provider -> ask "What resistor do I need for a 5V LED?"'}
+          </p>
+        </div>
+
+        <button
+          onClick={onDismiss}
+          className="rounded border border-amber-700/70 px-2 py-1 text-xs text-amber-300 hover:border-amber-500 hover:text-amber-200"
+        >
+          dismiss
+        </button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={onConnect}
+          className="rounded bg-amber-300 px-3 py-1.5 text-xs font-semibold text-[#281800] hover:bg-amber-200"
+        >
+          Open Auth Panel
+        </button>
+        <button
+          onClick={onTryPrompt}
+          className="rounded border border-amber-700/70 px-3 py-1.5 text-xs text-amber-300 hover:border-amber-500 hover:text-amber-200"
+        >
+          Fill Example Prompt
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AuthPanel({
+  isCheckingAuth,
+  isConfigured,
+  authSource,
+  claudeProvider,
+  codexProvider,
+  onConnectClaude,
+  onConnectCodex,
+  onDisconnect,
+  onClose,
+}: AuthPanelProps) {
+  const claudeAvailable = claudeProvider?.available;
+  const codexAvailable = codexProvider?.available;
+
+  return (
+    <div className="my-3 max-w-3xl rounded-xl border border-cyan-500/25 bg-[#0f1722]/90 p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.08)] backdrop-blur">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-cyan-200">Authentication Providers</div>
+          <p className="mt-1 text-xs text-gray-400">
+            Connect one provider. The app stores only your provider selection, never raw keys.
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200"
+        >
+          close
+        </button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button
+          onClick={onConnectClaude}
+          disabled={isCheckingAuth || claudeAvailable === false}
+          className="rounded-lg border border-cyan-700/40 bg-cyan-950/20 p-3 text-left transition-colors hover:bg-cyan-950/35 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-cyan-200">Claude Code</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                claudeAvailable
+                  ? 'bg-green-900/40 text-green-300'
+                  : 'bg-gray-800/70 text-gray-400'
+              }`}
+            >
+              {claudeAvailable ? 'Available' : 'Unavailable'}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-gray-300">
+            Uses local Claude Code login and supports tool-enabled responses.
+          </p>
+          {claudeProvider?.source && (
+            <p className="mt-1 text-[11px] text-cyan-400/85">
+              Source: {providerSourceLabel(claudeProvider.source)}
+            </p>
+          )}
+          {claudeProvider?.reason && !claudeProvider.available && (
+            <p className="mt-1 text-[11px] text-amber-300/90">{claudeProvider.reason}</p>
+          )}
+        </button>
+
+        <button
+          onClick={onConnectCodex}
+          disabled={isCheckingAuth || codexAvailable === false}
+          className="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-3 text-left transition-colors hover:bg-emerald-950/35 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-emerald-200">OpenAI Codex</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                codexAvailable
+                  ? 'bg-green-900/40 text-green-300'
+                  : 'bg-gray-800/70 text-gray-400'
+              }`}
+            >
+              {codexAvailable ? 'Available' : 'Unavailable'}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-gray-300">
+            Uses local Codex auth and unlocks speech-to-text voice input.
+          </p>
+          {codexProvider?.source && (
+            <p className="mt-1 text-[11px] text-emerald-400/85">
+              Source: {providerSourceLabel(codexProvider.source)}
+            </p>
+          )}
+          {codexProvider?.reason && !codexProvider.available && (
+            <p className="mt-1 text-[11px] text-amber-300/90">{codexProvider.reason}</p>
+          )}
+        </button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+        <span>
+          Current connection:{' '}
+          <span className={isConfigured ? 'text-cyan-300' : 'text-amber-300'}>
+            {authLabel(authSource)}
+          </span>
+        </span>
+        {isConfigured && (
+          <button onClick={onDisconnect} className="text-red-400 hover:text-red-300 hover:underline">
+            disconnect
+          </button>
+        )}
+      </div>
+
+      {isCheckingAuth && <p className="mt-2 text-xs text-cyan-400">Checking provider availability...</p>}
+    </div>
+  );
+}
+
 function TerminalLine({ line }: { line: TerminalLine }) {
   switch (line.type) {
     case 'welcome':
@@ -649,15 +981,13 @@ function TerminalLine({ line }: { line: TerminalLine }) {
 
     case 'ascii':
       return (
-        <pre className="whitespace-pre text-cyan-600/60 text-xs leading-tight select-text">
+        <pre className="text-xs leading-tight whitespace-pre text-cyan-600/60 select-text">
           {line.content}
         </pre>
       );
 
     case 'system':
-      return (
-        <div className="py-1 text-green-400 select-text">{line.content}</div>
-      );
+      return <div className="py-1 text-green-400 select-text">{line.content}</div>;
 
     case 'command':
       return (
@@ -668,14 +998,20 @@ function TerminalLine({ line }: { line: TerminalLine }) {
       );
 
     case 'error':
-      return (
-        <div className="py-1 text-red-400 select-text">{line.content}</div>
-      );
+      return <div className="py-1 text-red-400 select-text">{line.content}</div>;
 
     case 'image':
+      if (!line.imageUrl) return null;
       return (
-        <div className="my-2 max-w-xs overflow-hidden rounded-lg border border-gray-700">
-          <img src={line.imageUrl} alt="Component" className="w-full" />
+        <div className="my-2 max-w-sm overflow-hidden rounded-lg border border-gray-700">
+          <Image
+            src={line.imageUrl}
+            alt="Uploaded component"
+            width={640}
+            height={400}
+            unoptimized
+            className="h-auto w-full"
+          />
         </div>
       );
 
@@ -691,7 +1027,6 @@ function TerminalLine({ line }: { line: TerminalLine }) {
   }
 }
 
-// Copy button component
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -708,7 +1043,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute right-2 top-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-600 transition-colors"
+      className="absolute top-2 right-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 transition-colors hover:bg-gray-600"
     >
       {copied ? '✓ Copied' : 'Copy'}
     </button>
@@ -734,32 +1069,39 @@ function MarkdownContent({ content }: { content: string }) {
 
           if (isBlock) {
             return (
-              <div className="relative group">
+              <div className="group relative">
                 <CopyButton text={codeText} />
-                <code className="block rounded bg-gray-900 p-3 text-cyan-300 text-xs overflow-x-auto">
+                <code className="block overflow-x-auto rounded bg-gray-900 p-3 text-xs text-cyan-300">
                   {children}
                 </code>
               </div>
             );
           }
           return (
-            <code className="rounded bg-gray-800 px-1.5 py-0.5 text-cyan-300 text-xs cursor-text">
+            <code className="cursor-text rounded bg-gray-800 px-1.5 py-0.5 text-xs text-cyan-300">
               {children}
             </code>
           );
         },
         pre: ({ children }) => (
-          <pre className="my-2 rounded bg-gray-900 overflow-x-auto">
-            {children}
-          </pre>
+          <pre className="my-2 overflow-x-auto rounded bg-gray-900">{children}</pre>
         ),
         a: ({ href, children }) => (
-          <a href={href} className="text-cyan-400 hover:underline" target="_blank" rel="noopener noreferrer">
+          <a
+            href={href}
+            className="text-cyan-400 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {children}
           </a>
         ),
-        table: ({ children }) => <table className="my-2 text-sm border-collapse">{children}</table>,
-        th: ({ children }) => <th className="border border-gray-700 bg-gray-800 px-3 py-1 text-left text-cyan-400">{children}</th>,
+        table: ({ children }) => <table className="my-2 border-collapse text-sm">{children}</table>,
+        th: ({ children }) => (
+          <th className="border border-gray-700 bg-gray-800 px-3 py-1 text-left text-cyan-400">
+            {children}
+          </th>
+        ),
         td: ({ children }) => <td className="border border-gray-700 px-3 py-1">{children}</td>,
       }}
     >
