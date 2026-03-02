@@ -16,7 +16,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), use the first-run coachmark or run `auth`, then choose `Claude Code` or `OpenAI Codex`.
+Open [http://localhost:3000](http://localhost:3000). If a provider is available it auto-connects; otherwise run `auth` and choose `Claude Code` or `OpenAI Codex`.
 
 ## Features
 
@@ -57,9 +57,9 @@ Open [http://localhost:3000](http://localhost:3000), use the first-run coachmark
 ### Terminal Experience
 
 - Electronics-themed ASCII art
-- First-run coachmark with guided setup actions
+- Classic retro terminal look with modern spacing and contrast
 - Clear provider/voice status chips
-- Quick-command rail (`help`, `list`, `info resistor`, `identify`, `auth`)
+- Centered auth modal with provider status and refresh action
 - Mobile-friendly touch targets and safe-area-aware footer
 - Consistent cyan/blue branding
 - Markdown rendering with syntax highlighting
@@ -76,7 +76,7 @@ Users authenticate by running `auth` and selecting:
 - `Claude Code` (uses local Claude Code credentials or server-side Anthropic env credentials)
 - `OpenAI Codex` (uses local Codex credentials or server-side OpenAI env credentials)
 
-The first-run coachmark opens the auth panel automatically for new users.
+If one provider is available, Clitronic auto-selects it to minimize setup friction.
 
 Optional server-side fallback configuration:
 

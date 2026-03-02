@@ -35,6 +35,14 @@ const ApiKeyContext = createContext<ApiKeyContextType | null>(null);
 const AUTH_SOURCE_KEY = 'clitronic_auth_source';
 const LEGACY_API_KEY_STORAGE_KEY = 'clitronic_api_key';
 
+function firstAvailableProvider(
+  list: AuthProviderInfo[]
+): Exclude<AuthSource, null> | null {
+  const available = list.find((provider) => provider.available);
+  if (!available) return null;
+  return available.id;
+}
+
 function parseStoredAuthSource(value: string | null): AuthSource {
   if (value === 'claude-code' || value === 'openai-codex') {
     return value;
@@ -98,7 +106,16 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
 
     const selected = providers.find((provider) => provider.id === authSource);
     if (selected && !selected.available) {
-      setAuthSource(null);
+      setAuthSource(firstAvailableProvider(providers));
+    }
+  }, [authSource, providers, setAuthSource]);
+
+  useEffect(() => {
+    if (authSource || providers.length === 0) return;
+
+    const fallback = firstAvailableProvider(providers);
+    if (fallback) {
+      setAuthSource(fallback);
     }
   }, [authSource, providers, setAuthSource]);
 

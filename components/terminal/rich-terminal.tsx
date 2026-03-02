@@ -34,6 +34,7 @@ interface AuthPanelProps {
   onConnectCodex: () => void;
   onDisconnect: () => void;
   onClose: () => void;
+  onRefresh: () => void;
 }
 
 const HELP_TEXT = `
@@ -55,8 +56,6 @@ const HELP_TEXT = `
 `;
 
 const AUTH_REQUIRED_MESSAGE = '✗ Authentication required. Type "auth" to connect.';
-const QUICK_COMMANDS = ['help', 'list', 'info resistor', 'identify', 'auth'];
-const COACHMARK_DISMISSED_KEY = 'clitronic_coachmark_dismissed_v1';
 
 function authLabel(authSource: 'claude-code' | 'openai-codex' | null): string {
   if (authSource === 'claude-code') return 'Claude Code';
@@ -104,7 +103,6 @@ export function RichTerminal() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [showCoachmark, setShowCoachmark] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -192,18 +190,6 @@ export function RichTerminal() {
   useEffect(() => {
     preloadAudioFeedback();
   }, []);
-
-  // First-run coachmark: visible until dismissed or auth is configured.
-  useEffect(() => {
-    if (isConfigured) {
-      setShowCoachmark(false);
-      localStorage.setItem(COACHMARK_DISMISSED_KEY, '1');
-      return;
-    }
-
-    const dismissed = localStorage.getItem(COACHMARK_DISMISSED_KEY) === '1';
-    setShowCoachmark(!dismissed);
-  }, [isConfigured]);
 
   // Refresh providers whenever auth panel opens to keep availability current.
   useEffect(() => {
@@ -492,13 +478,6 @@ export function RichTerminal() {
     void handleCommand(currentInput);
   }, [handleCommand, input, isProcessing]);
 
-  const dismissCoachmark = useCallback((persist = true) => {
-    setShowCoachmark(false);
-    if (persist) {
-      localStorage.setItem(COACHMARK_DISMISSED_KEY, '1');
-    }
-  }, []);
-
   // Drag and drop handlers
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
@@ -626,45 +605,18 @@ export function RichTerminal() {
       <VoiceIndicator state={voiceState} />
 
       <div className="relative z-10 flex min-h-[100dvh] flex-col">
-        <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-[11px] tracking-[0.22em] text-cyan-400 uppercase">Clitronic</div>
-              <h1 className="text-sm font-semibold tracking-[0.04em] text-cyan-200">
-                Electronics Copilot Terminal
-              </h1>
-              <p className="mt-1 text-xs text-gray-500">
-                Connect once, then ask questions, run commands, or drop component photos.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs">
-              <button
-                onClick={() => {
-                  void handleCommand('help');
-                }}
-                className="rounded border border-cyan-800/50 bg-cyan-900/15 px-2.5 py-1.5 text-cyan-300 hover:bg-cyan-900/30"
-              >
-                help
-              </button>
-              <button
-                onClick={() => {
-                  void handleCommand('identify');
-                }}
-                className="rounded border border-cyan-800/50 bg-cyan-900/15 px-2.5 py-1.5 text-cyan-300 hover:bg-cyan-900/30"
-              >
-                identify
-              </button>
-              <button
-                onClick={() => setShowAuthPanel((prev) => !prev)}
-                className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1.5 text-emerald-300 hover:bg-emerald-900/30"
-              >
-                auth
-              </button>
-            </div>
+        <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-2 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs tracking-[0.24em] text-cyan-400 uppercase">⚡ Clitronic</div>
+            <button
+              onClick={() => setShowAuthPanel(true)}
+              className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-900/30"
+            >
+              auth
+            </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
             <span
               className={`rounded-full border px-2 py-0.5 ${
                 canMakeApiCalls
@@ -711,60 +663,12 @@ export function RichTerminal() {
             </div>
           )}
 
-          {showAuthPanel && (
-            <AuthPanel
-              isCheckingAuth={isCheckingAuth}
-              isConfigured={isConfigured}
-              authSource={authSource}
-              claudeProvider={claudeProvider as ProviderAvailability | undefined}
-              codexProvider={codexProvider as ProviderAvailability | undefined}
-              onConnectClaude={() => {
-                void handleConnectClaudeCode();
-              }}
-              onConnectCodex={() => {
-                void handleConnectOpenAICodex();
-              }}
-              onDisconnect={disconnectAuth}
-              onClose={() => setShowAuthPanel(false)}
-            />
-          )}
-
-          {showCoachmark && !showAuthPanel && (
-            <Coachmark
-              onConnect={() => {
-                setShowAuthPanel(true);
-                dismissCoachmark(false);
-              }}
-              onTryPrompt={() => {
-                setInput('What resistor do I need for a 5V LED?');
-                inputRef.current?.focus();
-                dismissCoachmark();
-              }}
-              onDismiss={() => dismissCoachmark()}
-            />
-          )}
         </div>
 
         <footer
           className="border-t border-cyan-900/30 bg-[#070b11]/90 px-3 pt-3 backdrop-blur"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
         >
-          <div className="-mx-1 mb-2 overflow-x-auto pb-1">
-            <div className="flex min-w-max gap-2 px-1">
-              {QUICK_COMMANDS.map((command) => (
-                <button
-                  key={command}
-                  onClick={() => {
-                    void handleCommand(command);
-                  }}
-                  className="rounded border border-gray-700/70 bg-gray-900/80 px-2 py-1 text-[11px] text-gray-300 hover:border-cyan-700 hover:text-cyan-300"
-                >
-                  {command}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-900/40 bg-[#0d1117] px-3 py-2 sm:flex-nowrap">
             <span className="text-cyan-500 select-none">❯</span>
             <input
@@ -798,10 +702,38 @@ export function RichTerminal() {
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
             <span>{voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' : ''}</span>
-            <span>↑↓ command history • paste image • ESC closes auth panel</span>
+            <span>auth • help • identify • ↑↓ history • paste image • ESC closes auth panel</span>
           </div>
         </footer>
       </div>
+
+      {showAuthPanel && (
+        <div
+          className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+          onClick={() => setShowAuthPanel(false)}
+        >
+          <div className="w-full max-w-3xl" onClick={(event) => event.stopPropagation()}>
+            <AuthPanel
+              isCheckingAuth={isCheckingAuth}
+              isConfigured={isConfigured}
+              authSource={authSource}
+              claudeProvider={claudeProvider as ProviderAvailability | undefined}
+              codexProvider={codexProvider as ProviderAvailability | undefined}
+              onConnectClaude={() => {
+                void handleConnectClaudeCode();
+              }}
+              onConnectCodex={() => {
+                void handleConnectOpenAICodex();
+              }}
+              onDisconnect={disconnectAuth}
+              onClose={() => setShowAuthPanel(false)}
+              onRefresh={() => {
+                void refreshProviders();
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       <input
         ref={fileInputRef}
@@ -810,54 +742,6 @@ export function RichTerminal() {
         onChange={handleImageUpload}
         className="hidden"
       />
-    </div>
-  );
-}
-
-function Coachmark({
-  onConnect,
-  onTryPrompt,
-  onDismiss,
-}: {
-  onConnect: () => void;
-  onTryPrompt: () => void;
-  onDismiss: () => void;
-}) {
-  return (
-    <div className="my-3 max-w-3xl rounded-xl border border-amber-500/30 bg-amber-950/30 p-3 shadow-[0_0_0_1px_rgba(251,191,36,0.08)]">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold tracking-[0.08em] text-amber-200 uppercase">Quick Start</p>
-          <p className="mt-1 text-sm text-amber-100/95">
-            Connect a provider first, then ask questions or run commands.
-          </p>
-          <p className="mt-1 text-xs text-amber-300/85">
-            {'Recommended: "auth" -> choose provider -> ask "What resistor do I need for a 5V LED?"'}
-          </p>
-        </div>
-
-        <button
-          onClick={onDismiss}
-          className="rounded border border-amber-700/70 px-2 py-1 text-xs text-amber-300 hover:border-amber-500 hover:text-amber-200"
-        >
-          dismiss
-        </button>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          onClick={onConnect}
-          className="rounded bg-amber-300 px-3 py-1.5 text-xs font-semibold text-[#281800] hover:bg-amber-200"
-        >
-          Open Auth Panel
-        </button>
-        <button
-          onClick={onTryPrompt}
-          className="rounded border border-amber-700/70 px-3 py-1.5 text-xs text-amber-300 hover:border-amber-500 hover:text-amber-200"
-        >
-          Fill Example Prompt
-        </button>
-      </div>
     </div>
   );
 }
@@ -872,12 +756,14 @@ function AuthPanel({
   onConnectCodex,
   onDisconnect,
   onClose,
+  onRefresh,
 }: AuthPanelProps) {
   const claudeAvailable = claudeProvider?.available;
   const codexAvailable = codexProvider?.available;
+  const anyProviderAvailable = claudeAvailable === true || codexAvailable === true;
 
   return (
-    <div className="my-3 max-w-3xl rounded-xl border border-cyan-500/25 bg-[#0f1722]/90 p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.08)] backdrop-blur">
+    <div className="rounded-xl border border-cyan-500/25 bg-[#0f1722]/95 p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.08)] backdrop-blur">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-cyan-200">Authentication Providers</div>
@@ -955,6 +841,16 @@ function AuthPanel({
         </button>
       </div>
 
+      {!anyProviderAvailable && !isCheckingAuth && (
+        <div className="mt-3 rounded border border-amber-500/30 bg-amber-950/30 p-2 text-xs text-amber-200">
+          <p>No providers are available in this deployment right now.</p>
+          <p className="mt-1 text-amber-300/90">
+            For hosted testing, configure server credentials: `ANTHROPIC_API_KEY` and/or
+            `OPENAI_API_KEY`.
+          </p>
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
         <span>
           Current connection:{' '}
@@ -962,11 +858,16 @@ function AuthPanel({
             {authLabel(authSource)}
           </span>
         </span>
-        {isConfigured && (
-          <button onClick={onDisconnect} className="text-red-400 hover:text-red-300 hover:underline">
-            disconnect
+        <div className="flex items-center gap-3">
+          <button onClick={onRefresh} className="text-cyan-400 hover:text-cyan-300 hover:underline">
+            refresh
           </button>
-        )}
+          {isConfigured && (
+            <button onClick={onDisconnect} className="text-red-400 hover:text-red-300 hover:underline">
+              disconnect
+            </button>
+          )}
+        </div>
       </div>
 
       {isCheckingAuth && <p className="mt-2 text-xs text-cyan-400">Checking provider availability...</p>}

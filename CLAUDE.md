@@ -91,6 +91,8 @@ Users authenticate with the `auth` command in the terminal and choose:
 1. `Claude Code` (local Claude credentials or server Anthropic env fallback)
 2. `OpenAI Codex` (local Codex credentials or server OpenAI env fallback)
 
+If no provider is selected and one is available, the client auto-selects the first available provider.
+
 The browser stores only the selected provider id, not raw tokens.
 
 ## AI Integration
@@ -161,9 +163,9 @@ Features:
 ### UI Elements
 
 - Circuit-themed ASCII art header
-- First-run coachmark with connect/example actions (dismiss persisted in localStorage)
+- Classic retro terminal layout with modern spacing and contrast
 - Header status chips showing connection state and voice mode availability
-- Quick-command rail for common actions
+- Centered authentication modal with provider status and refresh action
 - Safe-area-aware footer and touch-friendly controls on mobile
 - Command history with ↑↓ navigation
 - Consistent cyan/blue color scheme
