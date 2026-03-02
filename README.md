@@ -183,6 +183,8 @@ clitronic/
 
 None are required for local testing if users have Claude Code or OpenAI Codex already authenticated.
 
+Also accepted aliases in hosted deployments: `ANTHROPIC_KEY` and `OPENAI_KEY` (plus lowercase equivalents).
+
 ## Development
 
 ```bash

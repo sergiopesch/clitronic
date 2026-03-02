@@ -35,11 +35,28 @@ export interface ResolvedOpenAIAuth {
     | 'codex-access-token';
 }
 
+const ANTHROPIC_API_KEY_ENV_NAMES = ['ANTHROPIC_API_KEY', 'anthropic_api_key', 'ANTHROPIC_KEY'];
+const ANTHROPIC_AUTH_TOKEN_ENV_NAMES = ['ANTHROPIC_AUTH_TOKEN', 'anthropic_auth_token'];
+const OPENAI_API_KEY_ENV_NAMES = ['OPENAI_API_KEY', 'openai_api_key', 'OPENAI_KEY'];
+const OPENAI_ACCESS_TOKEN_ENV_NAMES = ['OPENAI_ACCESS_TOKEN', 'openai_access_token'];
+
 function envValue(name: string): string | null {
   const value = process.env[name];
   if (!value) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function envValueAny(names: readonly string[]): string | null {
+  for (const name of names) {
+    const value = envValue(name);
+    if (value) return value;
+  }
+  return null;
+}
+
+function isHostedRuntime(): boolean {
+  return process.env.VERCEL === '1' || process.env.AWS_EXECUTION_ENV !== undefined;
 }
 
 export function parseAuthProvider(provider: string | null | undefined): AuthProviderId | null {
@@ -51,7 +68,7 @@ export function parseAuthProvider(provider: string | null | undefined): AuthProv
 }
 
 async function getClaudeProviderAvailability(): Promise<AuthProviderAvailability> {
-  if (envValue('ANTHROPIC_API_KEY')) {
+  if (envValueAny(ANTHROPIC_API_KEY_ENV_NAMES)) {
     return {
       id: 'claude-code',
       name: 'Claude Code',
@@ -60,7 +77,7 @@ async function getClaudeProviderAvailability(): Promise<AuthProviderAvailability
     };
   }
 
-  if (envValue('ANTHROPIC_AUTH_TOKEN')) {
+  if (envValueAny(ANTHROPIC_AUTH_TOKEN_ENV_NAMES)) {
     return {
       id: 'claude-code',
       name: 'Claude Code',
@@ -83,12 +100,14 @@ async function getClaudeProviderAvailability(): Promise<AuthProviderAvailability
     id: 'claude-code',
     name: 'Claude Code',
     available: false,
-    reason: check.reason,
+    reason: isHostedRuntime()
+      ? 'No server Anthropic credentials configured'
+      : check.reason,
   };
 }
 
 async function getCodexProviderAvailability(): Promise<AuthProviderAvailability> {
-  if (envValue('OPENAI_API_KEY')) {
+  if (envValueAny(OPENAI_API_KEY_ENV_NAMES)) {
     return {
       id: 'openai-codex',
       name: 'OpenAI Codex',
@@ -97,7 +116,7 @@ async function getCodexProviderAvailability(): Promise<AuthProviderAvailability>
     };
   }
 
-  if (envValue('OPENAI_ACCESS_TOKEN')) {
+  if (envValueAny(OPENAI_ACCESS_TOKEN_ENV_NAMES)) {
     return {
       id: 'openai-codex',
       name: 'OpenAI Codex',
@@ -120,7 +139,9 @@ async function getCodexProviderAvailability(): Promise<AuthProviderAvailability>
     id: 'openai-codex',
     name: 'OpenAI Codex',
     available: false,
-    reason: check.reason,
+    reason: isHostedRuntime()
+      ? 'No server OpenAI credentials configured'
+      : check.reason,
   };
 }
 
@@ -134,7 +155,7 @@ export async function getAuthProviderAvailability(): Promise<AuthProviderAvailab
 }
 
 export async function resolveAnthropicAuth(): Promise<ResolvedAnthropicAuth> {
-  const envApiKey = envValue('ANTHROPIC_API_KEY');
+  const envApiKey = envValueAny(ANTHROPIC_API_KEY_ENV_NAMES);
   if (envApiKey) {
     return {
       method: 'apiKey',
@@ -143,7 +164,7 @@ export async function resolveAnthropicAuth(): Promise<ResolvedAnthropicAuth> {
     };
   }
 
-  const envAuthToken = envValue('ANTHROPIC_AUTH_TOKEN');
+  const envAuthToken = envValueAny(ANTHROPIC_AUTH_TOKEN_ENV_NAMES);
   if (envAuthToken) {
     return {
       method: 'authToken',
@@ -176,7 +197,7 @@ export async function resolveOpenAIAuth(headerToken?: string | null): Promise<Re
     };
   }
 
-  const envApiKey = envValue('OPENAI_API_KEY');
+  const envApiKey = envValueAny(OPENAI_API_KEY_ENV_NAMES);
   if (envApiKey) {
     return {
       token: envApiKey,
@@ -184,7 +205,7 @@ export async function resolveOpenAIAuth(headerToken?: string | null): Promise<Re
     };
   }
 
-  const envAccessToken = envValue('OPENAI_ACCESS_TOKEN');
+  const envAccessToken = envValueAny(OPENAI_ACCESS_TOKEN_ENV_NAMES);
   if (envAccessToken) {
     return {
       token: envAccessToken,
