@@ -1,6 +1,6 @@
 # Clitronic
 
-**AI-powered terminal companion for electronics and robotics +**
+**AI-powered terminal companion for electronics and robotics ++**
 
 A beautiful terminal interface that helps you understand electronic components, circuits, and calculations. Keyboard-driven, multimodal, powered by Claude + OpenAI.
 
