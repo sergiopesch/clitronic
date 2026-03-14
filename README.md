@@ -1,199 +1,198 @@
 # Clitronic
 
-**AI-powered terminal companion for electronics and robotics**
+**Command-first electronics studio with adaptive teaching windows**
 
-A beautiful terminal interface that helps you understand electronic components, circuits, and calculations. Keyboard-driven, multimodal, powered by Claude + OpenAI.
+Clitronic is evolving from an AI terminal companion into a **command-first web studio** for electronics learning and experimentation.
 
-## Quick Start
+The terminal is still the spine, but the interface now sketches a bigger idea:
+- commands create intent
+- the workspace reacts visually
+- teacher windows open when they are useful
+- simulation, inspection, and learning sit side by side
+
+This first refactor is not full circuit simulation yet. It is a **product prototype** that makes the concept visible and testable.
+
+## Core product idea
+
+Clitronic should feel like:
+
+> a great electronics teacher standing beside you, noticing what you are building, and opening the right view at the right moment.
+
+Instead of choosing between CLI or GUI, Clitronic combines both:
+
+- **CLI / command layer** for speed, precision, and intent
+- **adaptive web workspace** for spatial understanding and guidance
+- **teaching windows** for explanation, warnings, and next steps
+- **simulation surfaces** for behaviour, graphs, and debugging
+
+## What the current prototype now demonstrates
+
+The web app now includes:
+
+- a command-first terminal input
+- an adaptive workspace pane
+- a workbench window
+- a teacher window
+- an inspector window
+- a graph/signal window
+- suggested next commands
+- dynamic state changes for commands like:
+  - `build ...`
+  - `simulate`
+  - `explain ...`
+  - `focus ...`
+
+Example flow:
 
 ```bash
-# Clone and install
-git clone https://github.com/sergiopesch/clitronic.git
-cd clitronic
-npm install
-
-# Run the web app
-npm run dev
+build a simple led circuit with a 9v battery
+simulate
+explain why the led is dim
+focus graph
 ```
 
-Open [http://localhost:3000](http://localhost:3000). If a provider is available it auto-connects; otherwise run `auth` and choose `Claude Code` or `OpenAI Codex`.
+The goal of this prototype is to prove the **interaction model**, not final simulation fidelity.
 
-## Features
+## Existing capabilities retained
 
 ### Terminal Commands
 
-- `help` — Show all available commands
+- `help` — Show available commands
 - `auth` — Connect Claude Code or OpenAI Codex
-- `list [category]` — List components (passive, active, input, output)
-- `info <component>` — Component details (e.g., `info led`)
-- `identify` — Upload an image to identify a component
-- `clear` — Clear the terminal
+- `build <idea>` — Open adaptive teaching windows for a circuit idea
+- `simulate` — Switch workspace into simulation mode
+- `explain <question>` — Ask the teacher layer about the active circuit
+- `focus <panel>` — Emphasise a panel such as teacher, graph, or inspector
+- `list [category]` — List components
+- `info <component>` — Component details
+- `identify` — Upload image to identify a component
+- `clear` — Reset the terminal and workspace
 
 ### Voice Mode
 
 **Hold spacebar** to record, release to transcribe, then **Enter to send**.
 
-- Works when not typing in the input field
-- Hold Ctrl+Space (or Cmd+Space) when focused in input
-- Visual indicator shows recording (pulsing red) and transcribing
-- Audio chimes for start/end feedback
-- Transcribed text appears in input field for review
-- Requires OpenAI credentials (OpenAI Codex auth or server-side OpenAI env credentials)
-
 ### Image Analysis
 
-- **Drag & drop** images directly into the terminal
-- **Paste** images from clipboard (Cmd/Ctrl+V)
-- **Upload** via `identify` command
-- Claude identifies components, decodes markings and color codes
+- drag and drop images
+- paste from clipboard
+- upload via `identify`
 
-### AI Capabilities
+## Why this direction matters
 
-- **Component Identification** — Identify components from photos, decode markings and color codes
-- **Knowledge Base** — Detailed info on 16 common electronic components
-- **Calculations** — Ohm's law, voltage dividers, current limiting, and more
-- **Circuit Help** — Wiring examples, pinouts, and practical tips
+Most electronics tools optimise for one of two things:
 
-### Terminal Experience
+- schematic accuracy
+- intuitive understanding
 
-- Electronics-themed ASCII art
-- Classic retro terminal look with modern spacing and contrast
-- Clear provider/voice status chips
-- Centered auth modal with provider status and refresh action
-- Mobile-friendly touch targets and safe-area-aware footer
-- Consistent cyan/blue branding
-- Markdown rendering with syntax highlighting
-- Command history (↑↓ arrow keys)
-- Copy buttons on code blocks
-- Text selection and copying
+Clitronic is aiming for something broader:
 
-## Authentication
+- **intent expressed by command**
+- **state shown visually**
+- **understanding surfaced contextually**
 
-No end-user API keys required.
+That gives us a path toward:
 
-Users authenticate by running `auth` and selecting:
+- multimodality
+- adaptive teaching
+- 3D workbench thinking
+- signal and simulation views
+- eventually richer circuit construction and co-simulation
 
-- `Claude Code` (uses local Claude Code credentials or server-side Anthropic env credentials)
-- `OpenAI Codex` (uses local Codex credentials or server-side OpenAI env credentials)
-
-If one provider is available, Clitronic auto-selects it to minimize setup friction.
-
-Optional server-side fallback configuration:
+## Quick Start
 
 ```bash
-# Anthropic
-ANTHROPIC_API_KEY=sk-ant-...          # or ANTHROPIC_AUTH_TOKEN
-
-# OpenAI
-OPENAI_API_KEY=sk-...                 # or OPENAI_ACCESS_TOKEN
+git clone https://github.com/sergiopesch/clitronic.git
+cd clitronic
+npm install
+npm run dev
 ```
 
-## Security
+Open [http://localhost:3000](http://localhost:3000).
 
-Authentication tokens are resolved server-side from trusted sources:
-
-- local Claude Code / Codex credential stores
-- or server environment variables
-
-The browser stores only the selected provider (`claude-code` or `openai-codex`), not raw API keys.
+If a provider is available it auto-connects; otherwise run `auth` and choose `Claude Code` or `OpenAI Codex`.
 
 ## Usage
 
 ### Web App
 
 ```bash
-npm run dev      # Development server
-npm run build    # Production build
-npm start        # Start production server
+npm run dev
+npm run build
+npm start
 ```
 
-Just ask anything: _"What resistor do I need for a 5V LED?"_
+Then try commands such as:
+
+```bash
+build a simple led circuit with a 9v battery
+simulate
+explain why the led is dim
+focus inspector
+```
 
 ### CLI
 
+The standalone CLI package still exists and can continue to inform the command language.
+
 ```bash
 cd cli && npm install
-export ANTHROPIC_API_KEY=your_key_here
-
-# Interactive chat
 npm run start -- chat
-
-# One-shot question
 npm run start -- ask "What resistor do I need for a 5V LED?"
-
-# Identify a component from an image
-npm run start -- identify component.jpg
-
-# Get component info (no API key needed)
 npm run start -- info resistor
-
-# List all known components (no API key needed)
 npm run start -- list
 ```
 
 ## Architecture
 
-```
+```text
 clitronic/
 ├── app/                    # Next.js App Router
 │   ├── api/
-│   │   ├── chat/          # Streaming chat API
-│   │   ├── auth/providers/ # Provider availability and selection validation
-│   │   ├── check-key/     # Backward-compatible auth status endpoint
-│   │   ├── claude-code-auth/  # Claude Code credentials
-│   │   └── speech-to-text/    # Voice transcription
-│   └── page.tsx           # Terminal interface
+│   │   ├── chat/           # Streaming AI responses
+│   │   ├── auth/providers/ # Provider availability
+│   │   └── speech-to-text/ # Voice transcription
+│   └── page.tsx            # Main command-first studio
 ├── cli/                    # Standalone CLI package
 ├── components/
-│   ├── api-key/           # Auth provider selection UI
-│   ├── terminal/          # Rich terminal interface
+│   ├── api-key/           # Provider selection UI
+│   ├── terminal/          # Terminal + adaptive studio prototype
 │   └── voice/             # Voice mode indicator
-├── hooks/                  # React hooks
-│   ├── useLongPress.ts    # Spacebar detection
-│   └── useVoiceRecording.ts  # Audio capture
+├── hooks/                  # Recording and long-press hooks
 └── lib/
-    ├── ai/                # System prompt & tools
-    ├── auth/              # Claude/Codex credential resolution
+    ├── ai/                # System prompt + tools
+    ├── auth/              # Provider auth resolution
     ├── data/              # Component knowledge base
-    └── utils/             # Audio utilities
+    └── utils/             # Audio/image helpers
 ```
 
-**Technologies:**
+## Product direction after this prototype
+
+The next meaningful steps are:
+
+1. introduce a real circuit document/state model
+2. map commands to structured state changes rather than prompt inference alone
+3. add a proper 2D topology view
+4. add a true 3D workbench pass
+5. open windows from simulation events, not just command parsing
+6. make the teacher layer explain actual circuit state and failures
+
+## Tech stack
 
 - **Web**: Next.js 16, React 19, Tailwind CSS
 - **AI**: Claude Sonnet via Vercel AI SDK v5
-- **Voice**: OpenAI Whisper, Web Audio API, MediaRecorder
-- **CLI**: Commander.js, @anthropic-ai/sdk
-
-## Requirements
-
-- Node.js 20+
-- Claude Code or OpenAI Codex credentials for local auth flow
-- Optional server credentials via environment variables (for hosted deployments)
-- Browser with MediaRecorder support (for voice mode)
-
-## Environment Variables
-
-| Variable               | Required | Description                                               |
-| ---------------------- | -------- | --------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`    | No       | Anthropic API key fallback for Claude provider            |
-| `ANTHROPIC_AUTH_TOKEN` | No       | Anthropic bearer token fallback for Claude provider       |
-| `OPENAI_API_KEY`       | No       | OpenAI API key fallback for Codex provider and voice      |
-| `OPENAI_ACCESS_TOKEN`  | No       | OpenAI bearer token fallback for Codex provider and voice |
-
-None are required for local testing if users have Claude Code or OpenAI Codex already authenticated.
-
-Also accepted aliases in hosted deployments: `ANTHROPIC_KEY` and `OPENAI_KEY` (plus lowercase equivalents).
+- **Voice**: OpenAI speech-to-text + browser recording APIs
+- **CLI**: Commander.js
 
 ## Development
 
 ```bash
-npm run dev          # Start dev server
-npm run build        # Production build
-npm run lint         # Run ESLint
-npm run type-check   # TypeScript validation
-npm run format       # Format with Prettier
-npm run validate     # Run all checks
+npm run dev
+npm run build
+npm run lint
+npm run type-check
+npm run format
+npm run validate
 ```
 
 ## License

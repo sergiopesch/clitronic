@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useApiKey } from '../api-key';
@@ -9,6 +9,10 @@ import { useLongPress, useVoiceRecording } from '@/hooks';
 import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 import { AnimatedWelcome } from './animated-welcome';
+import { electronicsComponents } from '@/lib/data/components';
+
+type PanelKind = 'scene' | 'teacher' | 'inspector' | 'graph' | 'next-step';
+type SimulationMode = 'idle' | 'preview' | 'simulating';
 
 interface TerminalLine {
   type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
@@ -37,22 +41,107 @@ interface AuthPanelProps {
   onRefresh: () => void;
 }
 
+interface TeacherEvent {
+  id: string;
+  title: string;
+  detail: string;
+}
+
+interface AdaptivePanel {
+  id: string;
+  kind: PanelKind;
+  title: string;
+  description: string;
+  accent: 'cyan' | 'emerald' | 'amber' | 'violet';
+}
+
+interface WorkspaceState {
+  mode: SimulationMode;
+  circuitTitle: string;
+  circuitSummary: string;
+  nodes: string[];
+  insights: string[];
+  metrics: Array<{ label: string; value: string }>;
+  teacherEvents: TeacherEvent[];
+  panels: AdaptivePanel[];
+  nextActions: string[];
+}
+
+const DEFAULT_WORKSPACE: WorkspaceState = {
+  mode: 'idle',
+  circuitTitle: 'No active circuit',
+  circuitSummary:
+    'This first version turns Clitronic into a command-first studio. Commands drive the experience; adaptive windows explain what matters.',
+  nodes: ['battery', 'resistor', 'led'],
+  insights: [
+    'The terminal is the spine of the interface.',
+    'Windows appear to explain state, not just decorate it.',
+    'The teacher panel should react to what the learner is doing now.',
+  ],
+  metrics: [
+    { label: 'Mode', value: 'Concept sketch' },
+    { label: 'Teacher', value: 'Observing' },
+    { label: 'Windows', value: 'Adaptive' },
+  ],
+  teacherEvents: [
+    {
+      id: 'default-observer',
+      title: 'Teacher by your side',
+      detail:
+        'As the learner acts, Clitronic should open the right lens: physical layout, explanation, warning, graph, or next step.',
+    },
+  ],
+  panels: [
+    {
+      id: 'scene-panel',
+      kind: 'scene',
+      title: 'Workbench',
+      description: 'A spatial view of the build. In later versions this becomes the 3D circuit bench.',
+      accent: 'cyan',
+    },
+    {
+      id: 'teacher-panel',
+      kind: 'teacher',
+      title: 'Teacher',
+      description: 'Context-aware guidance tied to the exact circuit state.',
+      accent: 'emerald',
+    },
+    {
+      id: 'inspector-panel',
+      kind: 'inspector',
+      title: 'Inspector',
+      description: 'Key values, pin states, warnings, and the current explanation surface.',
+      accent: 'amber',
+    },
+  ],
+  nextActions: [
+    'build a simple led circuit with a 9v battery',
+    'simulate',
+    'explain why the led is dim',
+  ],
+};
+
 const HELP_TEXT = `
-  ┌─────────────────────────────────────────────────────────────┐
-  │  COMMANDS                                                   │
-  ├─────────────────────────────────────────────────────────────┤
-  │  help              Show this help message                   │
-  │  auth              Connect Claude Code or OpenAI Codex      │
-  │  list [category]   List components (passive/active/etc)    │
-  │  info <component>  Get component details                    │
-  │  identify          Upload image to identify component       │
-  │  clear             Clear terminal                           │
-  ├─────────────────────────────────────────────────────────────┤
-  │  Or just ask a question! Examples:                          │
-  │    "What resistor for a 5V LED?"                            │
-  │    "How does a transistor work?"                            │
-  │    "Calculate voltage divider 5V to 3.3V"                   │
-  └─────────────────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │  CLITRONIC STUDIO COMMANDS                                              │
+  ├──────────────────────────────────────────────────────────────────────────┤
+  │  help                         Show this help message                     │
+  │  auth                         Connect Claude Code or OpenAI Codex        │
+  │  clear                        Clear terminal history                     │
+  │  identify                     Upload an image to identify a component    │
+  │  build <idea>                 Sketch a circuit and open teaching views   │
+  │  simulate                     Switch the workspace into simulation mode  │
+  │  explain <question>           Ask the teacher about the active circuit   │
+  │  focus <panel>                Emphasise teacher / graph / inspector      │
+  │  list [category]              List components from the knowledge base    │
+  │  info <component>             Get component details                      │
+  ├──────────────────────────────────────────────────────────────────────────┤
+  │  Example flow                                                         │
+  │    build a simple led circuit with a 9v battery                        │
+  │    simulate                                                            │
+  │    explain why the led is dim                                          │
+  │    focus graph                                                         │
+  └──────────────────────────────────────────────────────────────────────────┘
 `;
 
 const AUTH_REQUIRED_MESSAGE = '✗ Authentication required. Type "auth" to connect.';
@@ -82,6 +171,261 @@ function providerSourceLabel(source?: string): string {
   }
 }
 
+function titleCase(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function inferCircuitTokens(input: string): string[] {
+  const source = input.toLowerCase();
+  const matches = electronicsComponents
+    .filter((component) => source.includes(component.id) || source.includes(component.name.toLowerCase()))
+    .map((component) => component.id.replace(/-/g, ' '));
+
+  if (source.includes('battery')) matches.unshift('battery');
+  if (source.includes('ground') || source.includes('gnd')) matches.push('ground');
+  if (source.includes('wire')) matches.push('wire');
+
+  if (matches.length === 0) {
+    if (source.includes('sensor')) matches.push('sensor');
+    if (source.includes('circuit')) matches.push('circuit');
+  }
+
+  return unique(matches).slice(0, 6);
+}
+
+function createWorkspaceFromPrompt(prompt: string, previous?: WorkspaceState): WorkspaceState {
+  const normalized = prompt.trim();
+  const source = normalized.toLowerCase();
+  const nodes = inferCircuitTokens(normalized);
+  const hasLed = nodes.includes('led');
+  const hasResistor = nodes.includes('resistor');
+  const hasBattery = nodes.includes('battery');
+  const hasCapacitor = nodes.includes('capacitor');
+  const hasTransistor = nodes.includes('transistor');
+
+  const teacherEvents: TeacherEvent[] = [
+    {
+      id: 'teacher-observed-change',
+      title: 'Teacher noticed a new intent',
+      detail:
+        'A good teaching interface should react to the command by opening the smallest useful set of windows, not everything at once.',
+    },
+  ];
+
+  const metrics: Array<{ label: string; value: string }> = [
+    { label: 'Mode', value: 'Prototype sketch' },
+    { label: 'Circuit nodes', value: nodes.length ? String(nodes.length) : '0' },
+    { label: 'Teacher', value: 'Context-aware' },
+  ];
+
+  const insights: string[] = [];
+  const nextActions: string[] = [];
+  const panels: AdaptivePanel[] = [
+    {
+      id: 'scene-panel',
+      kind: 'scene',
+      title: 'Workbench',
+      description: 'The main canvas where the circuit exists physically and visually.',
+      accent: 'cyan',
+    },
+    {
+      id: 'teacher-panel',
+      kind: 'teacher',
+      title: 'Teacher',
+      description: 'Explains what just happened and why it matters.',
+      accent: 'emerald',
+    },
+    {
+      id: 'inspector-panel',
+      kind: 'inspector',
+      title: 'Inspector',
+      description: 'Shows the current values, assumptions, and warnings for the active build.',
+      accent: 'amber',
+    },
+  ];
+
+  if (hasLed && hasBattery) {
+    insights.push('The interface should automatically surface current limiting because the LED path implies a protection question.');
+    teacherEvents.push({
+      id: 'teacher-led-protection',
+      title: 'Protection check',
+      detail: hasResistor
+        ? 'A resistor is present, so the teacher can focus on why that resistor value changes brightness and safety.'
+        : 'No resistor was detected. The teacher should warn immediately before simulation or build continuation.',
+    });
+    metrics.push({ label: 'LED safety', value: hasResistor ? 'Protected' : 'Needs resistor' });
+    nextActions.push('simulate');
+    nextActions.push('explain why the led is dim');
+    nextActions.push('focus graph');
+  }
+
+  if (hasCapacitor) {
+    insights.push('Capacitors are perfect for adaptive teaching because they create visible time-based behaviour.');
+    panels.push({
+      id: 'graph-panel',
+      kind: 'graph',
+      title: 'Charge curve',
+      description: 'A graph window opens because time-dependent behaviour is easier to understand visually than verbally.',
+      accent: 'violet',
+    });
+    nextActions.push('explain the charge curve');
+  }
+
+  if (hasTransistor) {
+    insights.push('A transistor often triggers pinout, biasing, and current-path questions, so the teacher should open those lenses proactively.');
+    teacherEvents.push({
+      id: 'teacher-transistor',
+      title: 'Switching concept introduced',
+      detail: 'This is where Clitronic can distinguish itself: show the control path and the load path as separate but linked stories.',
+    });
+    nextActions.push('show current flow');
+  }
+
+  if (insights.length === 0) {
+    insights.push('The first version should bias toward explanation windows that increase understanding, not UI theatre.');
+    insights.push('Commands are still the source of intent; windows are responses to intent.');
+    nextActions.push('build a simple led circuit with a 9v battery');
+  }
+
+  const summary = normalized
+    ? `Command-first sketch for: ${normalized}. The workspace should react by exposing the right teaching lenses around this build.`
+    : previous?.circuitSummary ?? DEFAULT_WORKSPACE.circuitSummary;
+
+  return {
+    mode: 'preview',
+    circuitTitle: normalized ? titleCase(normalized) : previous?.circuitTitle ?? DEFAULT_WORKSPACE.circuitTitle,
+    circuitSummary: summary,
+    nodes: nodes.length ? nodes : previous?.nodes ?? DEFAULT_WORKSPACE.nodes,
+    insights,
+    metrics,
+    teacherEvents,
+    panels,
+    nextActions: unique(nextActions).slice(0, 5),
+  };
+}
+
+function activateSimulation(previous: WorkspaceState): WorkspaceState {
+  const baseInsights = previous.insights.filter(Boolean);
+  const insights = unique([
+    ...baseInsights,
+    'Simulation mode should favour signal, causality, and failure explanation over static description.',
+  ]);
+
+  const graphPanel: AdaptivePanel = {
+    id: 'graph-panel',
+    kind: 'graph',
+    title: 'Live graph',
+    description: 'Waveforms and time-based changes appear when the learner asks to simulate or when behaviour becomes dynamic.',
+    accent: 'violet',
+  };
+
+  const nextPanel: AdaptivePanel = {
+    id: 'next-step-panel',
+    kind: 'next-step',
+    title: 'What to try next',
+    description: 'A compact teaching window that suggests the next command or experiment rather than a long lecture.',
+    accent: 'emerald',
+  };
+
+  const panels = uniquePanels([...previous.panels, graphPanel, nextPanel]);
+
+  return {
+    ...previous,
+    mode: 'simulating',
+    circuitSummary:
+      previous.circuitSummary + ' Simulation mode is active, so the workspace should now foreground behaviour, graphs, and live explanation.',
+    metrics: [
+      ...previous.metrics.filter((metric) => metric.label !== 'Mode'),
+      { label: 'Mode', value: 'Simulating' },
+    ],
+    teacherEvents: [
+      {
+        id: 'teacher-simulation',
+        title: 'Simulation window opened',
+        detail:
+          'This is the point where Clitronic stops being a static explainer and starts acting like a responsive bench companion.',
+      },
+      ...previous.teacherEvents,
+    ].slice(0, 4),
+    panels,
+    nextActions: unique([
+      ...previous.nextActions,
+      'explain what changed',
+      'focus inspector',
+      'focus graph',
+    ]).slice(0, 5),
+    insights,
+  };
+}
+
+function uniquePanels(panels: AdaptivePanel[]): AdaptivePanel[] {
+  const seen = new Set<string>();
+  return panels.filter((panel) => {
+    if (seen.has(panel.id)) return false;
+    seen.add(panel.id);
+    return true;
+  });
+}
+
+function emphasisePanel(panelName: string, previous: WorkspaceState): WorkspaceState {
+  const normalized = panelName.trim().toLowerCase();
+  if (!normalized) return previous;
+
+  const matched = previous.panels.find(
+    (panel) => panel.kind === normalized || panel.title.toLowerCase() === normalized
+  );
+
+  const label = matched?.title ?? titleCase(normalized);
+
+  return {
+    ...previous,
+    teacherEvents: [
+      {
+        id: `teacher-focus-${normalized}`,
+        title: `${label} brought forward`,
+        detail: `The interface should now prioritise the ${label.toLowerCase()} view and compress less relevant windows without fully losing context.`,
+      },
+      ...previous.teacherEvents,
+    ].slice(0, 4),
+    metrics: [
+      ...previous.metrics.filter((metric) => metric.label !== 'Focus'),
+      { label: 'Focus', value: label },
+    ],
+  };
+}
+
+function buildTeacherPrompt(userInput: string, workspace: WorkspaceState): string {
+  const nodes = workspace.nodes.length ? workspace.nodes.join(', ') : 'none yet';
+  const panels = workspace.panels.map((panel) => panel.title).join(', ');
+
+  return `You are helping design Clitronic as a command-first adaptive electronics studio.
+
+The current workspace state is:
+- circuit title: ${workspace.circuitTitle}
+- mode: ${workspace.mode}
+- nodes: ${nodes}
+- open panels: ${panels}
+- circuit summary: ${workspace.circuitSummary}
+
+The user command or question is: ${userInput}
+
+Respond as the teacher layer inside the product, not as a generic assistant. Keep it concise and practical.
+Structure the answer with these headings:
+## What Clitronic should do
+## Why this view matters
+## Next commands to try
+
+Tie the explanation to the active circuit and to adaptive windows opening or changing.`;
+}
+
 export function RichTerminal() {
   const {
     authSource,
@@ -95,6 +439,7 @@ export function RichTerminal() {
     providers,
     refreshProviders,
   } = useApiKey();
+
   const [lines, setLines] = useState<TerminalLine[]>([{ type: 'welcome', content: '' }]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -103,6 +448,7 @@ export function RichTerminal() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [workspace, setWorkspace] = useState<WorkspaceState>(DEFAULT_WORKSPACE);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -117,10 +463,8 @@ export function RichTerminal() {
     shouldScrollRef.current = true;
   }, []);
 
-  // Voice mode state
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
 
-  // Consider auth "available" unless provider check explicitly marks it unavailable.
   const currentAuthAvailable =
     authSource === 'claude-code'
       ? claudeCodeAvailable !== false
@@ -136,7 +480,6 @@ export function RichTerminal() {
     setShowAuthPanel(true);
   }, [addLine]);
 
-  // Voice recording hook
   const {
     isRecording,
     isTranscribing,
@@ -161,7 +504,6 @@ export function RichTerminal() {
     ),
   });
 
-  // Update voice state based on recording/transcribing status
   useEffect(() => {
     if (isRecording) {
       setVoiceState('recording');
@@ -172,7 +514,6 @@ export function RichTerminal() {
     }
   }, [isRecording, isTranscribing]);
 
-  // Long-press spacebar for voice recording
   useLongPress({
     onStart: useCallback(() => {
       if (!canMakeApiCalls || !voiceAvailable || isProcessing) return;
@@ -186,18 +527,15 @@ export function RichTerminal() {
     enabled: voiceSupported && voiceAvailable && canMakeApiCalls && !isProcessing && !showAuthPanel,
   });
 
-  // Preload audio feedback on mount
   useEffect(() => {
     preloadAudioFeedback();
   }, []);
 
-  // Refresh providers whenever auth panel opens to keep availability current.
   useEffect(() => {
     if (!showAuthPanel) return;
     void refreshProviders();
   }, [refreshProviders, showAuthPanel]);
 
-  // Allow Esc to quickly close auth panel.
   useEffect(() => {
     if (!showAuthPanel) return;
 
@@ -211,7 +549,6 @@ export function RichTerminal() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showAuthPanel]);
 
-  // Scroll to bottom when needed
   useEffect(() => {
     if (shouldScrollRef.current && containerRef.current) {
       requestAnimationFrame(() => {
@@ -223,10 +560,14 @@ export function RichTerminal() {
     }
   }, [lines, streamingContent]);
 
-  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  const panelSummary = useMemo(
+    () => workspace.panels.map((panel) => panel.title).join(' • '),
+    [workspace.panels]
+  );
 
   const handleConnectClaudeCode = useCallback(async () => {
     const result = await connectClaudeCode();
@@ -253,7 +594,6 @@ export function RichTerminal() {
     addLine({ type: 'system', content: '✓ Disconnected authentication provider' });
   }, [addLine, clearApiKey]);
 
-  // Resize image to reduce size
   const resizeImage = async (dataUrl: string, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve) => {
       const img = new window.Image();
@@ -277,7 +617,6 @@ export function RichTerminal() {
     });
   };
 
-  // Send image for analysis
   const analyzeImage = useCallback(
     async (dataUrl: string, fileName: string) => {
       if (!canMakeApiCalls) {
@@ -359,6 +698,56 @@ export function RichTerminal() {
     [addLine, authSource, canMakeApiCalls, showAuthRequiredError]
   );
 
+  const askTeacher = useCallback(
+    async (userInput: string, state: WorkspaceState) => {
+      if (!canMakeApiCalls) {
+        showAuthRequiredError();
+        return;
+      }
+
+      const prompt = buildTeacherPrompt(userInput, state);
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authSource ? { 'x-auth-provider': authSource } : {}),
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              parts: [{ type: 'text', text: prompt }],
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        try {
+          const error = JSON.parse(errorText);
+          addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
+        } catch {
+          addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
+        }
+        return;
+      }
+
+      const text = await streamResponse(res, (chunk) => {
+        setStreamingContent((prev) => prev + chunk);
+        shouldScrollRef.current = true;
+      });
+      setStreamingContent('');
+
+      if (text.startsWith('Error:')) {
+        addLine({ type: 'error', content: `✗ ${text}` });
+      } else {
+        addLine({ type: 'response', content: text });
+      }
+    },
+    [addLine, authSource, canMakeApiCalls, showAuthRequiredError]
+  );
+
   const handleCommand = useCallback(
     async (cmd: string) => {
       const trimmedCmd = cmd.trim();
@@ -379,6 +768,7 @@ export function RichTerminal() {
 
       if (command === 'clear') {
         setLines([{ type: 'welcome', content: '' }]);
+        setWorkspace(DEFAULT_WORKSPACE);
         return;
       }
 
@@ -396,7 +786,49 @@ export function RichTerminal() {
         return;
       }
 
-      if (!canMakeApiCalls) {
+      if (command === 'build') {
+        const nextWorkspace = createWorkspaceFromPrompt(args || 'new circuit idea', workspace);
+        setWorkspace(nextWorkspace);
+        addLine({
+          type: 'system',
+          content: `✓ Opened adaptive windows for ${nextWorkspace.circuitTitle}`,
+        });
+        addLine({
+          type: 'system',
+          content: `→ Panels: ${nextWorkspace.panels.map((panel) => panel.title).join(', ')}`,
+        });
+        return;
+      }
+
+      if (command === 'simulate') {
+        const nextWorkspace = activateSimulation(workspace);
+        setWorkspace(nextWorkspace);
+        addLine({ type: 'system', content: '✓ Simulation mode active — graph and next-step windows opened' });
+        return;
+      }
+
+      if (command === 'focus') {
+        if (!args) {
+          addLine({ type: 'error', content: 'Usage: focus <teacher|graph|inspector|workbench>' });
+          return;
+        }
+        const nextWorkspace = emphasisePanel(args, workspace);
+        setWorkspace(nextWorkspace);
+        addLine({ type: 'system', content: `✓ Focus shifted to ${titleCase(args)}` });
+        return;
+      }
+
+      if (command === 'explain') {
+        setIsProcessing(true);
+        try {
+          await askTeacher(args || 'Explain the current circuit state', workspace);
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
+
+      if (command !== 'list' && command !== 'info' && !canMakeApiCalls) {
         showAuthRequiredError();
         return;
       }
@@ -404,71 +836,111 @@ export function RichTerminal() {
       setIsProcessing(true);
 
       try {
-        let prompt = trimmedCmd;
-
         if (command === 'list') {
-          prompt = args
+          const prompt = args
             ? `List ${args} electronic components with brief descriptions.`
             : 'List electronic components by category with brief descriptions.';
-        } else if (command === 'info') {
-          if (!args) {
-            addLine({ type: 'error', content: 'Usage: info <component>' });
-            setIsProcessing(false);
+
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authSource ? { 'x-auth-provider': authSource } : {}),
+            },
+            body: JSON.stringify({
+              messages: [
+                {
+                  role: 'user',
+                  parts: [{ type: 'text', text: prompt }],
+                },
+              ],
+            }),
+          });
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            try {
+              const error = JSON.parse(errorText);
+              addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
+            } catch {
+              addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
+            }
             return;
           }
-          prompt = `Provide detailed info about "${args}": specs, pinout, circuit examples, and tips.`;
-        }
 
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(authSource ? { 'x-auth-provider': authSource } : {}),
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: 'user',
-                parts: [{ type: 'text', text: prompt }],
-              },
-            ],
-          }),
-        });
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          try {
-            const error = JSON.parse(errorText);
-            addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
-          } catch {
-            addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
-          }
-          setIsProcessing(false);
+          const text = await streamResponse(res, (chunk) => {
+            setStreamingContent((prev) => prev + chunk);
+            shouldScrollRef.current = true;
+          });
+          setStreamingContent('');
+          addLine({ type: text.startsWith('Error:') ? 'error' : 'response', content: text });
           return;
         }
 
-        const text = await streamResponse(res, (chunk) => {
-          setStreamingContent((prev) => prev + chunk);
-          shouldScrollRef.current = true;
-        });
-        setStreamingContent('');
+        if (command === 'info') {
+          if (!args) {
+            addLine({ type: 'error', content: 'Usage: info <component>' });
+            return;
+          }
 
-        if (text.startsWith('Error:')) {
-          addLine({ type: 'error', content: `✗ ${text}` });
-        } else {
-          addLine({ type: 'response', content: text });
+          const prompt = `Provide detailed info about "${args}": specs, pinout, circuit examples, and tips.`;
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authSource ? { 'x-auth-provider': authSource } : {}),
+            },
+            body: JSON.stringify({
+              messages: [
+                {
+                  role: 'user',
+                  parts: [{ type: 'text', text: prompt }],
+                },
+              ],
+            }),
+          });
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            try {
+              const error = JSON.parse(errorText);
+              addLine({ type: 'error', content: `✗ ${error.error || 'Request failed'}` });
+            } catch {
+              addLine({ type: 'error', content: `✗ HTTP ${res.status}: ${res.statusText}` });
+            }
+            return;
+          }
+
+          const text = await streamResponse(res, (chunk) => {
+            setStreamingContent((prev) => prev + chunk);
+            shouldScrollRef.current = true;
+          });
+          setStreamingContent('');
+          addLine({ type: text.startsWith('Error:') ? 'error' : 'response', content: text });
+          return;
         }
+
+        const draftWorkspace = createWorkspaceFromPrompt(trimmedCmd, workspace);
+        setWorkspace(draftWorkspace);
+        await askTeacher(trimmedCmd, draftWorkspace);
       } catch (err) {
         setStreamingContent('');
         addLine({
           type: 'error',
           content: `✗ ${err instanceof Error ? err.message : 'Unknown error'}`,
         });
+      } finally {
+        setIsProcessing(false);
       }
-
-      setIsProcessing(false);
     },
-    [addLine, authSource, canMakeApiCalls, showAuthRequiredError]
+    [
+      addLine,
+      askTeacher,
+      authSource,
+      canMakeApiCalls,
+      showAuthRequiredError,
+      workspace,
+    ]
   );
 
   const submitCurrentInput = useCallback(() => {
@@ -478,7 +950,6 @@ export function RichTerminal() {
     void handleCommand(currentInput);
   }, [handleCommand, input, isProcessing]);
 
-  // Drag and drop handlers
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -518,7 +989,6 @@ export function RichTerminal() {
     [addLine, analyzeImage]
   );
 
-  // Handle paste for images
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -582,7 +1052,7 @@ export function RichTerminal() {
 
   return (
     <div
-      className={`relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#070b11] font-mono text-[13px] leading-relaxed text-gray-200 select-text sm:text-[14px] ${
+      className={`relative min-h-[100dvh] overflow-hidden bg-[#070b11] font-mono text-[13px] leading-relaxed text-gray-200 select-text sm:text-[14px] ${
         isDragging ? 'ring-2 ring-cyan-400 ring-inset' : ''
       }`}
       onDragOver={handleDragOver}
@@ -604,107 +1074,127 @@ export function RichTerminal() {
 
       <VoiceIndicator state={voiceState} />
 
-      <div className="relative z-10 flex min-h-[100dvh] flex-col">
-        <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-2 backdrop-blur">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs tracking-[0.24em] text-cyan-400 uppercase">⚡ Clitronic</div>
-            <button
-              onClick={() => setShowAuthPanel(true)}
-              className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-900/30"
-            >
-              auth
-            </button>
-          </div>
-
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-            <span
-              className={`rounded-full border px-2 py-0.5 ${
-                canMakeApiCalls
-                  ? 'border-green-500/30 bg-green-950/50 text-green-300'
-                  : 'border-amber-500/30 bg-amber-950/40 text-amber-300'
-              }`}
-            >
-              {canMakeApiCalls ? `Connected: ${authLabel(authSource)}` : 'Authentication required'}
-            </span>
-            <span
-              className={`rounded-full border px-2 py-0.5 ${
-                voiceSupported && voiceAvailable && canMakeApiCalls
-                  ? 'border-cyan-500/30 bg-cyan-950/40 text-cyan-300'
-                  : 'border-gray-600/40 bg-gray-900/60 text-gray-400'
-              }`}
-            >
-              {voiceSupported && voiceAvailable && canMakeApiCalls
-                ? 'Voice ready (hold space)'
-                : 'Voice unavailable'}
-            </span>
-            <span className="rounded-full border border-gray-700/50 bg-gray-900/60 px-2 py-0.5 text-gray-400">
-              Drag/drop or paste images enabled
-            </span>
-          </div>
-        </header>
-
-        <div
-          ref={containerRef}
-          className="flex-1 cursor-text overflow-y-auto px-4 py-3"
-          onClick={(e) => {
-            if (e.target === containerRef.current) {
-              inputRef.current?.focus();
-            }
-          }}
-        >
-          {lines.map((line, i) => (
-            <TerminalLine key={i} line={line} />
-          ))}
-
-          {streamingContent && (
-            <div className="my-2 text-gray-200" aria-live="polite">
-              <MarkdownContent content={streamingContent} />
-              <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-400" />
+      <div className="relative z-10 grid min-h-[100dvh] grid-cols-1 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="flex min-h-[100dvh] flex-col border-r border-cyan-900/20">
+          <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs tracking-[0.24em] text-cyan-400 uppercase">⚡ Clitronic Studio</div>
+                <div className="mt-1 text-sm text-gray-300">Command-first electronics workspace with adaptive teaching windows.</div>
+              </div>
+              <button
+                onClick={() => setShowAuthPanel(true)}
+                className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-900/30"
+              >
+                auth
+              </button>
             </div>
-          )}
 
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+              <span
+                className={`rounded-full border px-2 py-0.5 ${
+                  canMakeApiCalls
+                    ? 'border-green-500/30 bg-green-950/50 text-green-300'
+                    : 'border-amber-500/30 bg-amber-950/40 text-amber-300'
+                }`}
+              >
+                {canMakeApiCalls ? `Connected: ${authLabel(authSource)}` : 'Authentication required'}
+              </span>
+              <span className="rounded-full border border-cyan-500/30 bg-cyan-950/40 px-2 py-0.5 text-cyan-300">
+                {workspace.mode === 'simulating' ? 'Simulation live' : workspace.mode === 'preview' ? 'Preview mode' : 'Concept mode'}
+              </span>
+              <span className="rounded-full border border-violet-500/30 bg-violet-950/30 px-2 py-0.5 text-violet-300">
+                Open windows: {workspace.panels.length}
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 ${
+                  voiceSupported && voiceAvailable && canMakeApiCalls
+                    ? 'border-cyan-500/30 bg-cyan-950/40 text-cyan-300'
+                    : 'border-gray-600/40 bg-gray-900/60 text-gray-400'
+                }`}
+              >
+                {voiceSupported && voiceAvailable && canMakeApiCalls
+                  ? 'Voice ready (hold space)'
+                  : 'Voice unavailable'}
+              </span>
+            </div>
+          </header>
+
+          <div
+            ref={containerRef}
+            className="flex-1 overflow-y-auto px-4 py-3"
+            onClick={(e) => {
+              if (e.target === containerRef.current) {
+                inputRef.current?.focus();
+              }
+            }}
+          >
+            {lines.map((line, i) => (
+              <TerminalLine key={i} line={line} />
+            ))}
+
+            {streamingContent && (
+              <div className="my-2 text-gray-200" aria-live="polite">
+                <MarkdownContent content={streamingContent} />
+                <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-400" />
+              </div>
+            )}
+          </div>
+
+          <footer
+            className="border-t border-cyan-900/30 bg-[#070b11]/90 px-3 pt-3 backdrop-blur"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+          >
+            <div className="mb-2 text-[11px] text-gray-500">
+              Panels now open: <span className="text-cyan-400">{panelSummary}</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-900/40 bg-[#0d1117] px-3 py-2 sm:flex-nowrap">
+              <span className="text-cyan-500 select-none">❯</span>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isProcessing}
+                aria-label="Terminal command input"
+                className="flex-1 bg-transparent text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
+                placeholder={
+                  isProcessing
+                    ? 'Processing...'
+                    : 'Try: build a simple led circuit with a 9v battery'
+                }
+              />
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
+                className="rounded border border-gray-700/80 px-2 py-1.5 text-xs text-gray-300 hover:border-cyan-700 hover:text-cyan-300 disabled:opacity-40"
+                title="Upload image"
+              >
+                Upload
+              </button>
+
+              <button
+                onClick={submitCurrentInput}
+                disabled={isProcessing || !input.trim()}
+                className="rounded bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-[#032a31] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-cyan-500"
+              >
+                Send
+              </button>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+              <span>{voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' : ''}</span>
+              <span>build • simulate • explain • focus • identify • auth • ↑↓ history</span>
+            </div>
+          </footer>
         </div>
 
-        <footer
-          className="border-t border-cyan-900/30 bg-[#070b11]/90 px-3 pt-3 backdrop-blur"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
-        >
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-900/40 bg-[#0d1117] px-3 py-2 sm:flex-nowrap">
-            <span className="text-cyan-500 select-none">❯</span>
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isProcessing}
-              aria-label="Terminal command input"
-              className="flex-1 bg-transparent text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
-              placeholder={isProcessing ? 'Processing...' : 'Ask about electronics or run a command...'}
-            />
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isProcessing}
-              className="rounded border border-gray-700/80 px-2 py-1.5 text-xs text-gray-300 hover:border-cyan-700 hover:text-cyan-300 disabled:opacity-40"
-              title="Upload image"
-            >
-              Upload
-            </button>
-
-            <button
-              onClick={submitCurrentInput}
-              disabled={isProcessing || !input.trim()}
-              className="rounded bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-[#032a31] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-cyan-500"
-            >
-              Send
-            </button>
-          </div>
-
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
-            <span>{voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' : ''}</span>
-            <span>auth • help • identify • ↑↓ history • paste image • ESC closes auth panel</span>
-          </div>
-        </footer>
+        <AdaptiveStudio workspace={workspace} onQuickCommand={(command) => {
+          setInput(command);
+          inputRef.current?.focus();
+        }} />
       </div>
 
       {showAuthPanel && (
@@ -742,6 +1232,199 @@ export function RichTerminal() {
         onChange={handleImageUpload}
         className="hidden"
       />
+    </div>
+  );
+}
+
+function AdaptiveStudio({
+  workspace,
+  onQuickCommand,
+}: {
+  workspace: WorkspaceState;
+  onQuickCommand: (command: string) => void;
+}) {
+  return (
+    <aside className="relative flex min-h-[100dvh] flex-col overflow-y-auto bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
+      <div className="mb-4 rounded-2xl border border-cyan-900/30 bg-[#0c141d] p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.04)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-[11px] tracking-[0.24em] text-cyan-400 uppercase">Workbench state</div>
+            <h2 className="mt-2 text-xl font-semibold text-white">{workspace.circuitTitle}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">{workspace.circuitSummary}</p>
+          </div>
+          <div className="rounded-xl border border-cyan-700/30 bg-cyan-950/20 px-3 py-2 text-right text-xs text-cyan-200">
+            <div>{workspace.mode === 'simulating' ? 'Simulation running' : workspace.mode === 'preview' ? 'Adaptive preview' : 'Concept sketch'}</div>
+            <div className="mt-1 text-cyan-400/80">{workspace.nodes.length} nodes • {workspace.panels.length} windows</div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {workspace.metrics.map((metric) => (
+            <div key={`${metric.label}-${metric.value}`} className="rounded-xl border border-gray-800 bg-[#0a0f15] p-3">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-gray-500">{metric.label}</div>
+              <div className="mt-1 text-sm font-medium text-gray-100">{metric.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'scene') ?? workspace.panels[0]}>
+          <WorkbenchPreview nodes={workspace.nodes} mode={workspace.mode} />
+        </WindowCard>
+
+        <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'teacher') ?? workspace.panels[1]}>
+          <div className="space-y-3 text-sm text-gray-300">
+            {workspace.teacherEvents.map((event) => (
+              <div key={event.id} className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3">
+                <div className="font-semibold text-emerald-200">{event.title}</div>
+                <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
+              </div>
+            ))}
+          </div>
+        </WindowCard>
+
+        <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'inspector') ?? workspace.panels[2]}>
+          <div className="space-y-3 text-sm text-gray-300">
+            <div>
+              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Detected circuit nodes</div>
+              <div className="flex flex-wrap gap-2">
+                {workspace.nodes.map((node) => (
+                  <span key={node} className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200">
+                    {node}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Why these windows are open</div>
+              <ul className="space-y-2 text-gray-300">
+                {workspace.insights.map((insight, index) => (
+                  <li key={`${index}-${insight}`} className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2 leading-relaxed">
+                    {insight}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </WindowCard>
+
+        <WindowCard
+          panel={
+            workspace.panels.find((panel) => panel.kind === 'graph') ?? {
+              id: 'graph-panel-fallback',
+              kind: 'graph',
+              title: 'Graph window',
+              description: 'This window appears when the circuit needs a time or signal view.',
+              accent: 'violet',
+            }
+          }
+        >
+          <GraphPreview mode={workspace.mode} />
+        </WindowCard>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-gray-800 bg-[#0a0f15] p-4">
+        <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Suggested next commands</div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {workspace.nextActions.map((action) => (
+            <button
+              key={action}
+              onClick={() => onQuickCommand(action)}
+              className="rounded-full border border-cyan-700/30 bg-cyan-950/20 px-3 py-1.5 text-xs text-cyan-200 transition hover:border-cyan-500/50 hover:bg-cyan-900/30"
+            >
+              {action}
+            </button>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function WindowCard({ panel, children }: { panel?: AdaptivePanel; children: React.ReactNode }) {
+  if (!panel) return null;
+
+  const accentClasses: Record<AdaptivePanel['accent'], string> = {
+    cyan: 'border-cyan-900/30 bg-cyan-950/10 text-cyan-200',
+    emerald: 'border-emerald-900/30 bg-emerald-950/10 text-emerald-200',
+    amber: 'border-amber-900/30 bg-amber-950/10 text-amber-200',
+    violet: 'border-violet-900/30 bg-violet-950/10 text-violet-200',
+  };
+
+  return (
+    <section className="rounded-2xl border border-gray-800 bg-[#0f1721] p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.18em] ${accentClasses[panel.accent]}`}>
+            {panel.kind}
+          </div>
+          <h3 className="mt-2 text-lg font-semibold text-white">{panel.title}</h3>
+          <p className="mt-1 text-sm leading-relaxed text-gray-400">{panel.description}</p>
+        </div>
+        <div className="rounded-lg border border-gray-800 bg-[#0a0f15] px-2 py-1 text-[11px] text-gray-500">adaptive</div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function WorkbenchPreview({ nodes, mode }: { nodes: string[]; mode: SimulationMode }) {
+  const displayNodes = nodes.length ? nodes : ['battery', 'resistor', 'led'];
+
+  return (
+    <div className="rounded-2xl border border-cyan-900/30 bg-[linear-gradient(180deg,#0a1017,#081019)] p-4">
+      <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
+        <span>Spatial circuit sketch</span>
+        <span>{mode === 'simulating' ? 'signal overlays on' : 'layout preview'}</span>
+      </div>
+
+      <div className="grid gap-3">
+        {displayNodes.map((node, index) => (
+          <div key={`${node}-${index}`} className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-700/30 bg-cyan-950/20 text-xs text-cyan-200">
+              {node.slice(0, 3).toUpperCase()}
+            </div>
+            <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/50 to-transparent" />
+            <div className="rounded-lg border border-gray-800 bg-[#0a0f15] px-2 py-1 text-xs text-gray-300">
+              {node}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-xl border border-cyan-900/25 bg-cyan-950/10 p-3 text-xs leading-relaxed text-cyan-100/80">
+        In a fuller version this becomes the 3D bench. For now it proves the product idea: commands create physical state, and the UI opens the right teaching windows around it.
+      </div>
+    </div>
+  );
+}
+
+function GraphPreview({ mode }: { mode: SimulationMode }) {
+  const bars = mode === 'simulating' ? [32, 55, 68, 44, 79, 58, 72] : [20, 28, 36, 30, 42, 34, 40];
+
+  return (
+    <div className="rounded-2xl border border-violet-900/30 bg-[linear-gradient(180deg,#100d18,#0b0b14)] p-4">
+      <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
+        <span>{mode === 'simulating' ? 'Live behaviour' : 'Potential signal view'}</span>
+        <span>{mode === 'simulating' ? 'watching change over time' : 'waiting for simulation'}</span>
+      </div>
+
+      <div className="flex h-40 items-end gap-2">
+        {bars.map((bar, index) => (
+          <div key={`${index}-${bar}`} className="flex flex-1 flex-col justify-end">
+            <div
+              className="rounded-t-md bg-gradient-to-t from-violet-500 to-cyan-400"
+              style={{ height: `${bar}%` }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 text-xs leading-relaxed text-violet-100/80">
+        Dynamic graphs should open only when they help explain behaviour — RC charge, PWM duty cycle, signal timing, or instability.
+      </div>
     </div>
   );
 }
@@ -789,9 +1472,7 @@ function AuthPanel({
             <span className="text-sm font-semibold text-cyan-200">Claude Code</span>
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] ${
-                claudeAvailable
-                  ? 'bg-green-900/40 text-green-300'
-                  : 'bg-gray-800/70 text-gray-400'
+                claudeAvailable ? 'bg-green-900/40 text-green-300' : 'bg-gray-800/70 text-gray-400'
               }`}
             >
               {claudeAvailable ? 'Available' : 'Unavailable'}
@@ -819,9 +1500,7 @@ function AuthPanel({
             <span className="text-sm font-semibold text-emerald-200">OpenAI Codex</span>
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] ${
-                codexAvailable
-                  ? 'bg-green-900/40 text-green-300'
-                  : 'bg-gray-800/70 text-gray-400'
+                codexAvailable ? 'bg-green-900/40 text-green-300' : 'bg-gray-800/70 text-gray-400'
               }`}
             >
               {codexAvailable ? 'Available' : 'Unavailable'}
@@ -984,9 +1663,7 @@ function MarkdownContent({ content }: { content: string }) {
             </code>
           );
         },
-        pre: ({ children }) => (
-          <pre className="my-2 overflow-x-auto rounded bg-gray-900">{children}</pre>
-        ),
+        pre: ({ children }) => <pre className="my-2 overflow-x-auto rounded bg-gray-900">{children}</pre>,
         a: ({ href, children }) => (
           <a
             href={href}
