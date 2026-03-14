@@ -1,4 +1,5 @@
 import { findCatalogMatches } from './catalog';
+import { analyzeCircuit } from './analysis';
 import type {
   CircuitConnection,
   CircuitDocument,
@@ -130,99 +131,6 @@ function getNode(nodes: CircuitNode[], key: string): CircuitNode | undefined {
   return nodes.find((node) => node.key === key);
 }
 
-function getParameter(node: CircuitNode | undefined, key: string): string | undefined {
-  return node?.parameters?.find((param) => param.key === key)?.value;
-}
-
-function parseVoltage(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const match = value.match(/(\d+(?:\.\d+)?)/);
-  return match ? Number(match[1]) : undefined;
-}
-
-function parseResistance(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const normalized = value.toLowerCase();
-  const match = normalized.match(/(\d+(?:\.\d+)?)/);
-  if (!match) return undefined;
-  const base = Number(match[1]);
-  return normalized.includes('k') ? base * 1000 : base;
-}
-
-function buildValidationEvents(nodes: CircuitNode[], connections: CircuitConnection[]): CircuitEvent[] {
-  const validations: CircuitEvent[] = [];
-  const battery = getNode(nodes, 'battery');
-  const led = getNode(nodes, 'led');
-  const resistor = getNode(nodes, 'resistor');
-  const ground = getNode(nodes, 'ground');
-
-  if (led && battery && !resistor) {
-    validations.push({
-      id: 'validation-led-needs-resistor',
-      kind: 'validation',
-      title: 'LED path needs current limiting',
-      detail:
-        'The active document contains a battery and LED but no resistor. Clitronic should warn before simulation and suggest a resistor value.',
-    });
-  }
-
-  if (led && !ground) {
-    validations.push({
-      id: 'validation-missing-ground',
-      kind: 'validation',
-      title: 'No ground reference detected',
-      detail:
-        'The circuit document has no explicit ground node yet. The topology view should flag the path as incomplete.',
-    });
-  }
-
-  if (battery && resistor && led) {
-    const voltage = parseVoltage(getParameter(battery, 'voltage')) ?? 5;
-    const resistance = parseResistance(getParameter(resistor, 'resistance')) ?? 220;
-    const ledForward = parseVoltage(getParameter(led, 'forward-voltage')) ?? 2;
-    const currentMa = ((voltage - ledForward) / resistance) * 1000;
-
-    validations.push({
-      id: 'validation-led-current-estimate',
-      kind: 'validation',
-      title: 'Estimated LED current available',
-      detail: `With ${voltage}V supply, ${resistance}Ω resistor, and ~${ledForward}V LED drop, the current is about ${currentMa.toFixed(1)}mA.`,
-    });
-
-    if (currentMa > 20) {
-      validations.push({
-        id: 'validation-led-current-high',
-        kind: 'warning',
-        title: 'Estimated LED current is high',
-        detail:
-          'The current estimate exceeds the comfortable 20mA region. The teacher should suggest increasing the resistor value.',
-      });
-    }
-  }
-
-  const connectedIds = new Set<string>();
-  for (const connection of connections) {
-    connectedIds.add(connection.from);
-    connectedIds.add(connection.to);
-  }
-
-  const disconnected = nodes.filter(
-    (node) => node.key !== 'concept' && !connectedIds.has(node.id) && nodes.length > 1
-  );
-
-  for (const node of disconnected) {
-    validations.push({
-      id: `validation-disconnected-${node.id}`,
-      kind: 'validation',
-      title: `${node.label} is not connected`,
-      detail:
-        'This node exists in the document but is not part of an explicit connection. The topology view should make that obvious.',
-    });
-  }
-
-  return validations;
-}
-
 function buildEvents(nodes: CircuitNode[], connections: CircuitConnection[], mode: CircuitMode): CircuitEvent[] {
   const events: CircuitEvent[] = [
     {
@@ -274,7 +182,22 @@ function buildEvents(nodes: CircuitNode[], connections: CircuitConnection[], mod
     });
   }
 
-  events.push(...buildValidationEvents(nodes, connections));
+  const analysis = analyzeCircuit({
+    id: 'analysis',
+    prompt: 'analysis',
+    title: 'analysis',
+    mode,
+    summary: '',
+    nodes,
+    connections,
+    metrics: [],
+    events: [],
+    panels: [],
+    insights: [],
+    nextActions: [],
+  });
+
+  events.push(...analysis.derivedEvents);
 
   if (mode === 'simulating') {
     events.unshift({
@@ -337,7 +260,7 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
   return panels;
 }
 
-function buildInsights(nodes: CircuitNode[], mode: CircuitMode): string[] {
+function buildInsights(nodes: CircuitNode[], mode: CircuitMode, connections: CircuitConnection[]): string[] {
   const insights: string[] = [
     'The command layer should create a circuit document that windows can respond to deterministically.',
     'Adaptive panels should open because of circuit state and events, not because the UI feels chatty.',
@@ -355,11 +278,43 @@ function buildInsights(nodes: CircuitNode[], mode: CircuitMode): string[] {
     insights.push('When simulation is active, the graph and inspector should outrank generic explanation panels.');
   }
 
+  const analysis = analyzeCircuit({
+    id: 'analysis',
+    prompt: 'analysis',
+    title: 'analysis',
+    mode,
+    summary: '',
+    nodes,
+    connections,
+    metrics: [],
+    events: [],
+    panels: [],
+    insights: [],
+    nextActions: [],
+  });
+
+  insights.push(...analysis.derivedInsights);
+
   return unique(insights);
 }
 
 function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], events: CircuitEvent[], mode: CircuitMode): CircuitMetric[] {
   const validations = events.filter((event) => event.kind === 'validation' || event.kind === 'warning');
+
+  const analysis = analyzeCircuit({
+    id: 'analysis',
+    prompt: 'analysis',
+    title: 'analysis',
+    mode,
+    summary: '',
+    nodes,
+    connections,
+    metrics: [],
+    events: [],
+    panels: [],
+    insights: [],
+    nextActions: [],
+  });
 
   return [
     { label: 'Mode', value: titleCase(mode) },
@@ -370,6 +325,7 @@ function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], ev
       label: 'Teaching windows',
       value: mode === 'simulating' ? 'Event-driven + live' : 'Event-driven',
     },
+    ...analysis.derivedMetrics,
   ];
 }
 
@@ -401,7 +357,7 @@ export function createCircuitDocument(prompt: string, mode: CircuitMode = 'previ
   const connections = buildConnections(nodes);
   const events = buildEvents(nodes, connections, mode);
   const panels = buildPanels(nodes, mode);
-  const insights = buildInsights(nodes, mode);
+  const insights = buildInsights(nodes, mode, connections);
 
   return {
     id: `circuit-${cleanPrompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'draft'}`,
