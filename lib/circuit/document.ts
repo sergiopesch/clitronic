@@ -1,0 +1,286 @@
+import { findCatalogMatches } from './catalog';
+import type {
+  CircuitConnection,
+  CircuitDocument,
+  CircuitEvent,
+  CircuitMetric,
+  CircuitMode,
+  CircuitNode,
+  CircuitPanel,
+} from './types';
+
+function titleCase(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function createNodeId(key: string, index: number): string {
+  return `${key}-${index + 1}`;
+}
+
+function buildNodes(prompt: string): CircuitNode[] {
+  const matches = findCatalogMatches(prompt);
+
+  if (matches.length === 0) {
+    return [
+      {
+        id: 'concept-1',
+        key: 'concept',
+        label: 'Concept',
+        type: 'unknown',
+        quantity: 1,
+        notes: ['No concrete component was detected yet.'],
+      },
+    ];
+  }
+
+  return matches.map((match, index) => ({
+    id: createNodeId(match.key, index),
+    key: match.key,
+    label: match.label,
+    type: match.nodeType,
+    quantity: 1,
+  }));
+}
+
+function buildConnections(nodes: CircuitNode[]): CircuitConnection[] {
+  if (nodes.length < 2) return [];
+
+  const connections: CircuitConnection[] = [];
+
+  for (let index = 0; index < nodes.length - 1; index += 1) {
+    const current = nodes[index];
+    const next = nodes[index + 1];
+    if (!current || !next) continue;
+
+    connections.push({
+      id: `connection-${index + 1}`,
+      from: current.id,
+      to: next.id,
+      label: index === 0 ? 'command-inferred path' : 'adjacent relationship',
+    });
+  }
+
+  return connections;
+}
+
+function hasNode(nodes: CircuitNode[], key: string): boolean {
+  return nodes.some((node) => node.key === key);
+}
+
+function buildEvents(nodes: CircuitNode[], mode: CircuitMode): CircuitEvent[] {
+  const events: CircuitEvent[] = [
+    {
+      id: 'teacher-observed-intent',
+      kind: 'teaching',
+      title: 'Teacher noticed a concrete build intent',
+      detail:
+        'Windows should respond to actual detected components and relationships, not just broad conversation context.',
+    },
+  ];
+
+  if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && !hasNode(nodes, 'resistor')) {
+    events.push({
+      id: 'warning-led-resistor',
+      kind: 'warning',
+      title: 'LED protection missing',
+      detail:
+        'A battery and LED are present but no resistor was detected. The teacher should warn before simulation and suggest adding current limiting.',
+    });
+  }
+
+  if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && hasNode(nodes, 'resistor')) {
+    events.push({
+      id: 'teaching-led-path',
+      kind: 'teaching',
+      title: 'Current-limited LED path detected',
+      detail:
+        'This is a good moment to explain brightness, voltage drop, and why resistor values change current rather than simply saying the circuit is correct.',
+    });
+  }
+
+  if (hasNode(nodes, 'capacitor')) {
+    events.push({
+      id: 'window-capacitor-graph',
+      kind: 'window-opened',
+      title: 'Time-based graph should open',
+      detail:
+        'A capacitor implies charge and discharge behaviour, so a graph window becomes materially useful.',
+    });
+  }
+
+  if (hasNode(nodes, 'transistor')) {
+    events.push({
+      id: 'teaching-transistor',
+      kind: 'teaching',
+      title: 'Switching layer introduced',
+      detail:
+        'The interface should separate the control path from the load path so the learner can see cause and effect clearly.',
+    });
+  }
+
+  if (mode === 'simulating') {
+    events.unshift({
+      id: 'simulation-active',
+      kind: 'simulation',
+      title: 'Simulation mode active',
+      detail:
+        'Signal, timing, and failure surfaces should now come forward while explanatory windows compress to what matters right now.',
+    });
+  }
+
+  return events;
+}
+
+function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
+  const panels: CircuitPanel[] = [
+    {
+      id: 'scene-panel',
+      kind: 'scene',
+      title: 'Workbench',
+      description: 'The main spatial canvas for the current circuit document.',
+      accent: 'cyan',
+    },
+    {
+      id: 'teacher-panel',
+      kind: 'teacher',
+      title: 'Teacher',
+      description: 'Explains why the interface opened these windows and what the learner should notice.',
+      accent: 'emerald',
+    },
+    {
+      id: 'inspector-panel',
+      kind: 'inspector',
+      title: 'Inspector',
+      description: 'Shows the active nodes, inferred path, and warnings.',
+      accent: 'amber',
+    },
+  ];
+
+  if (hasNode(nodes, 'capacitor') || mode === 'simulating' || hasNode(nodes, 'led')) {
+    panels.push({
+      id: 'graph-panel',
+      kind: 'graph',
+      title: 'Signal graph',
+      description: 'Appears when behaviour over time or intensity should be visible.',
+      accent: 'violet',
+    });
+  }
+
+  if (mode === 'simulating') {
+    panels.push({
+      id: 'next-step-panel',
+      kind: 'next-step',
+      title: 'Next move',
+      description: 'Suggests the next experiment or command instead of dumping theory.',
+      accent: 'emerald',
+    });
+  }
+
+  return panels;
+}
+
+function buildInsights(nodes: CircuitNode[], mode: CircuitMode): string[] {
+  const insights: string[] = [
+    'The command layer should create a circuit document that windows can respond to deterministically.',
+    'Adaptive panels should open because of circuit state and events, not because the UI feels chatty.',
+  ];
+
+  if (hasNode(nodes, 'led')) {
+    insights.push('An LED is a strong teaching trigger because current limiting, polarity, and brightness all become teachable immediately.');
+  }
+
+  if (hasNode(nodes, 'capacitor')) {
+    insights.push('Capacitors justify graph windows because time is part of the concept, not an optional flourish.');
+  }
+
+  if (mode === 'simulating') {
+    insights.push('When simulation is active, the graph and inspector should outrank generic explanation panels.');
+  }
+
+  return unique(insights);
+}
+
+function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], mode: CircuitMode): CircuitMetric[] {
+  return [
+    { label: 'Mode', value: titleCase(mode) },
+    { label: 'Components', value: String(nodes.length) },
+    { label: 'Connections', value: String(connections.length) },
+    {
+      label: 'Teaching windows',
+      value: mode === 'simulating' ? 'Event-driven + live' : 'Event-driven',
+    },
+  ];
+}
+
+function buildNextActions(nodes: CircuitNode[], mode: CircuitMode): string[] {
+  const next = ['simulate', 'focus inspector', 'explain what changed'];
+
+  if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && !hasNode(nodes, 'resistor')) {
+    next.unshift('build add resistor to the led path');
+  }
+
+  if (hasNode(nodes, 'capacitor')) {
+    next.push('explain the charge curve');
+  }
+
+  if (mode === 'simulating') {
+    next.push('focus graph');
+  }
+
+  return unique(next).slice(0, 5);
+}
+
+export function createCircuitDocument(prompt: string, mode: CircuitMode = 'preview'): CircuitDocument {
+  const cleanPrompt = prompt.trim() || 'new circuit idea';
+  const nodes = buildNodes(cleanPrompt);
+  const connections = buildConnections(nodes);
+  const panels = buildPanels(nodes, mode);
+  const events = buildEvents(nodes, mode);
+  const insights = buildInsights(nodes, mode);
+
+  return {
+    id: `circuit-${cleanPrompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'draft'}`,
+    prompt: cleanPrompt,
+    title: titleCase(cleanPrompt),
+    mode,
+    summary: `Structured circuit document derived from the command: ${cleanPrompt}. This gives Clitronic a foundation for event-driven teaching windows and later true simulation state.`,
+    nodes,
+    connections,
+    metrics: buildMetrics(nodes, connections, mode),
+    events,
+    panels,
+    insights,
+    nextActions: buildNextActions(nodes, mode),
+  };
+}
+
+export function activateCircuitSimulation(document: CircuitDocument): CircuitDocument {
+  return createCircuitDocument(document.prompt, 'simulating');
+}
+
+export function focusCircuitPanel(document: CircuitDocument, panelName: string): CircuitDocument {
+  const label = titleCase(panelName.trim() || 'inspector');
+  const focusEvent: CircuitEvent = {
+    id: `focus-${panelName.toLowerCase().replace(/\s+/g, '-') || 'inspector'}`,
+    kind: 'focus',
+    title: `${label} brought forward`,
+    detail: `The interface should emphasise the ${label.toLowerCase()} window while keeping enough context to avoid disorienting the learner.`,
+  };
+
+  return {
+    ...document,
+    metrics: [
+      ...document.metrics.filter((metric) => metric.label !== 'Focus'),
+      { label: 'Focus', value: label },
+    ],
+    events: [focusEvent, ...document.events].slice(0, 5),
+  };
+}

@@ -10,9 +10,9 @@ import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 import { AnimatedWelcome } from './animated-welcome';
 import { electronicsComponents } from '@/lib/data/components';
+import { activateCircuitSimulation, createCircuitDocument, focusCircuitPanel } from '@/lib/circuit';
+import type { CircuitDocument, CircuitMode, CircuitPanel } from '@/lib/circuit';
 
-type PanelKind = 'scene' | 'teacher' | 'inspector' | 'graph' | 'next-step';
-type SimulationMode = 'idle' | 'preview' | 'simulating';
 
 interface TerminalLine {
   type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
@@ -41,85 +41,7 @@ interface AuthPanelProps {
   onRefresh: () => void;
 }
 
-interface TeacherEvent {
-  id: string;
-  title: string;
-  detail: string;
-}
-
-interface AdaptivePanel {
-  id: string;
-  kind: PanelKind;
-  title: string;
-  description: string;
-  accent: 'cyan' | 'emerald' | 'amber' | 'violet';
-}
-
-interface WorkspaceState {
-  mode: SimulationMode;
-  circuitTitle: string;
-  circuitSummary: string;
-  nodes: string[];
-  insights: string[];
-  metrics: Array<{ label: string; value: string }>;
-  teacherEvents: TeacherEvent[];
-  panels: AdaptivePanel[];
-  nextActions: string[];
-}
-
-const DEFAULT_WORKSPACE: WorkspaceState = {
-  mode: 'idle',
-  circuitTitle: 'No active circuit',
-  circuitSummary:
-    'This first version turns Clitronic into a command-first studio. Commands drive the experience; adaptive windows explain what matters.',
-  nodes: ['battery', 'resistor', 'led'],
-  insights: [
-    'The terminal is the spine of the interface.',
-    'Windows appear to explain state, not just decorate it.',
-    'The teacher panel should react to what the learner is doing now.',
-  ],
-  metrics: [
-    { label: 'Mode', value: 'Concept sketch' },
-    { label: 'Teacher', value: 'Observing' },
-    { label: 'Windows', value: 'Adaptive' },
-  ],
-  teacherEvents: [
-    {
-      id: 'default-observer',
-      title: 'Teacher by your side',
-      detail:
-        'As the learner acts, Clitronic should open the right lens: physical layout, explanation, warning, graph, or next step.',
-    },
-  ],
-  panels: [
-    {
-      id: 'scene-panel',
-      kind: 'scene',
-      title: 'Workbench',
-      description: 'A spatial view of the build. In later versions this becomes the 3D circuit bench.',
-      accent: 'cyan',
-    },
-    {
-      id: 'teacher-panel',
-      kind: 'teacher',
-      title: 'Teacher',
-      description: 'Context-aware guidance tied to the exact circuit state.',
-      accent: 'emerald',
-    },
-    {
-      id: 'inspector-panel',
-      kind: 'inspector',
-      title: 'Inspector',
-      description: 'Key values, pin states, warnings, and the current explanation surface.',
-      accent: 'amber',
-    },
-  ],
-  nextActions: [
-    'build a simple led circuit with a 9v battery',
-    'simulate',
-    'explain why the led is dim',
-  ],
-};
+const DEFAULT_WORKSPACE: CircuitDocument = createCircuitDocument('simple led circuit with a resistor and battery', 'draft');
 
 const HELP_TEXT = `
   ┌──────────────────────────────────────────────────────────────────────────┐
@@ -201,219 +123,18 @@ function inferCircuitTokens(input: string): string[] {
   return unique(matches).slice(0, 6);
 }
 
-function createWorkspaceFromPrompt(prompt: string, previous?: WorkspaceState): WorkspaceState {
-  const normalized = prompt.trim();
-  const source = normalized.toLowerCase();
-  const nodes = inferCircuitTokens(normalized);
-  const hasLed = nodes.includes('led');
-  const hasResistor = nodes.includes('resistor');
-  const hasBattery = nodes.includes('battery');
-  const hasCapacitor = nodes.includes('capacitor');
-  const hasTransistor = nodes.includes('transistor');
-
-  const teacherEvents: TeacherEvent[] = [
-    {
-      id: 'teacher-observed-change',
-      title: 'Teacher noticed a new intent',
-      detail:
-        'A good teaching interface should react to the command by opening the smallest useful set of windows, not everything at once.',
-    },
-  ];
-
-  const metrics: Array<{ label: string; value: string }> = [
-    { label: 'Mode', value: 'Prototype sketch' },
-    { label: 'Circuit nodes', value: nodes.length ? String(nodes.length) : '0' },
-    { label: 'Teacher', value: 'Context-aware' },
-  ];
-
-  const insights: string[] = [];
-  const nextActions: string[] = [];
-  const panels: AdaptivePanel[] = [
-    {
-      id: 'scene-panel',
-      kind: 'scene',
-      title: 'Workbench',
-      description: 'The main canvas where the circuit exists physically and visually.',
-      accent: 'cyan',
-    },
-    {
-      id: 'teacher-panel',
-      kind: 'teacher',
-      title: 'Teacher',
-      description: 'Explains what just happened and why it matters.',
-      accent: 'emerald',
-    },
-    {
-      id: 'inspector-panel',
-      kind: 'inspector',
-      title: 'Inspector',
-      description: 'Shows the current values, assumptions, and warnings for the active build.',
-      accent: 'amber',
-    },
-  ];
-
-  if (hasLed && hasBattery) {
-    insights.push('The interface should automatically surface current limiting because the LED path implies a protection question.');
-    teacherEvents.push({
-      id: 'teacher-led-protection',
-      title: 'Protection check',
-      detail: hasResistor
-        ? 'A resistor is present, so the teacher can focus on why that resistor value changes brightness and safety.'
-        : 'No resistor was detected. The teacher should warn immediately before simulation or build continuation.',
-    });
-    metrics.push({ label: 'LED safety', value: hasResistor ? 'Protected' : 'Needs resistor' });
-    nextActions.push('simulate');
-    nextActions.push('explain why the led is dim');
-    nextActions.push('focus graph');
-  }
-
-  if (hasCapacitor) {
-    insights.push('Capacitors are perfect for adaptive teaching because they create visible time-based behaviour.');
-    panels.push({
-      id: 'graph-panel',
-      kind: 'graph',
-      title: 'Charge curve',
-      description: 'A graph window opens because time-dependent behaviour is easier to understand visually than verbally.',
-      accent: 'violet',
-    });
-    nextActions.push('explain the charge curve');
-  }
-
-  if (hasTransistor) {
-    insights.push('A transistor often triggers pinout, biasing, and current-path questions, so the teacher should open those lenses proactively.');
-    teacherEvents.push({
-      id: 'teacher-transistor',
-      title: 'Switching concept introduced',
-      detail: 'This is where Clitronic can distinguish itself: show the control path and the load path as separate but linked stories.',
-    });
-    nextActions.push('show current flow');
-  }
-
-  if (insights.length === 0) {
-    insights.push('The first version should bias toward explanation windows that increase understanding, not UI theatre.');
-    insights.push('Commands are still the source of intent; windows are responses to intent.');
-    nextActions.push('build a simple led circuit with a 9v battery');
-  }
-
-  const summary = normalized
-    ? `Command-first sketch for: ${normalized}. The workspace should react by exposing the right teaching lenses around this build.`
-    : previous?.circuitSummary ?? DEFAULT_WORKSPACE.circuitSummary;
-
-  return {
-    mode: 'preview',
-    circuitTitle: normalized ? titleCase(normalized) : previous?.circuitTitle ?? DEFAULT_WORKSPACE.circuitTitle,
-    circuitSummary: summary,
-    nodes: nodes.length ? nodes : previous?.nodes ?? DEFAULT_WORKSPACE.nodes,
-    insights,
-    metrics,
-    teacherEvents,
-    panels,
-    nextActions: unique(nextActions).slice(0, 5),
-  };
-}
-
-function activateSimulation(previous: WorkspaceState): WorkspaceState {
-  const baseInsights = previous.insights.filter(Boolean);
-  const insights = unique([
-    ...baseInsights,
-    'Simulation mode should favour signal, causality, and failure explanation over static description.',
-  ]);
-
-  const graphPanel: AdaptivePanel = {
-    id: 'graph-panel',
-    kind: 'graph',
-    title: 'Live graph',
-    description: 'Waveforms and time-based changes appear when the learner asks to simulate or when behaviour becomes dynamic.',
-    accent: 'violet',
-  };
-
-  const nextPanel: AdaptivePanel = {
-    id: 'next-step-panel',
-    kind: 'next-step',
-    title: 'What to try next',
-    description: 'A compact teaching window that suggests the next command or experiment rather than a long lecture.',
-    accent: 'emerald',
-  };
-
-  const panels = uniquePanels([...previous.panels, graphPanel, nextPanel]);
-
-  return {
-    ...previous,
-    mode: 'simulating',
-    circuitSummary:
-      previous.circuitSummary + ' Simulation mode is active, so the workspace should now foreground behaviour, graphs, and live explanation.',
-    metrics: [
-      ...previous.metrics.filter((metric) => metric.label !== 'Mode'),
-      { label: 'Mode', value: 'Simulating' },
-    ],
-    teacherEvents: [
-      {
-        id: 'teacher-simulation',
-        title: 'Simulation window opened',
-        detail:
-          'This is the point where Clitronic stops being a static explainer and starts acting like a responsive bench companion.',
-      },
-      ...previous.teacherEvents,
-    ].slice(0, 4),
-    panels,
-    nextActions: unique([
-      ...previous.nextActions,
-      'explain what changed',
-      'focus inspector',
-      'focus graph',
-    ]).slice(0, 5),
-    insights,
-  };
-}
-
-function uniquePanels(panels: AdaptivePanel[]): AdaptivePanel[] {
-  const seen = new Set<string>();
-  return panels.filter((panel) => {
-    if (seen.has(panel.id)) return false;
-    seen.add(panel.id);
-    return true;
-  });
-}
-
-function emphasisePanel(panelName: string, previous: WorkspaceState): WorkspaceState {
-  const normalized = panelName.trim().toLowerCase();
-  if (!normalized) return previous;
-
-  const matched = previous.panels.find(
-    (panel) => panel.kind === normalized || panel.title.toLowerCase() === normalized
-  );
-
-  const label = matched?.title ?? titleCase(normalized);
-
-  return {
-    ...previous,
-    teacherEvents: [
-      {
-        id: `teacher-focus-${normalized}`,
-        title: `${label} brought forward`,
-        detail: `The interface should now prioritise the ${label.toLowerCase()} view and compress less relevant windows without fully losing context.`,
-      },
-      ...previous.teacherEvents,
-    ].slice(0, 4),
-    metrics: [
-      ...previous.metrics.filter((metric) => metric.label !== 'Focus'),
-      { label: 'Focus', value: label },
-    ],
-  };
-}
-
-function buildTeacherPrompt(userInput: string, workspace: WorkspaceState): string {
-  const nodes = workspace.nodes.length ? workspace.nodes.join(', ') : 'none yet';
+function buildTeacherPrompt(userInput: string, workspace: CircuitDocument): string {
+  const nodes = workspace.nodes.length ? workspace.nodes.map((node) => node.label).join(', ') : 'none yet';
   const panels = workspace.panels.map((panel) => panel.title).join(', ');
 
   return `You are helping design Clitronic as a command-first adaptive electronics studio.
 
 The current workspace state is:
-- circuit title: ${workspace.circuitTitle}
+- circuit title: ${workspace.title}
 - mode: ${workspace.mode}
 - nodes: ${nodes}
 - open panels: ${panels}
-- circuit summary: ${workspace.circuitSummary}
+- circuit summary: ${workspace.summary}
 
 The user command or question is: ${userInput}
 
@@ -448,7 +169,7 @@ export function RichTerminal() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [workspace, setWorkspace] = useState<WorkspaceState>(DEFAULT_WORKSPACE);
+  const [workspace, setWorkspace] = useState<CircuitDocument>(DEFAULT_WORKSPACE);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -699,7 +420,7 @@ export function RichTerminal() {
   );
 
   const askTeacher = useCallback(
-    async (userInput: string, state: WorkspaceState) => {
+    async (userInput: string, state: CircuitDocument) => {
       if (!canMakeApiCalls) {
         showAuthRequiredError();
         return;
@@ -787,11 +508,11 @@ export function RichTerminal() {
       }
 
       if (command === 'build') {
-        const nextWorkspace = createWorkspaceFromPrompt(args || 'new circuit idea', workspace);
+        const nextWorkspace = createCircuitDocument(args || 'new circuit idea', 'preview');
         setWorkspace(nextWorkspace);
         addLine({
           type: 'system',
-          content: `✓ Opened adaptive windows for ${nextWorkspace.circuitTitle}`,
+          content: `✓ Opened adaptive windows for ${nextWorkspace.title}`,
         });
         addLine({
           type: 'system',
@@ -801,7 +522,7 @@ export function RichTerminal() {
       }
 
       if (command === 'simulate') {
-        const nextWorkspace = activateSimulation(workspace);
+        const nextWorkspace = activateCircuitSimulation(workspace);
         setWorkspace(nextWorkspace);
         addLine({ type: 'system', content: '✓ Simulation mode active — graph and next-step windows opened' });
         return;
@@ -812,7 +533,7 @@ export function RichTerminal() {
           addLine({ type: 'error', content: 'Usage: focus <teacher|graph|inspector|workbench>' });
           return;
         }
-        const nextWorkspace = emphasisePanel(args, workspace);
+        const nextWorkspace = focusCircuitPanel(workspace, args);
         setWorkspace(nextWorkspace);
         addLine({ type: 'system', content: `✓ Focus shifted to ${titleCase(args)}` });
         return;
@@ -920,7 +641,7 @@ export function RichTerminal() {
           return;
         }
 
-        const draftWorkspace = createWorkspaceFromPrompt(trimmedCmd, workspace);
+        const draftWorkspace = createCircuitDocument(trimmedCmd, workspace.mode === 'simulating' ? 'simulating' : 'preview');
         setWorkspace(draftWorkspace);
         await askTeacher(trimmedCmd, draftWorkspace);
       } catch (err) {
@@ -1101,7 +822,7 @@ export function RichTerminal() {
                 {canMakeApiCalls ? `Connected: ${authLabel(authSource)}` : 'Authentication required'}
               </span>
               <span className="rounded-full border border-cyan-500/30 bg-cyan-950/40 px-2 py-0.5 text-cyan-300">
-                {workspace.mode === 'simulating' ? 'Simulation live' : workspace.mode === 'preview' ? 'Preview mode' : 'Concept mode'}
+                {workspace.mode === 'simulating' ? 'Simulation live' : workspace.mode === 'preview' ? 'Preview mode' : 'Draft mode'}
               </span>
               <span className="rounded-full border border-violet-500/30 bg-violet-950/30 px-2 py-0.5 text-violet-300">
                 Open windows: {workspace.panels.length}
@@ -1240,7 +961,7 @@ function AdaptiveStudio({
   workspace,
   onQuickCommand,
 }: {
-  workspace: WorkspaceState;
+  workspace: CircuitDocument;
   onQuickCommand: (command: string) => void;
 }) {
   return (
@@ -1249,12 +970,12 @@ function AdaptiveStudio({
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-[11px] tracking-[0.24em] text-cyan-400 uppercase">Workbench state</div>
-            <h2 className="mt-2 text-xl font-semibold text-white">{workspace.circuitTitle}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">{workspace.circuitSummary}</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">{workspace.title}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">{workspace.summary}</p>
           </div>
           <div className="rounded-xl border border-cyan-700/30 bg-cyan-950/20 px-3 py-2 text-right text-xs text-cyan-200">
-            <div>{workspace.mode === 'simulating' ? 'Simulation running' : workspace.mode === 'preview' ? 'Adaptive preview' : 'Concept sketch'}</div>
-            <div className="mt-1 text-cyan-400/80">{workspace.nodes.length} nodes • {workspace.panels.length} windows</div>
+            <div>{workspace.mode === 'simulating' ? 'Simulation running' : workspace.mode === 'preview' ? 'Adaptive preview' : 'Draft document'}</div>
+            <div className="mt-1 text-cyan-400/80">{workspace.nodes.length} nodes • {workspace.connections.length} links • {workspace.panels.length} windows</div>
           </div>
         </div>
 
@@ -1270,12 +991,12 @@ function AdaptiveStudio({
 
       <div className="grid gap-4 xl:grid-cols-2">
         <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'scene') ?? workspace.panels[0]}>
-          <WorkbenchPreview nodes={workspace.nodes} mode={workspace.mode} />
+          <WorkbenchPreview nodes={workspace.nodes} connections={workspace.connections} mode={workspace.mode} />
         </WindowCard>
 
         <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'teacher') ?? workspace.panels[1]}>
           <div className="space-y-3 text-sm text-gray-300">
-            {workspace.teacherEvents.map((event) => (
+            {workspace.events.map((event) => (
               <div key={event.id} className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3">
                 <div className="font-semibold text-emerald-200">{event.title}</div>
                 <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
@@ -1290,8 +1011,8 @@ function AdaptiveStudio({
               <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Detected circuit nodes</div>
               <div className="flex flex-wrap gap-2">
                 {workspace.nodes.map((node) => (
-                  <span key={node} className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200">
-                    {node}
+                  <span key={node.id} className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200">
+                    {node.label}
                   </span>
                 ))}
               </div>
@@ -1343,10 +1064,10 @@ function AdaptiveStudio({
   );
 }
 
-function WindowCard({ panel, children }: { panel?: AdaptivePanel; children: React.ReactNode }) {
+function WindowCard({ panel, children }: { panel?: CircuitPanel; children: React.ReactNode }) {
   if (!panel) return null;
 
-  const accentClasses: Record<AdaptivePanel['accent'], string> = {
+  const accentClasses: Record<CircuitPanel['accent'], string> = {
     cyan: 'border-cyan-900/30 bg-cyan-950/10 text-cyan-200',
     emerald: 'border-emerald-900/30 bg-emerald-950/10 text-emerald-200',
     amber: 'border-amber-900/30 bg-amber-950/10 text-amber-200',
@@ -1370,8 +1091,14 @@ function WindowCard({ panel, children }: { panel?: AdaptivePanel; children: Reac
   );
 }
 
-function WorkbenchPreview({ nodes, mode }: { nodes: string[]; mode: SimulationMode }) {
-  const displayNodes = nodes.length ? nodes : ['battery', 'resistor', 'led'];
+function WorkbenchPreview({ nodes, connections, mode }: { nodes: CircuitDocument['nodes']; connections: CircuitDocument['connections']; mode: CircuitMode }) {
+  const displayNodes = nodes.length
+    ? nodes
+    : [
+        { id: 'battery-1', key: 'battery', label: 'Battery', type: 'power', quantity: 1 },
+        { id: 'resistor-1', key: 'resistor', label: 'Resistor', type: 'passive', quantity: 1 },
+        { id: 'led-1', key: 'led', label: 'LED', type: 'output', quantity: 1 },
+      ];
 
   return (
     <div className="rounded-2xl border border-cyan-900/30 bg-[linear-gradient(180deg,#0a1017,#081019)] p-4">
@@ -1382,26 +1109,26 @@ function WorkbenchPreview({ nodes, mode }: { nodes: string[]; mode: SimulationMo
 
       <div className="grid gap-3">
         {displayNodes.map((node, index) => (
-          <div key={`${node}-${index}`} className="flex items-center gap-3">
+          <div key={`${node.id}-${index}`} className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-700/30 bg-cyan-950/20 text-xs text-cyan-200">
-              {node.slice(0, 3).toUpperCase()}
+              {node.label.slice(0, 3).toUpperCase()}
             </div>
             <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/50 to-transparent" />
             <div className="rounded-lg border border-gray-800 bg-[#0a0f15] px-2 py-1 text-xs text-gray-300">
-              {node}
+              {node.label}
             </div>
           </div>
         ))}
       </div>
 
       <div className="mt-4 rounded-xl border border-cyan-900/25 bg-cyan-950/10 p-3 text-xs leading-relaxed text-cyan-100/80">
-        In a fuller version this becomes the 3D bench. For now it proves the product idea: commands create physical state, and the UI opens the right teaching windows around it.
+        {connections.length} inferred connection{connections.length === 1 ? '' : 's'} currently define the path. This is the bridge from pure concept UI to a real circuit document model.
       </div>
     </div>
   );
 }
 
-function GraphPreview({ mode }: { mode: SimulationMode }) {
+function GraphPreview({ mode }: { mode: CircuitMode }) {
   const bars = mode === 'simulating' ? [32, 55, 68, 44, 79, 58, 72] : [20, 28, 36, 30, 42, 34, 40];
 
   return (
