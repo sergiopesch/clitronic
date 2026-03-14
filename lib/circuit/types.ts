@@ -10,6 +10,12 @@ export type CircuitNodeType =
 
 export type CircuitMode = 'draft' | 'preview' | 'simulating';
 
+export interface CircuitNodeParameter {
+  key: string;
+  label: string;
+  value: string;
+}
+
 export interface CircuitNode {
   id: string;
   key: string;
@@ -17,6 +23,7 @@ export interface CircuitNode {
   type: CircuitNodeType;
   quantity: number;
   notes?: string[];
+  parameters?: CircuitNodeParameter[];
 }
 
 export interface CircuitConnection {
@@ -39,7 +46,8 @@ export interface CircuitEvent {
     | 'teaching'
     | 'window-opened'
     | 'simulation'
-    | 'focus';
+    | 'focus'
+    | 'validation';
   title: string;
   detail: string;
 }

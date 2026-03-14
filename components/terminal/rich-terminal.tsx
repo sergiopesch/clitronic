@@ -55,6 +55,7 @@ const HELP_TEXT = `
   │  add <component>              Add a component to the active circuit      │
   │  connect <a> to <b>           Create a connection in the active circuit   │
   │  remove <component>           Remove a component from the active circuit   │
+  │  set <node> <param> = <val>   Set a component parameter                    │
   │  simulate                     Switch the workspace into simulation mode  │
   │  explain <question>           Ask the teacher about the active circuit   │
   │  focus <panel>                Emphasise teacher / graph / inspector      │
@@ -65,6 +66,8 @@ const HELP_TEXT = `
   │    build a simple led circuit with a 9v battery                        │
   │    add resistor                                                        │
   │    connect battery to resistor                                          │
+  │    set battery voltage = 9V                                             │
+  │    set resistor resistance = 220Ω                                       │
   │    simulate                                                            │
   │    explain why the led is dim                                          │
   │    focus graph                                                         │
@@ -526,7 +529,7 @@ export function RichTerminal() {
         return;
       }
 
-      if (command === 'add' || command === 'connect' || command === 'remove') {
+      if (command === 'add' || command === 'connect' || command === 'remove' || command === 'set') {
         const parsed = parseCircuitCommand(trimmedCmd);
         const nextWorkspace = applyStructuredCommand(workspace, parsed);
         setWorkspace(nextWorkspace);
@@ -923,7 +926,7 @@ export function RichTerminal() {
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
               <span>{voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' : ''}</span>
-              <span>build • add • connect • remove • simulate • explain • focus • identify</span>
+              <span>build • add • connect • remove • set • simulate • explain • focus</span>
             </div>
           </footer>
         </div>
@@ -1043,6 +1046,29 @@ function AdaptiveStudio({
                     {node.label}
                   </span>
                 ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Parameters</div>
+              <div className="space-y-2">
+                {workspace.nodes.map((node) =>
+                  node.parameters && node.parameters.length > 0 ? (
+                    <div key={`${node.id}-params`} className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2">
+                      <div className="text-xs font-semibold text-amber-200">{node.label}</div>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {node.parameters.map((param) => (
+                          <span
+                            key={`${node.id}-${param.key}`}
+                            className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100"
+                          >
+                            {param.label}: {param.value}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null
+                )}
               </div>
             </div>
 

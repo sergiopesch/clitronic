@@ -6,6 +6,7 @@ import type {
   CircuitMetric,
   CircuitMode,
   CircuitNode,
+  CircuitNodeParameter,
   CircuitPanel,
 } from './types';
 
@@ -23,6 +24,55 @@ function unique(values: string[]): string[] {
 
 function createNodeId(key: string, index: number): string {
   return `${key}-${index + 1}`;
+}
+
+function extractParameter(prompt: string, pattern: RegExp): string | undefined {
+  const match = prompt.match(pattern);
+  return match?.[1]?.trim();
+}
+
+function inferParameters(key: string, prompt: string): CircuitNodeParameter[] {
+  const source = prompt.toLowerCase();
+  const params: CircuitNodeParameter[] = [];
+
+  if (key === 'battery') {
+    const voltage = extractParameter(source, /(\d+(?:\.\d+)?)\s*v/);
+    params.push({ key: 'voltage', label: 'Voltage', value: voltage ? `${voltage}V` : '5V' });
+  }
+
+  if (key === 'resistor') {
+    const resistance = extractParameter(source, /(\d+(?:\.\d+)?)\s*(k?\s?ohm|k?\s?ω|k?\s?ohms|k?\s?Ω|k)/i);
+    params.push({
+      key: 'resistance',
+      label: 'Resistance',
+      value: resistance
+        ? resistance.replace(/\s+/g, '').replace('ohms', 'Ω').replace('ohm', 'Ω')
+        : '220Ω',
+    });
+  }
+
+  if (key === 'led') {
+    const colour = source.includes('blue')
+      ? 'Blue'
+      : source.includes('green')
+        ? 'Green'
+        : source.includes('yellow')
+          ? 'Yellow'
+          : 'Red';
+    params.push({ key: 'colour', label: 'Colour', value: colour });
+    params.push({ key: 'forward-voltage', label: 'Forward voltage', value: colour === 'Red' ? '2.0V' : '3.2V' });
+  }
+
+  if (key === 'capacitor') {
+    const capacitance = extractParameter(source, /(\d+(?:\.\d+)?)\s*(uf|μf|nf|pf)/i);
+    params.push({
+      key: 'capacitance',
+      label: 'Capacitance',
+      value: capacitance ? capacitance.replace(/\s+/g, '') : '100μF',
+    });
+  }
+
+  return params;
 }
 
 function buildNodes(prompt: string): CircuitNode[] {
@@ -47,6 +97,7 @@ function buildNodes(prompt: string): CircuitNode[] {
     label: match.label,
     type: match.nodeType,
     quantity: 1,
+    parameters: inferParameters(match.key, prompt),
   }));
 }
 
@@ -75,7 +126,104 @@ function hasNode(nodes: CircuitNode[], key: string): boolean {
   return nodes.some((node) => node.key === key);
 }
 
-function buildEvents(nodes: CircuitNode[], mode: CircuitMode): CircuitEvent[] {
+function getNode(nodes: CircuitNode[], key: string): CircuitNode | undefined {
+  return nodes.find((node) => node.key === key);
+}
+
+function getParameter(node: CircuitNode | undefined, key: string): string | undefined {
+  return node?.parameters?.find((param) => param.key === key)?.value;
+}
+
+function parseVoltage(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const match = value.match(/(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : undefined;
+}
+
+function parseResistance(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const normalized = value.toLowerCase();
+  const match = normalized.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return undefined;
+  const base = Number(match[1]);
+  return normalized.includes('k') ? base * 1000 : base;
+}
+
+function buildValidationEvents(nodes: CircuitNode[], connections: CircuitConnection[]): CircuitEvent[] {
+  const validations: CircuitEvent[] = [];
+  const battery = getNode(nodes, 'battery');
+  const led = getNode(nodes, 'led');
+  const resistor = getNode(nodes, 'resistor');
+  const ground = getNode(nodes, 'ground');
+
+  if (led && battery && !resistor) {
+    validations.push({
+      id: 'validation-led-needs-resistor',
+      kind: 'validation',
+      title: 'LED path needs current limiting',
+      detail:
+        'The active document contains a battery and LED but no resistor. Clitronic should warn before simulation and suggest a resistor value.',
+    });
+  }
+
+  if (led && !ground) {
+    validations.push({
+      id: 'validation-missing-ground',
+      kind: 'validation',
+      title: 'No ground reference detected',
+      detail:
+        'The circuit document has no explicit ground node yet. The topology view should flag the path as incomplete.',
+    });
+  }
+
+  if (battery && resistor && led) {
+    const voltage = parseVoltage(getParameter(battery, 'voltage')) ?? 5;
+    const resistance = parseResistance(getParameter(resistor, 'resistance')) ?? 220;
+    const ledForward = parseVoltage(getParameter(led, 'forward-voltage')) ?? 2;
+    const currentMa = ((voltage - ledForward) / resistance) * 1000;
+
+    validations.push({
+      id: 'validation-led-current-estimate',
+      kind: 'validation',
+      title: 'Estimated LED current available',
+      detail: `With ${voltage}V supply, ${resistance}Ω resistor, and ~${ledForward}V LED drop, the current is about ${currentMa.toFixed(1)}mA.`,
+    });
+
+    if (currentMa > 20) {
+      validations.push({
+        id: 'validation-led-current-high',
+        kind: 'warning',
+        title: 'Estimated LED current is high',
+        detail:
+          'The current estimate exceeds the comfortable 20mA region. The teacher should suggest increasing the resistor value.',
+      });
+    }
+  }
+
+  const connectedIds = new Set<string>();
+  for (const connection of connections) {
+    connectedIds.add(connection.from);
+    connectedIds.add(connection.to);
+  }
+
+  const disconnected = nodes.filter(
+    (node) => node.key !== 'concept' && !connectedIds.has(node.id) && nodes.length > 1
+  );
+
+  for (const node of disconnected) {
+    validations.push({
+      id: `validation-disconnected-${node.id}`,
+      kind: 'validation',
+      title: `${node.label} is not connected`,
+      detail:
+        'This node exists in the document but is not part of an explicit connection. The topology view should make that obvious.',
+    });
+  }
+
+  return validations;
+}
+
+function buildEvents(nodes: CircuitNode[], connections: CircuitConnection[], mode: CircuitMode): CircuitEvent[] {
   const events: CircuitEvent[] = [
     {
       id: 'teacher-observed-intent',
@@ -126,6 +274,8 @@ function buildEvents(nodes: CircuitNode[], mode: CircuitMode): CircuitEvent[] {
     });
   }
 
+  events.push(...buildValidationEvents(nodes, connections));
+
   if (mode === 'simulating') {
     events.unshift({
       id: 'simulation-active',
@@ -159,7 +309,7 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
       id: 'inspector-panel',
       kind: 'inspector',
       title: 'Inspector',
-      description: 'Shows the active nodes, inferred path, and warnings.',
+      description: 'Shows the active nodes, inferred path, warnings, and parameter values.',
       accent: 'amber',
     },
   ];
@@ -194,7 +344,7 @@ function buildInsights(nodes: CircuitNode[], mode: CircuitMode): string[] {
   ];
 
   if (hasNode(nodes, 'led')) {
-    insights.push('An LED is a strong teaching trigger because current limiting, polarity, and brightness all become teachable immediately.');
+    insights.push('An LED is a strong teaching trigger because current limiting, polarity, brightness, and safe current all become teachable immediately.');
   }
 
   if (hasNode(nodes, 'capacitor')) {
@@ -208,11 +358,14 @@ function buildInsights(nodes: CircuitNode[], mode: CircuitMode): string[] {
   return unique(insights);
 }
 
-function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], mode: CircuitMode): CircuitMetric[] {
+function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], events: CircuitEvent[], mode: CircuitMode): CircuitMetric[] {
+  const validations = events.filter((event) => event.kind === 'validation' || event.kind === 'warning');
+
   return [
     { label: 'Mode', value: titleCase(mode) },
     { label: 'Components', value: String(nodes.length) },
     { label: 'Connections', value: String(connections.length) },
+    { label: 'Validation rules', value: String(validations.length) },
     {
       label: 'Teaching windows',
       value: mode === 'simulating' ? 'Event-driven + live' : 'Event-driven',
@@ -224,7 +377,11 @@ function buildNextActions(nodes: CircuitNode[], mode: CircuitMode): string[] {
   const next = ['simulate', 'focus inspector', 'explain what changed'];
 
   if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && !hasNode(nodes, 'resistor')) {
-    next.unshift('build add resistor to the led path');
+    next.unshift('add resistor');
+  }
+
+  if (!hasNode(nodes, 'ground')) {
+    next.push('add ground');
   }
 
   if (hasNode(nodes, 'capacitor')) {
@@ -242,8 +399,8 @@ export function createCircuitDocument(prompt: string, mode: CircuitMode = 'previ
   const cleanPrompt = prompt.trim() || 'new circuit idea';
   const nodes = buildNodes(cleanPrompt);
   const connections = buildConnections(nodes);
+  const events = buildEvents(nodes, connections, mode);
   const panels = buildPanels(nodes, mode);
-  const events = buildEvents(nodes, mode);
   const insights = buildInsights(nodes, mode);
 
   return {
@@ -251,10 +408,10 @@ export function createCircuitDocument(prompt: string, mode: CircuitMode = 'previ
     prompt: cleanPrompt,
     title: titleCase(cleanPrompt),
     mode,
-    summary: `Structured circuit document derived from the command: ${cleanPrompt}. This gives Clitronic a foundation for event-driven teaching windows and later true simulation state.`,
+    summary: `Structured circuit document derived from the command: ${cleanPrompt}. This gives Clitronic a foundation for event-driven teaching windows, validation, and later true simulation state.`,
     nodes,
     connections,
-    metrics: buildMetrics(nodes, connections, mode),
+    metrics: buildMetrics(nodes, connections, events, mode),
     events,
     panels,
     insights,
@@ -275,12 +432,14 @@ export function focusCircuitPanel(document: CircuitDocument, panelName: string):
     detail: `The interface should emphasise the ${label.toLowerCase()} window while keeping enough context to avoid disorienting the learner.`,
   };
 
+  const events = [focusEvent, ...document.events].slice(0, 6);
+
   return {
     ...document,
     metrics: [
       ...document.metrics.filter((metric) => metric.label !== 'Focus'),
       { label: 'Focus', value: label },
     ],
-    events: [focusEvent, ...document.events].slice(0, 5),
+    events,
   };
 }

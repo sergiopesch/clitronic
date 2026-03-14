@@ -1,8 +1,17 @@
 import { createCircuitDocument } from './document';
-import type { CircuitDocument } from './types';
+import type { CircuitDocument, CircuitNode, CircuitNodeParameter } from './types';
 
 export interface ParsedCircuitCommand {
-  kind: 'build' | 'add' | 'connect' | 'remove' | 'simulate' | 'focus' | 'explain' | 'unknown';
+  kind:
+    | 'build'
+    | 'add'
+    | 'connect'
+    | 'remove'
+    | 'simulate'
+    | 'focus'
+    | 'explain'
+    | 'set'
+    | 'unknown';
   raw: string;
   args: string;
 }
@@ -13,7 +22,9 @@ export function parseCircuitCommand(input: string): ParsedCircuitCommand {
   const command = head?.toLowerCase() ?? '';
   const args = rest.join(' ').trim();
 
-  if (['build', 'add', 'connect', 'remove', 'simulate', 'focus', 'explain'].includes(command)) {
+  if (
+    ['build', 'add', 'connect', 'remove', 'simulate', 'focus', 'explain', 'set'].includes(command)
+  ) {
     return { kind: command as ParsedCircuitCommand['kind'], raw: trimmed, args };
   }
 
@@ -50,13 +61,14 @@ function ensureNode(document: CircuitDocument, label: string) {
   if (existing) return existing;
 
   const key = createNodeKey(label);
-  const node = {
+  const node: CircuitNode = {
     id: nextNodeId(document, key),
     key,
     label: humanLabel(label),
-    type: 'unknown' as const,
+    type: 'unknown',
     quantity: 1,
     notes: ['Added via structured command parser.'],
+    parameters: [],
   };
 
   document.nodes = [...document.nodes, node];
@@ -75,6 +87,19 @@ function refreshDocument(document: CircuitDocument): CircuitDocument {
       rebuilt.summary +
       ' This version includes explicit command edits layered onto the circuit document.',
   };
+}
+
+function upsertParameter(node: CircuitNode, parameter: CircuitNodeParameter) {
+  const nextParameters = [...(node.parameters ?? [])];
+  const existingIndex = nextParameters.findIndex((item) => item.key === parameter.key);
+
+  if (existingIndex >= 0) {
+    nextParameters[existingIndex] = parameter;
+  } else {
+    nextParameters.push(parameter);
+  }
+
+  node.parameters = nextParameters;
 }
 
 export function applyStructuredCommand(
@@ -139,6 +164,35 @@ export function applyStructuredCommand(
         },
       ];
     }
+
+    return refreshDocument(draft);
+  }
+
+  if (parsed.kind === 'set') {
+    const match = parsed.args.match(/(.+?)\s+(?:to|=)\s+(.+)/i);
+    if (!match) return document;
+
+    const [, leftRaw, valueRaw] = match;
+    const left = leftRaw?.trim() ?? '';
+    const value = valueRaw?.trim() ?? '';
+    if (!left || !value) return document;
+
+    const parts = left.split(/\s+/);
+    const parameterKey = parts.pop()?.toLowerCase() ?? 'value';
+    const nodeLabel = parts.join(' ') || left;
+
+    const draft: CircuitDocument = {
+      ...document,
+      nodes: [...document.nodes],
+      connections: [...document.connections],
+    };
+
+    const node = ensureNode(draft, nodeLabel);
+    upsertParameter(node, {
+      key: parameterKey.replace(/[^a-z0-9]+/g, '-'),
+      label: humanLabel(parameterKey),
+      value,
+    });
 
     return refreshDocument(draft);
   }
