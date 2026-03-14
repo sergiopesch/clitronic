@@ -10,7 +10,7 @@ import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 import { AnimatedWelcome } from './animated-welcome';
 import { electronicsComponents } from '@/lib/data/components';
-import { activateCircuitSimulation, applyStructuredCommand, createCircuitDocument, focusCircuitPanel, parseCircuitCommand } from '@/lib/circuit';
+import { activateCircuitSimulation, analyzeCircuit, applyStructuredCommand, createCircuitDocument, focusCircuitPanel, parseCircuitCommand } from '@/lib/circuit';
 import type { CircuitDocument, CircuitMode, CircuitPanel } from '@/lib/circuit';
 
 
@@ -983,6 +983,8 @@ function AdaptiveStudio({
   workspace: CircuitDocument;
   onQuickCommand: (command: string) => void;
 }) {
+  const analysis = analyzeCircuit(workspace);
+
   return (
     <aside className="relative flex min-h-[100dvh] flex-col overflow-y-auto bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
       <div className="mb-4 rounded-2xl border border-cyan-900/30 bg-[#0c141d] p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.04)]">
@@ -1027,7 +1029,7 @@ function AdaptiveStudio({
 
         <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'teacher') ?? workspace.panels[1]}>
           <div className="space-y-3 text-sm text-gray-300">
-            {workspace.events.map((event) => (
+            {[...workspace.events, ...analysis.derivedEvents].slice(0, 8).map((event) => (
               <div key={event.id} className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3">
                 <div className="font-semibold text-emerald-200">{event.title}</div>
                 <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
@@ -1068,6 +1070,37 @@ function AdaptiveStudio({
                       </div>
                     </div>
                   ) : null
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Derived analysis</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {analysis.derivedMetrics.map((metric) => (
+                  <div key={`${metric.label}-${metric.value}`} className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-gray-500">{metric.label}</div>
+                    <div className="mt-1 text-sm font-medium text-white">{metric.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Recommended fixes</div>
+              <div className="flex flex-wrap gap-2">
+                {analysis.suggestedFixes.length > 0 ? (
+                  analysis.suggestedFixes.map((fix) => (
+                    <button
+                      key={fix}
+                      onClick={() => onQuickCommand(fix)}
+                      className="rounded-full border border-emerald-700/30 bg-emerald-950/20 px-3 py-1.5 text-xs text-emerald-200 transition hover:border-emerald-500/50 hover:bg-emerald-900/30"
+                    >
+                      {fix}
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-500">No targeted fixes suggested right now.</span>
                 )}
               </div>
             </div>

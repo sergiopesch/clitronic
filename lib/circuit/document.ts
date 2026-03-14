@@ -329,8 +329,24 @@ function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], ev
   ];
 }
 
-function buildNextActions(nodes: CircuitNode[], mode: CircuitMode): string[] {
+function buildNextActions(nodes: CircuitNode[], connections: CircuitConnection[], mode: CircuitMode): string[] {
   const next = ['simulate', 'focus inspector', 'explain what changed'];
+  const analysis = analyzeCircuit({
+    id: 'analysis',
+    prompt: 'analysis',
+    title: 'analysis',
+    mode,
+    summary: '',
+    nodes,
+    connections,
+    metrics: [],
+    events: [],
+    panels: [],
+    insights: [],
+    nextActions: [],
+  });
+
+  next.unshift(...analysis.suggestedFixes);
 
   if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && !hasNode(nodes, 'resistor')) {
     next.unshift('add resistor');
@@ -348,7 +364,7 @@ function buildNextActions(nodes: CircuitNode[], mode: CircuitMode): string[] {
     next.push('focus graph');
   }
 
-  return unique(next).slice(0, 5);
+  return unique(next).slice(0, 6);
 }
 
 export function createCircuitDocument(prompt: string, mode: CircuitMode = 'preview'): CircuitDocument {
@@ -371,7 +387,7 @@ export function createCircuitDocument(prompt: string, mode: CircuitMode = 'previ
     events,
     panels,
     insights,
-    nextActions: buildNextActions(nodes, mode),
+    nextActions: buildNextActions(nodes, connections, mode),
   };
 }
 

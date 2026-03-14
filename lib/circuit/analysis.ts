@@ -38,12 +38,14 @@ export interface CircuitAnalysis {
   derivedMetrics: CircuitMetric[];
   derivedEvents: CircuitEvent[];
   derivedInsights: string[];
+  suggestedFixes: string[];
 }
 
 export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
   const derivedMetrics: CircuitMetric[] = [];
   const derivedEvents: CircuitEvent[] = [];
   const derivedInsights: string[] = [];
+  const suggestedFixes: string[] = [];
 
   const battery = getNode(document.nodes, 'battery');
   const resistor = getNode(document.nodes, 'resistor');
@@ -58,11 +60,14 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
     const currentMa = ((supplyVoltage - ledForward) / resistance) * 1000;
     const resistorDrop = supplyVoltage - ledForward;
     const resistorPowerMw = ((currentMa / 1000) ** 2) * resistance * 1000;
-    const brightnessBand = currentMa < 5 ? 'Very dim' : currentMa < 12 ? 'Comfortable' : currentMa < 20 ? 'Bright' : 'Aggressive';
+    const recommendedResistance = Math.round(((supplyVoltage - ledForward) / 0.012) / 10) * 10;
+    const brightnessBand =
+      currentMa < 5 ? 'Very dim' : currentMa < 12 ? 'Comfortable' : currentMa < 20 ? 'Bright' : 'Aggressive';
 
     derivedMetrics.push({ label: 'Estimated LED current', value: `${currentMa.toFixed(1)}mA` });
     derivedMetrics.push({ label: 'Resistor dissipation', value: `${resistorPowerMw.toFixed(1)}mW` });
     derivedMetrics.push({ label: 'Brightness band', value: brightnessBand });
+    derivedMetrics.push({ label: 'Suggested resistor', value: `${recommendedResistance}Ω` });
 
     derivedEvents.push({
       id: 'derived-led-analysis',
@@ -79,6 +84,7 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
         detail:
           'The current estimate is quite low. Clitronic should explain that brightness is current-driven and invite a lower resistor value experiment.',
       });
+      suggestedFixes.push(`set resistor resistance = ${Math.max(100, recommendedResistance)}Ω`);
     }
 
     if (currentMa > 20) {
@@ -89,6 +95,7 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
         detail:
           'The estimated current exceeds a safe everyday target. The teacher should propose a safer resistor value before encouraging simulation confidence.',
       });
+      suggestedFixes.push(`set resistor resistance = ${Math.max(recommendedResistance, 330)}Ω`);
     }
 
     derivedInsights.push(
@@ -110,19 +117,34 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
           'The topology contains a plausible series path from battery through resistor to LED and then ground. This is enough to justify stronger simulation surfaces.',
       });
     } else {
+      const missingLink = !batteryToResistor
+        ? 'connect battery to resistor'
+        : !resistorToLed
+          ? 'connect resistor to led'
+          : 'connect led to ground';
+
       derivedEvents.push({
         id: 'derived-incomplete-led-path',
         kind: 'validation',
         title: 'LED path is structurally incomplete',
-        detail:
-          'The required parts exist but the explicit topology is incomplete. Clitronic should point the learner to the exact missing link.',
+        detail: `The required parts exist but the explicit topology is incomplete. The next missing link is: ${missingLink}.`,
       });
+      suggestedFixes.push(missingLink);
     }
+  }
+
+  if (led && !ground) {
+    suggestedFixes.push('add ground');
+  }
+
+  if (led && battery && !resistor) {
+    suggestedFixes.push('add resistor');
   }
 
   return {
     derivedMetrics,
     derivedEvents,
     derivedInsights,
+    suggestedFixes: Array.from(new Set(suggestedFixes.filter(Boolean))).slice(0, 5),
   };
 }
