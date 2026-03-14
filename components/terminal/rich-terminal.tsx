@@ -10,7 +10,7 @@ import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 import { AnimatedWelcome } from './animated-welcome';
 import { electronicsComponents } from '@/lib/data/components';
-import { activateCircuitSimulation, createCircuitDocument, focusCircuitPanel } from '@/lib/circuit';
+import { activateCircuitSimulation, applyStructuredCommand, createCircuitDocument, focusCircuitPanel, parseCircuitCommand } from '@/lib/circuit';
 import type { CircuitDocument, CircuitMode, CircuitPanel } from '@/lib/circuit';
 
 
@@ -52,6 +52,9 @@ const HELP_TEXT = `
   │  clear                        Clear terminal history                     │
   │  identify                     Upload an image to identify a component    │
   │  build <idea>                 Sketch a circuit and open teaching views   │
+  │  add <component>              Add a component to the active circuit      │
+  │  connect <a> to <b>           Create a connection in the active circuit   │
+  │  remove <component>           Remove a component from the active circuit   │
   │  simulate                     Switch the workspace into simulation mode  │
   │  explain <question>           Ask the teacher about the active circuit   │
   │  focus <panel>                Emphasise teacher / graph / inspector      │
@@ -60,6 +63,8 @@ const HELP_TEXT = `
   ├──────────────────────────────────────────────────────────────────────────┤
   │  Example flow                                                         │
   │    build a simple led circuit with a 9v battery                        │
+  │    add resistor                                                        │
+  │    connect battery to resistor                                          │
   │    simulate                                                            │
   │    explain why the led is dim                                          │
   │    focus graph                                                         │
@@ -521,6 +526,17 @@ export function RichTerminal() {
         return;
       }
 
+      if (command === 'add' || command === 'connect' || command === 'remove') {
+        const parsed = parseCircuitCommand(trimmedCmd);
+        const nextWorkspace = applyStructuredCommand(workspace, parsed);
+        setWorkspace(nextWorkspace);
+        addLine({
+          type: 'system',
+          content: `✓ Updated circuit document via ${command} command`,
+        });
+        return;
+      }
+
       if (command === 'simulate') {
         const nextWorkspace = activateCircuitSimulation(workspace);
         setWorkspace(nextWorkspace);
@@ -907,7 +923,7 @@ export function RichTerminal() {
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
               <span>{voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' : ''}</span>
-              <span>build • simulate • explain • focus • identify • auth • ↑↓ history</span>
+              <span>build • add • connect • remove • simulate • explain • focus • identify</span>
             </div>
           </footer>
         </div>
@@ -992,6 +1008,18 @@ function AdaptiveStudio({
       <div className="grid gap-4 xl:grid-cols-2">
         <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'scene') ?? workspace.panels[0]}>
           <WorkbenchPreview nodes={workspace.nodes} connections={workspace.connections} mode={workspace.mode} />
+        </WindowCard>
+
+        <WindowCard
+          panel={{
+            id: 'topology-panel',
+            kind: 'scene',
+            title: 'Topology map',
+            description: 'A 2D graph of the active circuit document, showing explicit and inferred links.',
+            accent: 'cyan',
+          }}
+        >
+          <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
         </WindowCard>
 
         <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'teacher') ?? workspace.panels[1]}>
@@ -1123,6 +1151,67 @@ function WorkbenchPreview({ nodes, connections, mode }: { nodes: CircuitDocument
 
       <div className="mt-4 rounded-xl border border-cyan-900/25 bg-cyan-950/10 p-3 text-xs leading-relaxed text-cyan-100/80">
         {connections.length} inferred connection{connections.length === 1 ? '' : 's'} currently define the path. This is the bridge from pure concept UI to a real circuit document model.
+      </div>
+    </div>
+  );
+}
+
+function TopologyMap({
+  nodes,
+  connections,
+}: {
+  nodes: CircuitDocument['nodes'];
+  connections: CircuitDocument['connections'];
+}) {
+  const displayNodes = nodes.length
+    ? nodes
+    : [
+        { id: 'battery-1', key: 'battery', label: 'Battery', type: 'power', quantity: 1 },
+        { id: 'resistor-1', key: 'resistor', label: 'Resistor', type: 'passive', quantity: 1 },
+        { id: 'led-1', key: 'led', label: 'LED', type: 'output', quantity: 1 },
+      ];
+
+  return (
+    <div className="rounded-2xl border border-cyan-900/30 bg-[#0a1017] p-4">
+      <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
+        <span>2D topology</span>
+        <span>{displayNodes.length} node{displayNodes.length === 1 ? '' : 's'} • {connections.length} link{connections.length === 1 ? '' : 's'}</span>
+      </div>
+
+      <div className="space-y-3">
+        {displayNodes.map((node, index) => {
+          const outgoing = connections.filter((connection) => connection.from === node.id);
+          return (
+            <div key={node.id} className="rounded-xl border border-gray-800 bg-[#0d141c] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-cyan-200">{node.label}</div>
+                  <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-gray-500">{node.type}</div>
+                </div>
+                <div className="rounded-full border border-cyan-700/30 bg-cyan-950/20 px-2 py-1 text-[11px] text-cyan-200">
+                  {node.id}
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs text-gray-400">
+                {outgoing.length
+                  ? outgoing.map((connection) => {
+                      const target = displayNodes.find((candidate) => candidate.id === connection.to);
+                      return (
+                        <div key={connection.id} className="mb-1 flex items-center gap-2">
+                          <span className="text-cyan-500">→</span>
+                          <span>{target?.label ?? connection.to}</span>
+                          <span className="text-gray-600">({connection.label ?? 'link'})</span>
+                        </div>
+                      );
+                    })
+                  : index < displayNodes.length - 1
+                    ? 'No explicit outgoing link yet.'
+                    : 'Terminal node.'}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
