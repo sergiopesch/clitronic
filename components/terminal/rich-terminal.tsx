@@ -162,6 +162,16 @@ export function RichTerminal() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthPanel, setShowAuthPanel] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'split' | 'terminal' | 'studio'>(() => {
+    if (typeof window === 'undefined') return 'split';
+    try {
+      const stored = window.localStorage.getItem('clitronic_layout_mode_v1');
+      if (stored === 'terminal' || stored === 'studio' || stored === 'split') return stored;
+    } catch {
+      // ignore
+    }
+    return 'split';
+  });
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
@@ -253,6 +263,14 @@ export function RichTerminal() {
     if (!showAuthPanel) return;
     void refreshProviders();
   }, [refreshProviders, showAuthPanel]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('clitronic_layout_mode_v1', layoutMode);
+    } catch {
+      // ignore
+    }
+  }, [layoutMode]);
 
   useEffect(() => {
     if (!showAuthPanel) return;
@@ -813,8 +831,24 @@ export function RichTerminal() {
 
       <VoiceIndicator state={voiceState} />
 
-      <div className="relative z-10 grid min-h-[100dvh] grid-cols-1 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="flex min-h-[100dvh] flex-col border-r border-cyan-900/20">
+      <div
+        className={
+          layoutMode === 'terminal'
+            ? 'relative z-10 grid min-h-[100dvh] grid-cols-1'
+            : layoutMode === 'studio'
+              ? 'relative z-10 grid min-h-[100dvh] grid-cols-1'
+              : 'relative z-10 grid min-h-[100dvh] grid-cols-1 2xl:grid-cols-[1.3fr_0.7fr]'
+        }
+      >
+        <div
+          className={
+            layoutMode === 'studio'
+              ? 'hidden'
+              : layoutMode === 'split'
+                ? 'flex min-h-[100dvh] flex-col border-r border-cyan-900/20'
+                : 'flex min-h-[100dvh] flex-col'
+          }
+        >
           <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -825,12 +859,48 @@ export function RichTerminal() {
                   Command-first electronics workspace with adaptive teaching windows.
                 </div>
               </div>
-              <button
-                onClick={() => setShowAuthPanel(true)}
-                className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-900/30"
-              >
-                auth
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="hidden items-center gap-1 rounded border border-gray-800 bg-[#0a0f15] p-1 text-[11px] text-gray-300 sm:flex">
+                  <button
+                    onClick={() => setLayoutMode('terminal')}
+                    className={`rounded px-2 py-1 transition-colors ${
+                      layoutMode === 'terminal'
+                        ? 'bg-cyan-500 text-[#032a31]'
+                        : 'hover:bg-gray-800/70'
+                    }`}
+                    title="Terminal only"
+                  >
+                    Terminal
+                  </button>
+                  <button
+                    onClick={() => setLayoutMode('split')}
+                    className={`rounded px-2 py-1 transition-colors ${
+                      layoutMode === 'split' ? 'bg-cyan-500 text-[#032a31]' : 'hover:bg-gray-800/70'
+                    }`}
+                    title="Split view"
+                  >
+                    Split
+                  </button>
+                  <button
+                    onClick={() => setLayoutMode('studio')}
+                    className={`rounded px-2 py-1 transition-colors ${
+                      layoutMode === 'studio'
+                        ? 'bg-cyan-500 text-[#032a31]'
+                        : 'hover:bg-gray-800/70'
+                    }`}
+                    title="Studio only"
+                  >
+                    Studio
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowAuthPanel(true)}
+                  className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-900/30"
+                >
+                  auth
+                </button>
+              </div>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
@@ -941,16 +1011,41 @@ export function RichTerminal() {
               </span>
               <span>build • add • connect • remove • set • simulate • explain • focus</span>
             </div>
+
+            <div className="mt-2 flex gap-2 sm:hidden">
+              <button
+                onClick={() => setLayoutMode('terminal')}
+                className={`flex-1 rounded border px-3 py-2 text-xs transition-colors ${
+                  layoutMode === 'terminal'
+                    ? 'border-cyan-500/50 bg-cyan-950/30 text-cyan-200'
+                    : 'border-gray-800 bg-[#0a0f15] text-gray-400'
+                }`}
+              >
+                Terminal
+              </button>
+              <button
+                onClick={() => setLayoutMode('studio')}
+                className={`flex-1 rounded border px-3 py-2 text-xs transition-colors ${
+                  layoutMode === 'studio'
+                    ? 'border-cyan-500/50 bg-cyan-950/30 text-cyan-200'
+                    : 'border-gray-800 bg-[#0a0f15] text-gray-400'
+                }`}
+              >
+                Studio
+              </button>
+            </div>
           </footer>
         </div>
 
-        <AdaptiveStudio
-          workspace={workspace}
-          onQuickCommand={(command) => {
-            setInput(command);
-            inputRef.current?.focus();
-          }}
-        />
+        <div className={layoutMode === 'terminal' ? 'hidden' : ''}>
+          <AdaptiveStudio
+            workspace={workspace}
+            onQuickCommand={(command) => {
+              setInput(command);
+              inputRef.current?.focus();
+            }}
+          />
+        </div>
       </div>
 
       {showAuthPanel && (
