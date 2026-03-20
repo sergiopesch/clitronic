@@ -1,6 +1,14 @@
 import { createCircuitDocument } from './document';
 import type { CircuitDocument, CircuitNode, CircuitNodeParameter } from './types';
 
+function titleCase(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export interface ParsedCircuitCommand {
   kind:
     | 'build'
@@ -87,6 +95,7 @@ function refreshDocument(document: CircuitDocument): CircuitDocument {
     ...rebuilt,
     nodes: document.nodes,
     connections: document.connections,
+    simulation: document.simulation,
     summary:
       rebuilt.summary +
       ' This version includes explicit command edits layered onto the circuit document.',
@@ -106,10 +115,10 @@ function upsertParameter(node: CircuitNode, parameter: CircuitNodeParameter) {
   node.parameters = nextParameters;
 }
 
-export function applyStructuredCommand(
+export async function applyStructuredCommand(
   document: CircuitDocument,
   parsed: ParsedCircuitCommand
-): CircuitDocument {
+): Promise<CircuitDocument> {
   if (parsed.kind === 'build') {
     return createCircuitDocument(parsed.args || 'new circuit idea', 'preview');
   }
@@ -199,6 +208,50 @@ export function applyStructuredCommand(
     });
 
     return refreshDocument(draft);
+  }
+
+  if (parsed.kind === 'simulate') {
+    const nextDocument: CircuitDocument = {
+      ...document,
+      mode: 'simulating',
+      simulation: undefined,
+      metrics: document.metrics,
+      events: document.events,
+      panels: document.panels,
+      insights: document.insights,
+      nextActions: document.nextActions,
+    };
+
+    const { simulateLedSeries } = await import('@/lib/sim/led-series');
+    const simulation = simulateLedSeries(nextDocument);
+    const warningEvents = simulation.warnings.map((warning, index) => ({
+      id: `simulation-warning-${index + 1}`,
+      kind: 'warning' as const,
+      title: index === 0 ? 'Simulation warnings' : 'Simulation warning',
+      detail: warning,
+    }));
+
+    const resultEvent = simulation.ok
+      ? {
+          id: 'simulation-ok',
+          kind: 'simulation' as const,
+          title: 'Simulation completed',
+          detail:
+            `LED series solver ran. ${simulation.brightnessBand ? `Brightness: ${simulation.brightnessBand}.` : ''}`.trim(),
+        }
+      : {
+          id: 'simulation-failed',
+          kind: 'warning' as const,
+          title: 'Simulation could not run',
+          detail: simulation.reason ?? 'Missing required circuit information.',
+        };
+
+    return refreshDocument({
+      ...nextDocument,
+      simulation,
+      events: [resultEvent, ...warningEvents, ...document.events].slice(0, 8),
+      title: titleCase(document.prompt),
+    });
   }
 
   return document;

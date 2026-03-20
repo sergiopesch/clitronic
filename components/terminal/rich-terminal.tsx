@@ -519,7 +519,7 @@ export function RichTerminal() {
 
       if (command === 'add' || command === 'connect' || command === 'remove' || command === 'set') {
         const parsed = parseCircuitCommand(trimmedCmd);
-        const nextWorkspace = applyStructuredCommand(workspace, parsed);
+        const nextWorkspace = await applyStructuredCommand(workspace, parsed);
         setWorkspace(nextWorkspace);
         addLine({
           type: 'system',

@@ -6,6 +6,11 @@ import type {
   CircuitNode,
 } from './types';
 
+function formatOhms(value: number): string {
+  if (value >= 1000 && value % 1000 === 0) return `${value / 1000}kΩ`;
+  return `${Math.round(value)}Ω`;
+}
+
 function getNode(nodes: CircuitNode[], key: string): CircuitNode | undefined {
   return nodes.find((node) => node.key === key);
 }
@@ -62,33 +67,25 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
   const resistance = parseResistance(getParameter(resistor, 'resistance'));
   const ledForward = parseVoltage(getParameter(led, 'forward-voltage'));
 
-  if (battery && resistor && led && supplyVoltage && resistance && ledForward) {
-    const currentMa = ((supplyVoltage - ledForward) / resistance) * 1000;
-    const resistorDrop = supplyVoltage - ledForward;
-    const resistorPowerMw = (currentMa / 1000) ** 2 * resistance * 1000;
-    const recommendedResistance = Math.round((supplyVoltage - ledForward) / 0.012 / 10) * 10;
-    const brightnessBand =
-      currentMa < 5
-        ? 'Very dim'
-        : currentMa < 12
-          ? 'Comfortable'
-          : currentMa < 20
-            ? 'Bright'
-            : 'Aggressive';
+  if (document.simulation?.kind === 'led-series' && document.simulation.values) {
+    const { currentMa, resistorPowerMw, resistorOhms, supplyVoltageV, ledForwardVoltageV } =
+      document.simulation.values;
+    const recommendedResistance =
+      Math.round((supplyVoltageV - ledForwardVoltageV) / 0.012 / 10) * 10;
+    const band = document.simulation.brightnessBand ?? 'Comfortable';
 
-    derivedMetrics.push({ label: 'Estimated LED current', value: `${currentMa.toFixed(1)}mA` });
+    derivedMetrics.push({ label: 'LED current', value: `${currentMa.toFixed(1)}mA` });
     derivedMetrics.push({
       label: 'Resistor dissipation',
       value: `${resistorPowerMw.toFixed(1)}mW`,
     });
-    derivedMetrics.push({ label: 'Brightness band', value: brightnessBand });
-    derivedMetrics.push({ label: 'Suggested resistor', value: `${recommendedResistance}Ω` });
+    derivedMetrics.push({ label: 'Brightness band', value: band });
 
     derivedEvents.push({
-      id: 'derived-led-analysis',
-      kind: 'info',
-      title: 'LED path analysed',
-      detail: `Estimated current is ${currentMa.toFixed(1)}mA with about ${resistorDrop.toFixed(1)}V dropped across the resistor.`,
+      id: 'derived-led-sim',
+      kind: document.mode === 'simulating' ? 'simulation' : 'info',
+      title: 'LED series simulation',
+      detail: `Battery ${supplyVoltageV}V → Resistor ${formatOhms(resistorOhms)} → LED Vf ${ledForwardVoltageV}V. Estimated current ${currentMa.toFixed(1)}mA (${band}).`,
     });
 
     if (currentMa < 5) {
@@ -99,7 +96,9 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
         detail:
           'The current estimate is quite low. Clitronic should explain that brightness is current-driven and invite a lower resistor value experiment.',
       });
-      suggestedFixes.push(`set resistor resistance = ${Math.max(100, recommendedResistance)}Ω`);
+      suggestedFixes.push(
+        `set resistor resistance = ${formatOhms(Math.max(100, recommendedResistance))}`
+      );
     }
 
     if (currentMa > 20) {
@@ -110,12 +109,32 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
         detail:
           'The estimated current exceeds a safe everyday target. The teacher should propose a safer resistor value before encouraging simulation confidence.',
       });
-      suggestedFixes.push(`set resistor resistance = ${Math.max(recommendedResistance, 330)}Ω`);
+      suggestedFixes.push(
+        `set resistor resistance = ${formatOhms(Math.max(recommendedResistance, 330))}`
+      );
     }
 
     derivedInsights.push(
-      'Once parameters exist, the teacher can stop speaking in generalities and instead comment on this exact circuit state.'
+      'Once simulation outputs exist, the teacher can stop speaking in generalities and instead comment on this exact circuit state.'
     );
+  } else if (battery && resistor && led && supplyVoltage && resistance && ledForward) {
+    // Fallback (pre-simulation): keep the lightweight heuristic analysis.
+    const currentMa = ((supplyVoltage - ledForward) / resistance) * 1000;
+    const resistorDrop = supplyVoltage - ledForward;
+    const resistorPowerMw = (currentMa / 1000) ** 2 * resistance * 1000;
+
+    derivedMetrics.push({ label: 'Estimated LED current', value: `${currentMa.toFixed(1)}mA` });
+    derivedMetrics.push({
+      label: 'Resistor dissipation',
+      value: `${resistorPowerMw.toFixed(1)}mW`,
+    });
+
+    derivedEvents.push({
+      id: 'derived-led-analysis',
+      kind: 'info',
+      title: 'LED path analysed',
+      detail: `Estimated current is ${currentMa.toFixed(1)}mA with about ${resistorDrop.toFixed(1)}V dropped across the resistor.`,
+    });
   }
 
   if (battery && led && resistor) {

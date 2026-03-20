@@ -63,9 +63,28 @@ export interface CircuitDocument {
   summary: string;
   nodes: CircuitNode[];
   connections: CircuitConnection[];
+  simulation?: CircuitSimulation;
   metrics: CircuitMetric[];
   events: CircuitEvent[];
   panels: CircuitPanel[];
   insights: string[];
   nextActions: string[];
 }
+
+export interface LedSeriesSimulation {
+  kind: 'led-series';
+  ok: boolean;
+  reason?: string;
+  values?: {
+    supplyVoltageV: number;
+    resistorOhms: number;
+    ledForwardVoltageV: number;
+    currentMa: number;
+    resistorVoltageV: number;
+    resistorPowerMw: number;
+  };
+  brightnessBand?: 'Very dim' | 'Comfortable' | 'Bright' | 'Aggressive';
+  warnings: string[];
+}
+
+export type CircuitSimulation = LedSeriesSimulation;
