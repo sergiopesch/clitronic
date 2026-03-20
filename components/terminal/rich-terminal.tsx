@@ -1195,7 +1195,7 @@ function AdaptiveStudio({
             }
           }
         >
-          <GraphPreview mode={workspace.mode} />
+          <GraphPreview workspace={workspace} />
         </WindowCard>
       </div>
 
@@ -1364,15 +1364,39 @@ function TopologyMap({
   );
 }
 
-function GraphPreview({ mode }: { mode: CircuitMode }) {
-  const bars = mode === 'simulating' ? [32, 55, 68, 44, 79, 58, 72] : [20, 28, 36, 30, 42, 34, 40];
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function GraphPreview({ workspace }: { workspace: CircuitDocument }) {
+  const mode = workspace.mode;
+  const sim = workspace.simulation?.kind === 'led-series' ? workspace.simulation : undefined;
+
+  const hasValues = Boolean(sim?.ok && sim.values);
+  const currentMa = hasValues ? sim!.values!.currentMa : null;
+  const resistorPowerMw = hasValues ? sim!.values!.resistorPowerMw : null;
+
+  const displayCurrent = currentMa ?? 0;
+  const displayPower = resistorPowerMw ?? 0;
+
+  // Simple normalisation bands for MVP visuals.
+  const currentPct = clamp((displayCurrent / 25) * 100, 0, 100);
+  const powerPct = clamp((displayPower / 500) * 100, 0, 100);
+  const bars =
+    mode === 'simulating'
+      ? [currentPct, powerPct, clamp((currentPct + powerPct) / 2, 0, 100), 40, 65, 55, 70]
+      : [20, 28, 36, 30, 42, 34, 40];
 
   return (
     <div className="rounded-2xl border border-violet-900/30 bg-[linear-gradient(180deg,#100d18,#0b0b14)] p-4">
       <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
         <span>{mode === 'simulating' ? 'Live behaviour' : 'Potential signal view'}</span>
         <span>
-          {mode === 'simulating' ? 'watching change over time' : 'waiting for simulation'}
+          {hasValues
+            ? `I = ${displayCurrent.toFixed(1)}mA • P = ${displayPower.toFixed(1)}mW`
+            : mode === 'simulating'
+              ? 'waiting for a valid circuit'
+              : 'waiting for simulation'}
         </span>
       </div>
 
@@ -1388,8 +1412,9 @@ function GraphPreview({ mode }: { mode: CircuitMode }) {
       </div>
 
       <div className="mt-4 text-xs leading-relaxed text-violet-100/80">
-        Dynamic graphs should open only when they help explain behaviour — RC charge, PWM duty
-        cycle, signal timing, or instability.
+        {hasValues
+          ? `This is a DC snapshot (series LED). Current and power are driven by your parameters; change voltage/resistance and re-run simulate.`
+          : 'Graphs will wake up when simulation produces real values. Add the missing parts, connect the loop, and run simulate.'}
       </div>
     </div>
   );
