@@ -1,10 +1,10 @@
 # Clitronic
 
-**Command-first electronics studio with adaptive teaching windows**
+**Workbench-first electronics studio with adaptive teaching windows**
 
-Clitronic is evolving from an AI terminal companion into a **command-first web studio** for electronics learning and experimentation.
+Clitronic is evolving from an AI terminal companion into a **workbench-first web studio** for electronics learning and experimentation.
 
-The terminal is still the spine, but the interface now sketches a bigger idea:
+The command bar is still the spine, but the interface now sketches a bigger idea:
 
 - commands create intent
 - the workspace reacts visually
@@ -26,16 +26,14 @@ Instead of choosing between CLI or GUI, Clitronic combines both:
 - **teaching windows** for explanation, warnings, and next steps
 - **simulation surfaces** for behaviour, graphs, and debugging
 
-## What the current prototype now demonstrates
+## What the current prototype demonstrates
 
 The web app now includes:
 
-- a command-first terminal input
-- an adaptive workspace pane
-- a workbench window
-- a teacher window
-- an inspector window
-- a graph/signal window
+- a **workbench-first** layout
+- a command bar (terminal-style input)
+- an optional **Console** view (for history/debug)
+- a collapsible **Windows** section (Teacher / Inspector / Graph / Topology)
 - suggested next commands
 - dynamic state changes for commands like:
   - `build ...`
@@ -54,9 +52,9 @@ focus graph
 
 The goal of this prototype is to prove the **interaction model**, not final simulation fidelity.
 
-## Existing capabilities retained
+## Existing capabilities
 
-### Terminal Commands
+### Commands
 
 - `help` — Show available commands
 - `auth` — Connect Claude Code or OpenAI Codex
@@ -68,6 +66,19 @@ The goal of this prototype is to prove the **interaction model**, not final simu
 - `info <component>` — Component details
 - `identify` — Upload image to identify a component
 - `clear` — Reset the terminal and workspace
+
+## Demo mode (no user credentials)
+
+For a public demo, it should be possible to try Clitronic **without entering any credentials**.
+
+Recommended product posture:
+
+1. **Demo mode** (default): the server routes requests to a hosted **open-source model** so first-time users can interact instantly.
+2. **Bring-your-own-provider**: users can then connect Claude/OpenAI/etc for higher capability.
+
+Status: **planned** (not fully wired yet).
+
+Implementation note (recommended): keep the server-side chat layer compatible with an **OpenAI-compatible base URL** (Ollama/vLLM/etc), so the demo model is a configuration choice, not a forked codepath.
 
 ### Voice Mode
 
@@ -157,7 +168,8 @@ clitronic/
 ├── cli/                    # Standalone CLI package
 ├── components/
 │   ├── api-key/           # Provider selection UI
-│   ├── terminal/          # Terminal + adaptive studio prototype
+│   ├── studio/            # Workbench visuals (previews)
+│   ├── terminal/          # Command bar + console
 │   └── voice/             # Voice mode indicator
 ├── hooks/                  # Recording and long-press hooks
 └── lib/
@@ -187,15 +199,26 @@ The next meaningful steps are:
 
 ## Development
 
-```bash
+````bash
 npm run dev
 npm run build
 npm run lint
 npm run type-check
 npm run format
 npm run validate
+
+### CI note
+
+CI runs `npm run validate` (type-check + lint + prettier check). If CI fails, run:
+
+```bash
+npm run format
+npm run validate
+````
+
 ```
 
 ## License
 
 MIT
+```
