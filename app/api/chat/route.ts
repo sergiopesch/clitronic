@@ -5,10 +5,11 @@ import {
   type LocalChatMessage,
 } from '@/lib/local-llm/runtime';
 import { runLocalTools } from '@/lib/local-llm/tooling';
+import { createVercelFallbackReply } from '@/lib/local-llm/vercel-fallback';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 900;
+export const maxDuration = 300;
 
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
@@ -50,10 +51,17 @@ export async function POST(req: Request) {
 
   try {
     const toolPass = runLocalTools(messages[messages.length - 1]?.content ?? '');
-    const message = await generateLocalChatReply(messages, {
-      promptContext: toolPass.promptContext,
-    });
     const status = await getLocalModelStatus();
+
+    const message =
+      status.runtimeMode === 'vercel-fallback'
+        ? createVercelFallbackReply(
+            messages[messages.length - 1]?.content ?? '',
+            toolPass.invocations
+          )
+        : await generateLocalChatReply(messages, {
+            promptContext: toolPass.promptContext,
+          });
 
     return NextResponse.json({
       message,

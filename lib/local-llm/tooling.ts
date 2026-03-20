@@ -6,7 +6,8 @@ export type LocalToolName =
   | 'lookup_component'
   | 'search_components'
   | 'calculate_resistor'
-  | 'ohms_law';
+  | 'ohms_law'
+  | 'generate_circuit_plan';
 
 export interface LocalToolInvocation {
   toolName: LocalToolName;
@@ -360,8 +361,157 @@ function maybeSearchComponents(message: string): LocalToolInvocation | null {
   };
 }
 
+function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
+  const lowered = message.toLowerCase();
+  const wantsPlan =
+    lowered.includes('build') ||
+    lowered.includes('parts list') ||
+    lowered.includes('wiring plan') ||
+    lowered.includes('wire') ||
+    lowered.includes('breadboard') ||
+    lowered.includes('connect');
+
+  if (!wantsPlan || !lowered.includes('led')) {
+    return null;
+  }
+
+  const platform =
+    lowered.includes('raspberry pi') || lowered.includes('raspberrypi')
+      ? 'raspberry-pi'
+      : lowered.includes('arduino')
+        ? 'arduino'
+        : 'breadboard';
+
+  if (platform === 'arduino') {
+    return {
+      toolName: 'generate_circuit_plan',
+      summary: 'Generated a beginner-friendly Arduino LED circuit plan.',
+      input: {
+        platform,
+        project: 'arduino-led',
+      },
+      result: {
+        title: 'Arduino LED starter circuit',
+        platform: 'Arduino Uno / Nano style 5V board',
+        parts: [
+          '1 × Arduino board',
+          '1 × red LED',
+          '1 × 330 Ω resistor',
+          '2-3 × jumper wires',
+          '1 × breadboard',
+          '1 × USB cable for power/programming',
+        ],
+        wiring_steps: [
+          'Place the LED on the breadboard.',
+          'Connect the LED cathode (short leg) to GND.',
+          'Connect the LED anode (long leg) to one side of a 330 Ω resistor.',
+          'Connect the other side of the resistor to Arduino digital pin 9.',
+          'Connect Arduino GND to the breadboard ground rail if you are using one.',
+        ],
+        code: [
+          'const int ledPin = 9;',
+          '',
+          'void setup() {',
+          '  pinMode(ledPin, OUTPUT);',
+          '}',
+          '',
+          'void loop() {',
+          '  digitalWrite(ledPin, HIGH);',
+          '  delay(500);',
+          '  digitalWrite(ledPin, LOW);',
+          '  delay(500);',
+          '}',
+        ].join('\n'),
+        safety_notes: [
+          'Use the resistor in series with the LED; do not drive the LED directly from the pin.',
+          'A 330 Ω resistor keeps the current in a comfortable beginner-safe range on a 5V Arduino.',
+        ],
+      },
+    };
+  }
+
+  if (platform === 'raspberry-pi') {
+    return {
+      toolName: 'generate_circuit_plan',
+      summary: 'Generated a beginner-friendly Raspberry Pi LED circuit plan.',
+      input: {
+        platform,
+        project: 'raspberry-pi-led',
+      },
+      result: {
+        title: 'Raspberry Pi GPIO LED starter circuit',
+        platform: 'Raspberry Pi GPIO (3.3V logic)',
+        parts: [
+          '1 × Raspberry Pi',
+          '1 × red LED',
+          '1 × 330 Ω resistor',
+          '2-3 × jumper wires',
+          '1 × breadboard',
+        ],
+        wiring_steps: [
+          'Place the LED on the breadboard.',
+          'Connect the LED cathode (short leg) to a Pi GND pin.',
+          'Connect the LED anode (long leg) to one side of a 330 Ω resistor.',
+          'Connect the other side of the resistor to GPIO17 (physical pin 11).',
+          'Double-check pin numbering before powering up.',
+        ],
+        code: [
+          'from gpiozero import LED',
+          'from time import sleep',
+          '',
+          'led = LED(17)',
+          '',
+          'while True:',
+          '    led.on()',
+          '    sleep(0.5)',
+          '    led.off()',
+          '    sleep(0.5)',
+        ].join('\n'),
+        safety_notes: [
+          'Raspberry Pi GPIO is 3.3V only — never feed 5V directly into a GPIO pin.',
+          'Keep the LED current modest; 330 Ω is a good beginner value here.',
+        ],
+      },
+    };
+  }
+
+  return {
+    toolName: 'generate_circuit_plan',
+    summary: 'Generated a simple breadboard LED circuit plan.',
+    input: {
+      platform,
+      project: 'breadboard-led',
+    },
+    result: {
+      title: 'Simple breadboard LED circuit',
+      platform: '5V breadboard supply',
+      parts: [
+        '1 × red LED',
+        '1 × 220 Ω resistor',
+        '2 × jumper wires',
+        '1 × breadboard',
+        '1 × 5V supply',
+      ],
+      wiring_steps: [
+        'Connect the positive side of the 5V supply to one side of the 220 Ω resistor.',
+        'Connect the other side of the resistor to the LED anode (long leg).',
+        'Connect the LED cathode (short leg) back to ground.',
+      ],
+      safety_notes: [
+        'Always keep the resistor in series with the LED.',
+        'Check LED polarity before powering the circuit.',
+      ],
+    },
+  };
+}
+
 export function runLocalTools(message: string): LocalToolPass {
   const invocations: LocalToolInvocation[] = [];
+
+  const circuitPlanTool = maybeGenerateCircuitPlan(message);
+  if (circuitPlanTool) {
+    invocations.push(circuitPlanTool);
+  }
 
   const resistorTool = maybeCalculateLedResistor(message);
   if (resistorTool) {

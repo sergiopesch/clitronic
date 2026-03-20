@@ -17,6 +17,22 @@ This refactor deliberately removes provider auth and the workbench-first default
 - includes a **first local tool layer** for resistor calculation and component lookup
 - keeps the MVP **text-only and honest**
 
+## Vercel Hobby deployment reality
+
+Clitronic now takes the Vercel free tier into account explicitly.
+
+Confirmed from current Vercel docs:
+
+- **Node function max duration on Hobby:** configurable up to **300 seconds**
+- **Node function memory on Hobby:** up to **2 GB**
+
+That is enough for lightweight server logic, but it is **not a good home for an in-process GGUF model runtime**. So the app now behaves differently by environment:
+
+- **Local / self-hosted runtime** → full `node-llama-cpp` local model path
+- **Vercel Hobby deployment** → safe hosted fallback mode using built-in electronics tools and deterministic responses
+
+This keeps auto-deploys to Vercel working while preserving the stronger full-local experience for real local runs.
+
 ## What this version does not do yet
 
 Right now the default route does **not** attempt to provide:

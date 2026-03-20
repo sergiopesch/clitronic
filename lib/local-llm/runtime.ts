@@ -1,11 +1,5 @@
-import {
-  getLlama,
-  LlamaChatSession,
-  resolveModelFile,
-  type ChatHistoryItem,
-  type LlamaModel,
-} from 'node-llama-cpp';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
+import type { ChatHistoryItem, LlamaModel } from 'node-llama-cpp';
 
 export type LocalChatRole = 'user' | 'assistant';
 
@@ -21,6 +15,7 @@ export interface LocalReplyOptions {
 export interface LocalModelStatus {
   status: 'idle' | 'ready' | 'resolving-model' | 'loading-model' | 'error';
   ready: boolean;
+  runtimeMode: 'local-model' | 'vercel-fallback';
   modelRef: string;
   usingDefaultModel: boolean;
   localModelPresent: boolean;
@@ -45,6 +40,14 @@ const runtimeState: RuntimeState = {
 
 let modelPromise: Promise<LlamaModel> | null = null;
 let loadedModel: LlamaModel | null = null;
+
+function isVercelHosted() {
+  return process.env.VERCEL === '1';
+}
+
+async function loadNodeLlamaCpp() {
+  return import('node-llama-cpp');
+}
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -78,6 +81,7 @@ function formatError(error: unknown): string {
 
 async function resolveConfiguredModel(download: false | 'auto') {
   const { modelRef, modelsDirectory } = getModelConfig();
+  const { resolveModelFile } = await loadNodeLlamaCpp();
 
   return resolveModelFile(modelRef, {
     directory: modelsDirectory,
@@ -99,6 +103,7 @@ async function ensureModelLoaded(): Promise<LlamaModel> {
       runtimeState.modelPath = modelPath;
       runtimeState.status = 'loading-model';
 
+      const { getLlama } = await loadNodeLlamaCpp();
       const llama = await getLlama();
       const model = await llama.loadModel({ modelPath });
 
@@ -135,6 +140,18 @@ function createHistory(messages: LocalChatMessage[]): ChatHistoryItem[] {
 }
 
 export async function getLocalModelStatus(): Promise<LocalModelStatus> {
+  if (isVercelHosted()) {
+    return {
+      status: 'ready',
+      ready: true,
+      runtimeMode: 'vercel-fallback',
+      modelRef: 'vercel-hobby-fallback',
+      usingDefaultModel: true,
+      localModelPresent: false,
+      note: 'Vercel Hobby fallback mode: built-in electronics tools stay available, but the full local GGUF runtime is reserved for local or self-hosted use.',
+    };
+  }
+
   const { modelRef, usingDefaultModel } = getModelConfig();
 
   let localModelPresent = false;
@@ -178,6 +195,7 @@ export async function getLocalModelStatus(): Promise<LocalModelStatus> {
   return {
     status: runtimeState.status,
     ready: runtimeState.status === 'ready',
+    runtimeMode: 'local-model',
     modelRef,
     usingDefaultModel,
     localModelPresent,
@@ -191,6 +209,12 @@ export async function generateLocalChatReply(
   messages: LocalChatMessage[],
   options?: LocalReplyOptions
 ): Promise<string> {
+  if (isVercelHosted()) {
+    throw new Error(
+      'The full local GGUF runtime is disabled on Vercel Hobby. Use the fallback responder instead.'
+    );
+  }
+
   if (messages.length === 0) {
     throw new Error('No messages provided.');
   }
@@ -214,6 +238,7 @@ export async function generateLocalChatReply(
   });
 
   try {
+    const { LlamaChatSession } = await loadNodeLlamaCpp();
     const session = new LlamaChatSession({
       contextSequence: context.getSequence(),
       systemPrompt: SYSTEM_PROMPT,

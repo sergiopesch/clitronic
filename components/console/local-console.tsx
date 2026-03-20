@@ -21,6 +21,7 @@ type ToolInvocation = {
 type ModelStatus = {
   status: 'idle' | 'ready' | 'resolving-model' | 'loading-model' | 'error';
   ready: boolean;
+  runtimeMode: 'local-model' | 'vercel-fallback';
   modelRef: string;
   usingDefaultModel: boolean;
   localModelPresent: boolean;
@@ -105,6 +106,10 @@ export function LocalConsole() {
   }, [messages, isLoading]);
 
   const subtitle = useMemo(() => {
+    if (status?.runtimeMode === 'vercel-fallback') {
+      return 'Vercel-safe fallback mode. Built-in electronics help stays available.';
+    }
+
     if (status?.ready) return 'Local model ready. Text-only MVP.';
     if (status?.status === 'loading-model' || status?.status === 'resolving-model') {
       return 'Preparing the on-box model. First run can take a moment.';
@@ -201,6 +206,9 @@ export function LocalConsole() {
               <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
                 no remote vendor calls
               </span>
+              <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
+                vercel hobby safe
+              </span>
             </div>
           </section>
 
@@ -222,6 +230,10 @@ export function LocalConsole() {
                 <dd className="mt-1 font-mono text-xs break-all text-zinc-300">
                   {status?.modelRef ?? 'Loading…'}
                 </dd>
+              </div>
+              <div>
+                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">Runtime mode</dt>
+                <dd className="mt-1">{status?.runtimeMode ?? 'loading'}</dd>
               </div>
               <div>
                 <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">
