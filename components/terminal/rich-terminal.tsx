@@ -1029,6 +1029,62 @@ function AdaptiveStudio({
     return initial;
   });
 
+  useEffect(() => {
+    const key = 'clitronic_panel_state_v1';
+    try {
+      const stored = window.localStorage.getItem(key);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as Record<
+        string,
+        { isOpen: boolean; isPinned: boolean; order: number }
+      >;
+      if (!parsed || typeof parsed !== 'object') return;
+
+      const event = new window.CustomEvent('clitronic:panel-state-load', {
+        detail: parsed,
+      });
+      window.dispatchEvent(event);
+    } catch {
+      // ignore
+    }
+    // Load once.
+  }, []);
+
+  useEffect(() => {
+    const onLoad = (event: Event) => {
+      const custom = event as CustomEvent<
+        Record<string, { isOpen: boolean; isPinned: boolean; order: number }>
+      >;
+      const parsed = custom.detail;
+      if (!parsed || typeof parsed !== 'object') return;
+      setPanelState((prev) => {
+        const next: typeof prev = { ...prev };
+        for (const [id, state] of Object.entries(parsed)) {
+          if (!next[id]) continue;
+          next[id] = {
+            ...next[id],
+            isOpen: Boolean(state.isOpen),
+            isPinned: Boolean(state.isPinned),
+            order: Number.isFinite(state.order) ? state.order : next[id].order,
+          };
+        }
+        return next;
+      });
+    };
+
+    window.addEventListener('clitronic:panel-state-load', onLoad);
+    return () => window.removeEventListener('clitronic:panel-state-load', onLoad);
+  }, []);
+
+  useEffect(() => {
+    const key = 'clitronic_panel_state_v1';
+    try {
+      window.localStorage.setItem(key, JSON.stringify(panelState));
+    } catch {
+      // ignore
+    }
+  }, [panelState]);
+
   const sortedPanels = useMemo(() => {
     return panels
       .map((panel) => {
@@ -1484,9 +1540,13 @@ function PanelChrome({
 
   const dragId = panel.id;
 
+  const [dragOver, setDragOver] = useState(false);
+
   return (
     <div
-      className="-mt-1 mb-3 flex items-center justify-end gap-1 text-[11px] text-gray-500"
+      className={`-mt-1 mb-3 flex items-center justify-end gap-1 rounded-md border px-1 py-1 text-[11px] text-gray-500 transition-colors ${
+        dragOver ? 'border-cyan-600/60 bg-cyan-950/25' : 'border-transparent'
+      }`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', dragId);
@@ -1495,9 +1555,14 @@ function PanelChrome({
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+        if (!dragOver) setDragOver(true);
+      }}
+      onDragLeave={() => {
+        if (dragOver) setDragOver(false);
       }}
       onDrop={(e) => {
         e.preventDefault();
+        setDragOver(false);
         const sourceId = e.dataTransfer.getData('text/plain');
         if (!sourceId || sourceId === dragId) return;
         onDropPanel(sourceId);
