@@ -10,7 +10,6 @@ import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 import { AnimatedWelcome } from './animated-welcome';
 import {
-  activateCircuitSimulation,
   analyzeCircuit,
   applyStructuredCommand,
   createCircuitDocument,
@@ -59,6 +58,8 @@ const HELP_TEXT = `
   │  auth                         Connect Claude Code or OpenAI Codex        │
   │  clear                        Clear terminal history                     │
   │  identify                     Upload an image to identify a component    │
+  │  reset                        Reset the circuit workspace                 │
+  │  whatswrong                   Diagnose missing links/params               │
   │  build <idea>                 Sketch a circuit and open teaching views   │
   │  add <component>              Add a component to the active circuit      │
   │  connect <a> to <b>           Create a connection in the active circuit   │
@@ -489,6 +490,17 @@ export function RichTerminal() {
         return;
       }
 
+      if (command === 'reset') {
+        setLines([{ type: 'welcome', content: '' }]);
+        const nextWorkspace = createCircuitDocument(
+          'simple led circuit with a resistor and battery',
+          'draft'
+        );
+        setWorkspace(nextWorkspace);
+        addLine({ type: 'system', content: '✓ Workspace reset' });
+        return;
+      }
+
       if (command === 'auth' || command === 'key') {
         setShowAuthPanel(true);
         return;
@@ -517,23 +529,21 @@ export function RichTerminal() {
         return;
       }
 
-      if (command === 'add' || command === 'connect' || command === 'remove' || command === 'set') {
+      if (
+        command === 'add' ||
+        command === 'connect' ||
+        command === 'remove' ||
+        command === 'set' ||
+        command === 'simulate' ||
+        command === 'whatswrong' ||
+        command === 'diagnose'
+      ) {
         const parsed = parseCircuitCommand(trimmedCmd);
         const nextWorkspace = await applyStructuredCommand(workspace, parsed);
         setWorkspace(nextWorkspace);
         addLine({
           type: 'system',
           content: `✓ Updated circuit document via ${command} command`,
-        });
-        return;
-      }
-
-      if (command === 'simulate') {
-        const nextWorkspace = activateCircuitSimulation(workspace);
-        setWorkspace(nextWorkspace);
-        addLine({
-          type: 'system',
-          content: '✓ Simulation mode active — graph and next-step windows opened',
         });
         return;
       }
@@ -991,8 +1001,101 @@ function AdaptiveStudio({
 }) {
   const analysis = analyzeCircuit(workspace);
 
+  const panels = useMemo(() => {
+    return [...workspace.panels]
+      .map((panel, index) => ({
+        ...panel,
+        state: {
+          ...panel.state,
+          order: panel.state?.order ?? index + 1,
+          isOpen: panel.state?.isOpen ?? true,
+          isPinned: panel.state?.isPinned ?? false,
+        },
+      }))
+      .sort((a, b) => (a.state?.order ?? 0) - (b.state?.order ?? 0));
+  }, [workspace.panels]);
+
+  const [panelState, setPanelState] = useState<
+    Record<string, { isOpen: boolean; isPinned: boolean; order: number }>
+  >(() => {
+    const initial: Record<string, { isOpen: boolean; isPinned: boolean; order: number }> = {};
+    for (const panel of panels) {
+      initial[panel.id] = {
+        isOpen: panel.state?.isOpen ?? true,
+        isPinned: panel.state?.isPinned ?? false,
+        order: panel.state?.order ?? 0,
+      };
+    }
+    return initial;
+  });
+
+  const sortedPanels = useMemo(() => {
+    return panels
+      .map((panel) => {
+        const state = panelState[panel.id];
+        return {
+          ...panel,
+          state: state
+            ? { ...panel.state, ...state }
+            : { ...panel.state, isOpen: panel.state?.isOpen ?? true },
+        };
+      })
+      .sort((a, b) => ((a.state?.order ?? 0) as number) - ((b.state?.order ?? 0) as number));
+  }, [panels, panelState]);
+
+  const closePanel = useCallback((panelId: string) => {
+    setPanelState((prev) => {
+      const current = prev[panelId];
+      if (!current) return prev;
+      return { ...prev, [panelId]: { ...current, isOpen: false } };
+    });
+  }, []);
+
+  const togglePin = useCallback((panelId: string) => {
+    setPanelState((prev) => {
+      const current = prev[panelId];
+      if (!current) return prev;
+      return { ...prev, [panelId]: { ...current, isPinned: !current.isPinned } };
+    });
+  }, []);
+
+  const movePanel = useCallback((panelId: string, direction: 'up' | 'down') => {
+    setPanelState((prev) => {
+      const entries = Object.entries(prev);
+      const current = prev[panelId];
+      if (!current) return prev;
+
+      const orderList = entries
+        .map(([id, state]) => ({ id, order: state.order }))
+        .sort((a, b) => a.order - b.order);
+
+      const index = orderList.findIndex((item) => item.id === panelId);
+      if (index < 0) return prev;
+      const swapWith = direction === 'up' ? index - 1 : index + 1;
+      if (swapWith < 0 || swapWith >= orderList.length) return prev;
+
+      const a = orderList[index];
+      const b = orderList[swapWith];
+      if (!a || !b) return prev;
+
+      return {
+        ...prev,
+        [a.id]: { ...prev[a.id]!, order: b.order },
+        [b.id]: { ...prev[b.id]!, order: a.order },
+      };
+    });
+  }, []);
+
   return (
     <aside className="relative flex min-h-[100dvh] flex-col overflow-y-auto bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-800 bg-[#0a0f15] px-3 py-2 text-xs text-gray-400">
+        <span className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Windows</span>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">Tip:</span>
+          <span>close (×), pin, reorder (↑ ↓)</span>
+        </div>
+      </div>
+
       <div className="mb-4 rounded-2xl border border-cyan-900/30 bg-[#0c141d] p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.04)]">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -1035,168 +1138,152 @@ function AdaptiveStudio({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <WindowCard
-          panel={workspace.panels.find((panel) => panel.kind === 'scene') ?? workspace.panels[0]}
-        >
-          <WorkbenchPreview
-            nodes={workspace.nodes}
-            connections={workspace.connections}
-            mode={workspace.mode}
-          />
-        </WindowCard>
-
-        <WindowCard
-          panel={{
-            id: 'topology-panel',
-            kind: 'scene',
-            title: 'Topology map',
-            description:
-              'A 2D graph of the active circuit document, showing explicit and inferred links.',
-            accent: 'cyan',
-          }}
-        >
-          <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
-        </WindowCard>
-
-        <WindowCard
-          panel={workspace.panels.find((panel) => panel.kind === 'teacher') ?? workspace.panels[1]}
-        >
-          <div className="space-y-3 text-sm text-gray-300">
-            {[...workspace.events, ...analysis.derivedEvents].slice(0, 8).map((event) => (
-              <div
-                key={event.id}
-                className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
-              >
-                <div className="font-semibold text-emerald-200">{event.title}</div>
-                <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
-              </div>
-            ))}
-          </div>
-        </WindowCard>
-
-        <WindowCard
-          panel={
-            workspace.panels.find((panel) => panel.kind === 'inspector') ?? workspace.panels[2]
-          }
-        >
-          <div className="space-y-3 text-sm text-gray-300">
-            <div>
-              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                Detected circuit nodes
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {workspace.nodes.map((node) => (
-                  <span
-                    key={node.id}
-                    className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200"
-                  >
-                    {node.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                Parameters
-              </div>
-              <div className="space-y-2">
-                {workspace.nodes.map((node) =>
-                  node.parameters && node.parameters.length > 0 ? (
+        {sortedPanels
+          .filter((panel) => panel.kind !== 'next-step')
+          .map((panel) => (
+            <WindowCard
+              key={panel.id}
+              panel={{
+                ...panel,
+                state: panel.state,
+              }}
+            >
+              <PanelChrome
+                panel={panel}
+                onClose={() => closePanel(panel.id)}
+                onPin={() => togglePin(panel.id)}
+                onMoveUp={() => movePanel(panel.id, 'up')}
+                onMoveDown={() => movePanel(panel.id, 'down')}
+              />
+              {panel.kind === 'scene' && panel.id === 'scene-panel' ? (
+                <WorkbenchPreview
+                  nodes={workspace.nodes}
+                  connections={workspace.connections}
+                  mode={workspace.mode}
+                />
+              ) : panel.kind === 'scene' ? (
+                <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
+              ) : panel.kind === 'teacher' ? (
+                <div className="space-y-3 text-sm text-gray-300">
+                  {[...workspace.events, ...analysis.derivedEvents].slice(0, 8).map((event) => (
                     <div
-                      key={`${node.id}-params`}
-                      className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                      key={event.id}
+                      className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
                     >
-                      <div className="text-xs font-semibold text-amber-200">{node.label}</div>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {node.parameters.map((param) => (
-                          <span
-                            key={`${node.id}-${param.key}`}
-                            className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100"
-                          >
-                            {param.label}: {param.value}
-                          </span>
-                        ))}
-                      </div>
+                      <div className="font-semibold text-emerald-200">{event.title}</div>
+                      <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
                     </div>
-                  ) : null
-                )}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                Derived analysis
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {analysis.derivedMetrics.map((metric) => (
-                  <div
-                    key={`${metric.label}-${metric.value}`}
-                    className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
-                  >
-                    <div className="text-[11px] tracking-[0.12em] text-gray-500 uppercase">
-                      {metric.label}
+                  ))}
+                </div>
+              ) : panel.kind === 'inspector' ? (
+                <div className="space-y-3 text-sm text-gray-300">
+                  <div>
+                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                      Detected circuit nodes
                     </div>
-                    <div className="mt-1 text-sm font-medium text-white">{metric.value}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {workspace.nodes.map((node) => (
+                        <span
+                          key={node.id}
+                          className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200"
+                        >
+                          {node.label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            <div>
-              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                Recommended fixes
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {analysis.suggestedFixes.length > 0 ? (
-                  analysis.suggestedFixes.map((fix) => (
-                    <button
-                      key={fix}
-                      onClick={() => onQuickCommand(fix)}
-                      className="rounded-full border border-emerald-700/30 bg-emerald-950/20 px-3 py-1.5 text-xs text-emerald-200 transition hover:border-emerald-500/50 hover:bg-emerald-900/30"
-                    >
-                      {fix}
-                    </button>
-                  ))
-                ) : (
-                  <span className="text-xs text-gray-500">
-                    No targeted fixes suggested right now.
-                  </span>
-                )}
-              </div>
-            </div>
+                  <div>
+                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                      Parameters
+                    </div>
+                    <div className="space-y-2">
+                      {workspace.nodes.map((node) =>
+                        node.parameters && node.parameters.length > 0 ? (
+                          <div
+                            key={`${node.id}-params`}
+                            className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                          >
+                            <div className="text-xs font-semibold text-amber-200">{node.label}</div>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              {node.parameters.map((param) => (
+                                <span
+                                  key={`${node.id}-${param.key}`}
+                                  className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100"
+                                >
+                                  {param.label}: {param.value}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null
+                      )}
+                    </div>
+                  </div>
 
-            <div>
-              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                Why these windows are open
-              </div>
-              <ul className="space-y-2 text-gray-300">
-                {workspace.insights.map((insight, index) => (
-                  <li
-                    key={`${index}-${insight}`}
-                    className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2 leading-relaxed"
-                  >
-                    {insight}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </WindowCard>
+                  <div>
+                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                      Derived analysis
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {analysis.derivedMetrics.map((metric) => (
+                        <div
+                          key={`${metric.label}-${metric.value}`}
+                          className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                        >
+                          <div className="text-[11px] tracking-[0.12em] text-gray-500 uppercase">
+                            {metric.label}
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-white">{metric.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-        <WindowCard
-          panel={
-            workspace.panels.find((panel) => panel.kind === 'graph') ?? {
-              id: 'graph-panel-fallback',
-              kind: 'graph',
-              title: 'Graph window',
-              description: 'This window appears when the circuit needs a time or signal view.',
-              accent: 'violet',
-            }
-          }
-        >
-          <GraphPreview workspace={workspace} />
-        </WindowCard>
+                  <div>
+                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                      Recommended fixes
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {analysis.suggestedFixes.length > 0 ? (
+                        analysis.suggestedFixes.map((fix) => (
+                          <button
+                            key={fix}
+                            onClick={() => onQuickCommand(fix)}
+                            className="rounded-full border border-emerald-700/30 bg-emerald-950/20 px-3 py-1.5 text-xs text-emerald-200 transition hover:border-emerald-500/50 hover:bg-emerald-900/30"
+                          >
+                            {fix}
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-xs text-gray-500">
+                          No targeted fixes suggested right now.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                      Why these windows are open
+                    </div>
+                    <ul className="space-y-2 text-gray-300">
+                      {workspace.insights.map((insight, index) => (
+                        <li
+                          key={`${index}-${insight}`}
+                          className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2 leading-relaxed"
+                        >
+                          {insight}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : panel.kind === 'graph' ? (
+                <GraphPreview workspace={workspace} />
+              ) : null}
+            </WindowCard>
+          ))}
       </div>
 
       <div className="mt-4 rounded-2xl border border-gray-800 bg-[#0a0f15] p-4">
@@ -1229,6 +1316,9 @@ function WindowCard({ panel, children }: { panel?: CircuitPanel; children: React
     violet: 'border-violet-900/30 bg-violet-950/10 text-violet-200',
   };
 
+  const open = panel.state?.isOpen ?? true;
+  if (!open) return null;
+
   return (
     <section className="rounded-2xl border border-gray-800 bg-[#0f1721] p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -1247,6 +1337,59 @@ function WindowCard({ panel, children }: { panel?: CircuitPanel; children: React
       </div>
       {children}
     </section>
+  );
+}
+
+function PanelChrome({
+  panel,
+  onClose,
+  onPin,
+  onMoveUp,
+  onMoveDown,
+}: {
+  panel: CircuitPanel;
+  onClose: () => void;
+  onPin: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  const pinned = panel.state?.isPinned ?? false;
+
+  return (
+    <div className="-mt-1 mb-3 flex items-center justify-end gap-1 text-[11px] text-gray-500">
+      <button
+        onClick={onMoveUp}
+        className="rounded border border-gray-800 bg-[#0a0f15] px-2 py-1 hover:border-gray-600 hover:text-gray-200"
+        title="Move up"
+      >
+        ↑
+      </button>
+      <button
+        onClick={onMoveDown}
+        className="rounded border border-gray-800 bg-[#0a0f15] px-2 py-1 hover:border-gray-600 hover:text-gray-200"
+        title="Move down"
+      >
+        ↓
+      </button>
+      <button
+        onClick={onPin}
+        className={`rounded border px-2 py-1 hover:text-gray-200 ${
+          pinned
+            ? 'border-cyan-700/50 bg-cyan-950/30 text-cyan-300'
+            : 'border-gray-800 bg-[#0a0f15] text-gray-500 hover:border-gray-600'
+        }`}
+        title={pinned ? 'Unpin' : 'Pin'}
+      >
+        pin
+      </button>
+      <button
+        onClick={onClose}
+        className="rounded border border-gray-800 bg-[#0a0f15] px-2 py-1 hover:border-gray-600 hover:text-gray-200"
+        title="Close"
+      >
+        ×
+      </button>
+    </div>
   );
 }
 

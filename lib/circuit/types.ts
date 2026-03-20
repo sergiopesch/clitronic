@@ -53,6 +53,11 @@ export interface CircuitPanel {
   title: string;
   description: string;
   accent: 'cyan' | 'emerald' | 'amber' | 'violet';
+  state?: {
+    isOpen?: boolean;
+    isPinned?: boolean;
+    order?: number;
+  };
 }
 
 export interface CircuitDocument {

@@ -227,6 +227,7 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
       title: 'Workbench',
       description: 'The main spatial canvas for the current circuit document.',
       accent: 'cyan',
+      state: { isOpen: true, isPinned: true, order: 1 },
     },
     {
       id: 'teacher-panel',
@@ -235,6 +236,7 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
       description:
         'Explains why the interface opened these windows and what the learner should notice.',
       accent: 'emerald',
+      state: { isOpen: true, isPinned: false, order: 2 },
     },
     {
       id: 'inspector-panel',
@@ -242,8 +244,19 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
       title: 'Inspector',
       description: 'Shows the active nodes, inferred path, warnings, and parameter values.',
       accent: 'amber',
+      state: { isOpen: true, isPinned: true, order: 3 },
     },
   ];
+
+  // Always include topology panel; it is a deterministic map of the current document.
+  panels.push({
+    id: 'topology-panel',
+    kind: 'scene',
+    title: 'Topology map',
+    description: 'A 2D graph of the active circuit document, showing explicit and inferred links.',
+    accent: 'cyan',
+    state: { isOpen: false, isPinned: false, order: 1.5 },
+  });
 
   if (hasNode(nodes, 'capacitor') || mode === 'simulating' || hasNode(nodes, 'led')) {
     panels.push({
@@ -252,6 +265,7 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
       title: 'Signal graph',
       description: 'Appears when behaviour over time or intensity should be visible.',
       accent: 'violet',
+      state: { isOpen: mode === 'simulating', isPinned: false, order: 4 },
     });
   }
 
@@ -262,6 +276,7 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
       title: 'Next move',
       description: 'Suggests the next experiment or command instead of dumping theory.',
       accent: 'emerald',
+      state: { isOpen: true, isPinned: false, order: 5 },
     });
   }
 

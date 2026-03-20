@@ -19,6 +19,9 @@ export interface ParsedCircuitCommand {
     | 'focus'
     | 'explain'
     | 'set'
+    | 'reset'
+    | 'whatswrong'
+    | 'diagnose'
     | 'unknown';
   raw: string;
   args: string;
@@ -31,7 +34,19 @@ export function parseCircuitCommand(input: string): ParsedCircuitCommand {
   const args = rest.join(' ').trim();
 
   if (
-    ['build', 'add', 'connect', 'remove', 'simulate', 'focus', 'explain', 'set'].includes(command)
+    [
+      'build',
+      'add',
+      'connect',
+      'remove',
+      'simulate',
+      'focus',
+      'explain',
+      'set',
+      'reset',
+      'whatswrong',
+      'diagnose',
+    ].includes(command)
   ) {
     return { kind: command as ParsedCircuitCommand['kind'], raw: trimmed, args };
   }
@@ -173,6 +188,10 @@ export async function applyStructuredCommand(
   document: CircuitDocument,
   parsed: ParsedCircuitCommand
 ): Promise<CircuitDocument> {
+  if (parsed.kind === 'reset') {
+    return createCircuitDocument('simple led circuit with a resistor and battery', 'draft');
+  }
+
   if (parsed.kind === 'build') {
     const intent = parsed.args.trim().toLowerCase();
     const built = createCircuitDocument(parsed.args || 'new circuit idea', 'preview');
@@ -188,6 +207,25 @@ export async function applyStructuredCommand(
     }
 
     return built;
+  }
+
+  if (parsed.kind === 'whatswrong' || parsed.kind === 'diagnose') {
+    // No state changes yet: this command is a deterministic status read.
+    // The UI consumes suggestedFixes via analyzeCircuit() and the simulation warnings/events.
+    const nextDocument: CircuitDocument = {
+      ...document,
+      events: [
+        {
+          id: 'diagnose',
+          kind: 'info' as const,
+          title: 'Diagnosis',
+          detail:
+            'Open the Inspector and Recommended fixes. Clitronic will list missing ground, missing links, and unsafe parameters as actionable commands.',
+        },
+        ...document.events,
+      ].slice(0, 8),
+    };
+    return nextDocument;
   }
 
   if (parsed.kind === 'add') {
