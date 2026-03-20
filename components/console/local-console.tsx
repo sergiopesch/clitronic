@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { LearningMonitor } from '@/components/console/learning-monitor';
 
 type ConsoleMessage = {
   id: string;
@@ -208,7 +209,7 @@ export function LocalConsole() {
 
   return (
     <main className="min-h-screen bg-[#05070a] text-zinc-100">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-screen max-w-[96rem] flex-col px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6 grid gap-4 lg:grid-cols-[1.5fr_0.9fr]">
           <section className="rounded-3xl border border-cyan-500/20 bg-[radial-gradient(circle_at_top,#0f1722,transparent_45%),linear-gradient(180deg,#081018,#06090d)] p-6 shadow-2xl shadow-cyan-950/20">
             <div className="flex flex-wrap items-center gap-3 text-xs tracking-[0.22em] text-cyan-300/80 uppercase">
@@ -228,7 +229,7 @@ export function LocalConsole() {
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-400">
               <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
-                text only
+                chat-led learning
               </span>
               <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
                 no provider auth
@@ -274,216 +275,232 @@ export function LocalConsole() {
                   Current MVP limits
                 </dt>
                 <dd className="mt-1 text-zinc-400">
-                  First local tools now cover calculation, component lookup, circuit planning, and
-                  LED debug checklists. Voice, images, and workbench visuals are still out of the
-                  main flow.
+                  The current monitor supports guided visuals for calculations, component lookup,
+                  circuit planning, and LED debugging. Voice input and richer open-ended simulation
+                  flows are the next expansion points.
                 </dd>
               </div>
             </dl>
           </aside>
         </div>
 
-        <section className="flex min-h-[60vh] flex-1 flex-col overflow-hidden rounded-3xl border border-zinc-800 bg-[#080b10] shadow-2xl shadow-black/20">
-          <div className="border-b border-zinc-800 px-4 py-3 sm:px-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="font-mono text-sm text-zinc-200">/console</div>
-                <div className="mt-1 text-xs text-zinc-500">{subtitle}</div>
+        <div className="grid min-h-[60vh] flex-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]">
+          <section className="flex min-h-[60vh] flex-1 flex-col overflow-hidden rounded-3xl border border-zinc-800 bg-[#080b10] shadow-2xl shadow-black/20">
+            <div className="border-b border-zinc-800 px-4 py-3 sm:px-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-mono text-sm text-zinc-200">/console</div>
+                  <div className="mt-1 text-xs text-zinc-500">{subtitle}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessages([]);
+                    setError(null);
+                    textareaRef.current?.focus();
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-cyan-500/40 hover:text-white"
+                >
+                  reset
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setMessages([]);
-                  setError(null);
-                  textareaRef.current?.focus();
-                }}
-                className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-cyan-500/40 hover:text-white"
-              >
-                reset
-              </button>
             </div>
-          </div>
 
-          <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
-            {messages.length === 0 ? (
-              <div className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center">
-                <div className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300 uppercase">
-                  ready for conversation
-                </div>
-                <h2 className="mt-5 font-mono text-2xl text-white sm:text-3xl">
-                  Start with a real electronics question.
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
-                  {status?.runtimeMode === 'guided-tools'
-                    ? 'Guided mode is now good for concrete learner help: parts lists, wiring plans, resistor picks, and first-pass debug guidance.'
-                    : 'The point of this MVP is simple: test whether the local chat loop feels sharp enough before layering tools and workbench behaviour back in.'}
-                </p>
-                <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
-                  {starterPrompts.map((starter) => (
-                    <button
-                      key={starter}
-                      type="button"
-                      onClick={() => {
-                        setPrompt(starter);
-                        textareaRef.current?.focus();
-                      }}
-                      className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-left text-sm text-zinc-300 transition hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-white"
-                    >
-                      {starter}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-                {messages.map((message) => {
-                  const isUser = message.role === 'user';
-
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[90%] rounded-2xl border px-4 py-3 sm:max-w-[82%] ${
-                          isUser
-                            ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-50'
-                            : 'border-zinc-800 bg-zinc-950/80 text-zinc-100'
-                        }`}
+            <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
+              {messages.length === 0 ? (
+                <div className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center">
+                  <div className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300 uppercase">
+                    ready for conversation
+                  </div>
+                  <h2 className="mt-5 font-mono text-2xl text-white sm:text-3xl">
+                    Start with a real electronics question.
+                  </h2>
+                  <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
+                    {status?.runtimeMode === 'guided-tools'
+                      ? 'Guided mode is now good for concrete learner help: parts lists, wiring plans, resistor picks, and first-pass debug guidance.'
+                      : 'The point of this MVP is simple: test whether the local chat loop feels sharp enough before layering tools and workbench behaviour back in.'}
+                  </p>
+                  <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
+                    {starterPrompts.map((starter) => (
+                      <button
+                        key={starter}
+                        type="button"
+                        onClick={() => {
+                          setPrompt(starter);
+                          textareaRef.current?.focus();
+                        }}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-left text-sm text-zinc-300 transition hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-white"
                       >
-                        <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-zinc-500 uppercase">
-                          {isUser ? 'user' : 'clitronic'}
-                        </div>
+                        {starter}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+                  {messages.map((message) => {
+                    const isUser = message.role === 'user';
+
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                      >
                         <div
-                          className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'dark:prose-invert'}`}
+                          className={`max-w-[90%] rounded-2xl border px-4 py-3 sm:max-w-[82%] ${
+                            isUser
+                              ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-50'
+                              : 'border-zinc-800 bg-zinc-950/80 text-zinc-100'
+                          }`}
                         >
-                          {!isUser &&
-                          message.toolInvocations &&
-                          message.toolInvocations.length > 0 ? (
-                            <div className="not-prose mb-4 space-y-2">
-                              {message.toolInvocations.map((toolInvocation, index) => (
-                                <div
-                                  key={`${message.id}-tool-${index}`}
-                                  className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3"
-                                >
-                                  <div className="font-mono text-[11px] tracking-[0.18em] text-cyan-300 uppercase">
-                                    tool · {toolInvocation.toolName}
-                                  </div>
-                                  <p className="mt-2 text-sm text-zinc-200">
-                                    {toolInvocation.summary}
-                                  </p>
-                                  <dl className="mt-3 space-y-2 text-xs text-zinc-400">
-                                    {Object.entries(toolInvocation.result).map(([key, value]) => {
-                                      if (key === 'component_context') return null;
-
-                                      return (
-                                        <div key={key}>
-                                          <dt className="font-mono tracking-[0.16em] text-zinc-500 uppercase">
-                                            {key.replaceAll('_', ' ')}
-                                          </dt>
-                                          <dd className="mt-1 break-words whitespace-pre-wrap text-zinc-300">
-                                            {formatToolResultValue(value)}
-                                          </dd>
-                                        </div>
-                                      );
-                                    })}
-                                  </dl>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              pre: ({ children }) => (
-                                <pre className="overflow-x-auto rounded-xl bg-black/40 p-3 text-sm text-zinc-100">
-                                  {children}
-                                </pre>
-                              ),
-                              code: ({ children, className }) => {
-                                if (!className) {
-                                  return (
-                                    <code className="rounded bg-white/10 px-1 py-0.5 text-[0.92em]">
-                                      {children}
-                                    </code>
-                                  );
-                                }
-
-                                return <code className={className}>{children}</code>;
-                              },
-                            }}
+                          <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-zinc-500 uppercase">
+                            {isUser ? 'user' : 'clitronic'}
+                          </div>
+                          <div
+                            className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'dark:prose-invert'}`}
                           >
-                            {message.content}
-                          </ReactMarkdown>
+                            {!isUser &&
+                            message.toolInvocations &&
+                            message.toolInvocations.length > 0 ? (
+                              <div className="not-prose mb-4 space-y-2">
+                                {message.toolInvocations.map((toolInvocation, index) => (
+                                  <div
+                                    key={`${message.id}-tool-${index}`}
+                                    className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3"
+                                  >
+                                    <div className="font-mono text-[11px] tracking-[0.18em] text-cyan-300 uppercase">
+                                      tool · {toolInvocation.toolName}
+                                    </div>
+                                    <p className="mt-2 text-sm text-zinc-200">
+                                      {toolInvocation.summary}
+                                    </p>
+                                    <dl className="mt-3 space-y-2 text-xs text-zinc-400">
+                                      {Object.entries(toolInvocation.result).map(([key, value]) => {
+                                        if (
+                                          key === 'component_context' ||
+                                          key.startsWith('monitor_')
+                                        ) {
+                                          return null;
+                                        }
+
+                                        return (
+                                          <div key={key}>
+                                            <dt className="font-mono tracking-[0.16em] text-zinc-500 uppercase">
+                                              {key.replaceAll('_', ' ')}
+                                            </dt>
+                                            <dd className="mt-1 break-words whitespace-pre-wrap text-zinc-300">
+                                              {formatToolResultValue(value)}
+                                            </dd>
+                                          </div>
+                                        );
+                                      })}
+                                    </dl>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                pre: ({ children }) => (
+                                  <pre className="overflow-x-auto rounded-xl bg-black/40 p-3 text-sm text-zinc-100">
+                                    {children}
+                                  </pre>
+                                ),
+                                code: ({ children, className }) => {
+                                  if (!className) {
+                                    return (
+                                      <code className="rounded bg-white/10 px-1 py-0.5 text-[0.92em]">
+                                        {children}
+                                      </code>
+                                    );
+                                  }
+
+                                  return <code className={className}>{children}</code>;
+                                },
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
 
-                {isLoading ? (
-                  <div className="flex justify-start">
-                    <div className="max-w-[82%] rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
-                      <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-amber-300/70 uppercase">
-                        clitronic
+                  {isLoading ? (
+                    <div className="flex justify-start">
+                      <div className="max-w-[82%] rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
+                        <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-amber-300/70 uppercase">
+                          clitronic
+                        </div>
+                        {status?.runtimeMode === 'guided-tools'
+                          ? 'Working through the guided tool layer…'
+                          : 'Thinking locally… first run can take longer if the model still needs to download.'}
                       </div>
-                      {status?.runtimeMode === 'guided-tools'
-                        ? 'Working through the guided tool layer…'
-                        : 'Thinking locally… first run can take longer if the model still needs to download.'}
                     </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-zinc-800 bg-[#090d12] px-4 py-4 sm:px-5">
+              <div className="mx-auto max-w-3xl">
+                {error ? (
+                  <div className="mb-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                    {error}
                   </div>
                 ) : null}
-              </div>
-            )}
-          </div>
 
-          <div className="border-t border-zinc-800 bg-[#090d12] px-4 py-4 sm:px-5">
-            <div className="mx-auto max-w-3xl">
-              {error ? (
-                <div className="mb-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                  {error}
-                </div>
-              ) : null}
-
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void submitPrompt();
-                }}
-                className="rounded-3xl border border-zinc-700 bg-black/30 p-3"
-              >
-                <textarea
-                  ref={textareaRef}
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      void submitPrompt();
-                    }
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void submitPrompt();
                   }}
-                  rows={4}
-                  placeholder="Ask about a circuit, a component choice, or the shape of the product itself…"
-                  className="min-h-[108px] w-full resize-none bg-transparent font-mono text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
-                />
+                  className="rounded-3xl border border-zinc-700 bg-black/30 p-3"
+                >
+                  <textarea
+                    ref={textareaRef}
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void submitPrompt();
+                      }
+                    }}
+                    rows={4}
+                    placeholder="Ask about a circuit, a component choice, or the shape of the product itself…"
+                    className="min-h-[108px] w-full resize-none bg-transparent font-mono text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                  />
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-3">
-                  <div className="text-xs text-zinc-500">
-                    Text-only MVP for now. Shift+Enter for a new line.
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-3">
+                    <div className="text-xs text-zinc-500">
+                      Chat-led learning surface. Shift+Enter for a new line.
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isLoading || prompt.trim().length === 0}
+                      className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                    >
+                      {isLoading ? 'running locally…' : 'send'}
+                    </button>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading || prompt.trim().length === 0}
-                    className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
-                  >
-                    {isLoading ? 'running locally…' : 'send'}
-                  </button>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+
+          <LearningMonitor
+            messages={messages}
+            isLoading={isLoading}
+            onQuickPrompt={(nextPrompt) => {
+              setPrompt(nextPrompt);
+              textareaRef.current?.focus();
+            }}
+          />
+        </div>
       </div>
     </main>
   );

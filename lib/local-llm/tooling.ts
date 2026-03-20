@@ -164,6 +164,15 @@ function maybeCalculateLedResistor(message: string): LocalToolInvocation | null 
       estimated_resistor_power_mw: Number(resistorPowerMw.toFixed(1)),
       safety_note:
         'Round up rather than down for LED resistors when you want a safer, cooler-running first pass.',
+      monitor_metrics: {
+        title: 'LED resistor calculation',
+        metrics: [
+          { label: 'Exact resistor', value: `${Number(exactResistance.toFixed(1))} Ω` },
+          { label: 'Recommended', value: `${recommendedResistance} Ω` },
+          { label: 'Estimated current', value: `${Number(actualCurrentMa.toFixed(1))} mA` },
+          { label: 'Resistor power', value: `${Number(resistorPowerMw.toFixed(1))} mW` },
+        ],
+      },
     },
   };
 }
@@ -198,6 +207,15 @@ function maybeApplyOhmsLaw(message: string): LocalToolInvocation | null {
         formula_used: 'R = V / I',
         resistance_ohms: Number(calculatedResistance.toFixed(1)),
         power_mw: Number((powerW * 1000).toFixed(1)),
+        monitor_metrics: {
+          title: "Ohm's law",
+          metrics: [
+            { label: 'Voltage', value: `${voltage} V` },
+            { label: 'Current', value: `${currentMa} mA` },
+            { label: 'Resistance', value: `${Number(calculatedResistance.toFixed(1))} Ω` },
+            { label: 'Power', value: `${Number((powerW * 1000).toFixed(1))} mW` },
+          ],
+        },
       },
     };
   }
@@ -217,6 +235,15 @@ function maybeApplyOhmsLaw(message: string): LocalToolInvocation | null {
         formula_used: 'I = V / R',
         current_ma: Number((currentA * 1000).toFixed(2)),
         power_mw: Number((powerW * 1000).toFixed(1)),
+        monitor_metrics: {
+          title: "Ohm's law",
+          metrics: [
+            { label: 'Voltage', value: `${voltage} V` },
+            { label: 'Resistance', value: `${resistance} Ω` },
+            { label: 'Current', value: `${Number((currentA * 1000).toFixed(2))} mA` },
+            { label: 'Power', value: `${Number((powerW * 1000).toFixed(1))} mW` },
+          ],
+        },
       },
     };
   }
@@ -237,6 +264,15 @@ function maybeApplyOhmsLaw(message: string): LocalToolInvocation | null {
         formula_used: 'V = I × R',
         voltage: Number(calculatedVoltage.toFixed(2)),
         power_mw: Number((powerW * 1000).toFixed(1)),
+        monitor_metrics: {
+          title: "Ohm's law",
+          metrics: [
+            { label: 'Current', value: `${currentMa} mA` },
+            { label: 'Resistance', value: `${resistance} Ω` },
+            { label: 'Voltage', value: `${Number(calculatedVoltage.toFixed(2))} V` },
+            { label: 'Power', value: `${Number((powerW * 1000).toFixed(1))} mW` },
+          ],
+        },
       },
     };
   }
@@ -318,6 +354,7 @@ function maybeLookupComponent(message: string): LocalToolInvocation | null {
       pinout: resolved.datasheetInfo?.pinout,
       tips: resolved.datasheetInfo?.tips,
       component_context: formatComponentContext(resolved),
+      monitor_diagram_component: resolved.id,
     },
   };
 }
@@ -432,6 +469,38 @@ function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
           'Use the resistor in series with the LED; do not drive the LED directly from the pin.',
           'A 330 Ω resistor keeps the current in a comfortable beginner-safe range on a 5V Arduino.',
         ],
+        monitor_scene: {
+          components: [
+            { id: 'arduino', label: 'Arduino', type: 'logic' },
+            { id: 'resistor', label: 'Resistor', type: 'passive' },
+            { id: 'led', label: 'LED', type: 'output' },
+            { id: 'ground', label: 'Ground', type: 'ground' },
+          ],
+          connections: [
+            {
+              id: 'arduino-resistor',
+              from: 'arduino',
+              to: 'resistor',
+              kind: 'explicit',
+              label: 'Pin 9 output',
+            },
+            {
+              id: 'resistor-led',
+              from: 'resistor',
+              to: 'led',
+              kind: 'explicit',
+              label: 'Current-limited path',
+            },
+            {
+              id: 'led-ground',
+              from: 'led',
+              to: 'ground',
+              kind: 'explicit',
+              label: 'Return to GND',
+            },
+          ],
+          focusComponent: 'led',
+        },
       },
     };
   }
@@ -482,6 +551,38 @@ function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
           'Raspberry Pi GPIO is 3.3V only — never feed 5V directly into a GPIO pin.',
           'Keep the LED current modest; 330 Ω is a good beginner value here.',
         ],
+        monitor_scene: {
+          components: [
+            { id: 'gpio', label: 'GPIO17', type: 'logic' },
+            { id: 'resistor', label: 'Resistor', type: 'passive' },
+            { id: 'led', label: 'LED', type: 'output' },
+            { id: 'ground', label: 'Ground', type: 'ground' },
+          ],
+          connections: [
+            {
+              id: 'gpio-resistor',
+              from: 'gpio',
+              to: 'resistor',
+              kind: 'explicit',
+              label: 'GPIO17 output',
+            },
+            {
+              id: 'resistor-led',
+              from: 'resistor',
+              to: 'led',
+              kind: 'explicit',
+              label: 'Current-limited path',
+            },
+            {
+              id: 'led-ground',
+              from: 'led',
+              to: 'ground',
+              kind: 'explicit',
+              label: 'Return to GND',
+            },
+          ],
+          focusComponent: 'led',
+        },
       },
     };
   }
@@ -517,6 +618,32 @@ function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
         'Always keep the resistor in series with the LED.',
         'Check LED polarity before powering the circuit.',
       ],
+      monitor_scene: {
+        components: [
+          { id: 'supply', label: '5V supply', type: 'power' },
+          { id: 'resistor', label: 'Resistor', type: 'passive' },
+          { id: 'led', label: 'LED', type: 'output' },
+          { id: 'ground', label: 'Ground', type: 'ground' },
+        ],
+        connections: [
+          {
+            id: 'supply-resistor',
+            from: 'supply',
+            to: 'resistor',
+            kind: 'explicit',
+            label: 'Positive rail',
+          },
+          {
+            id: 'resistor-led',
+            from: 'resistor',
+            to: 'led',
+            kind: 'explicit',
+            label: 'Current-limited path',
+          },
+          { id: 'led-ground', from: 'led', to: 'ground', kind: 'explicit', label: 'Return to GND' },
+        ],
+        focusComponent: 'led',
+      },
     },
   };
 }
@@ -598,6 +725,21 @@ function maybeGenerateDebugChecklist(message: string): LocalToolInvocation | nul
         'Breadboard row mismatch',
         'Code targeting a different pin from the wiring',
       ],
+      monitor_debug: {
+        title:
+          platform === 'raspberry-pi'
+            ? 'Raspberry Pi LED debug monitor'
+            : platform === 'arduino'
+              ? 'Arduino LED debug monitor'
+              : 'Breadboard LED debug monitor',
+        checks: [
+          'Power path present',
+          'Ground return present',
+          'LED polarity correct',
+          'Resistor in series',
+          'Control pin matches code',
+        ],
+      },
     },
   };
 }
