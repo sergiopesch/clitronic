@@ -9,6 +9,7 @@ import { useLongPress, useVoiceRecording } from '@/hooks';
 import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 import { AnimatedWelcome } from './animated-welcome';
+import { GraphPreview, TopologyMap, WorkbenchPreview } from '@/components/studio/previews';
 import {
   analyzeCircuit,
   applyStructuredCommand,
@@ -162,15 +163,15 @@ export function RichTerminal() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthPanel, setShowAuthPanel] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<'terminal' | 'studio'>(() => {
-    if (typeof window === 'undefined') return 'studio';
+  const [view, setView] = useState<'workbench' | 'console'>(() => {
+    if (typeof window === 'undefined') return 'workbench';
     try {
-      const stored = window.localStorage.getItem('clitronic_layout_mode_v1');
-      if (stored === 'terminal' || stored === 'studio') return stored;
+      const stored = window.localStorage.getItem('clitronic_view_v2');
+      if (stored === 'workbench' || stored === 'console') return stored;
     } catch {
       // ignore
     }
-    return 'studio';
+    return 'workbench';
   });
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -266,11 +267,11 @@ export function RichTerminal() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem('clitronic_layout_mode_v1', layoutMode);
+      window.localStorage.setItem('clitronic_view_v2', view);
     } catch {
       // ignore
     }
-  }, [layoutMode]);
+  }, [view]);
 
   useEffect(() => {
     if (!showAuthPanel) return;
@@ -286,6 +287,7 @@ export function RichTerminal() {
   }, [showAuthPanel]);
 
   useEffect(() => {
+    if (view !== 'console') return;
     if (shouldScrollRef.current && containerRef.current) {
       requestAnimationFrame(() => {
         if (containerRef.current) {
@@ -294,7 +296,7 @@ export function RichTerminal() {
       });
       shouldScrollRef.current = false;
     }
-  }, [lines, streamingContent]);
+  }, [lines, streamingContent, view]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -807,7 +809,7 @@ export function RichTerminal() {
 
   return (
     <div
-      className={`relative min-h-[100dvh] overflow-hidden bg-[#070b11] font-mono text-[13px] leading-relaxed text-gray-200 select-text sm:text-[14px] ${
+      className={`relative min-h-[100dvh] overflow-hidden bg-[#070b11] font-sans text-[14px] leading-relaxed text-gray-200 select-text ${
         isDragging ? 'ring-2 ring-cyan-400 ring-inset' : ''
       }`}
       onDragOver={handleDragOver}
@@ -815,7 +817,7 @@ export function RichTerminal() {
       onDrop={handleDrop}
       onPaste={handlePaste}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.08),transparent_35%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.06),transparent_45%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.07),transparent_40%)]" />
 
       {isDragging && (
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#070b11]/90 backdrop-blur-sm">
@@ -831,196 +833,162 @@ export function RichTerminal() {
 
       <VoiceIndicator state={voiceState} />
 
-      <div className="relative z-10 grid min-h-[100dvh] grid-cols-1">
-        <div className={layoutMode === 'studio' ? 'hidden' : 'flex min-h-[100dvh] flex-col'}>
-          <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs tracking-[0.24em] text-cyan-400 uppercase">
-                  ⚡ Clitronic Studio
-                </div>
-                <div className="mt-1 text-sm text-gray-300">
-                  Command-first electronics workspace with adaptive teaching windows.
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="hidden items-center gap-1 rounded border border-gray-800 bg-[#0a0f15] p-1 text-[11px] text-gray-300 sm:flex">
-                  <button
-                    onClick={() => setLayoutMode('studio')}
-                    className={`rounded px-2 py-1 transition-colors ${
-                      layoutMode === 'studio'
-                        ? 'bg-cyan-500 text-[#032a31]'
-                        : 'hover:bg-gray-800/70'
-                    }`}
-                    title="Workbench"
-                  >
-                    Workbench
-                  </button>
-                  <button
-                    onClick={() => setLayoutMode('terminal')}
-                    className={`rounded px-2 py-1 transition-colors ${
-                      layoutMode === 'terminal'
-                        ? 'bg-cyan-500 text-[#032a31]'
-                        : 'hover:bg-gray-800/70'
-                    }`}
-                    title="Console"
-                  >
-                    Console
-                  </button>
-                </div>
+      <div className="relative z-10 flex min-h-[100dvh] flex-col">
+        <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-[10rem]">
+              <div className="text-base font-semibold text-white">Clitronic</div>
+              <div className="mt-0.5 text-sm text-gray-400">Workbench-first electronics workspace</div>
+            </div>
 
+            <div className="flex items-center gap-2">
+              <div className="hidden rounded-full border border-white/10 bg-white/5 p-1 text-[12px] text-gray-300 sm:flex">
                 <button
-                  onClick={() => setShowAuthPanel(true)}
-                  className="rounded border border-emerald-800/50 bg-emerald-900/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-900/30"
+                  onClick={() => setView('workbench')}
+                  className={`rounded-full px-3 py-1 transition-colors ${
+                    view === 'workbench'
+                      ? 'bg-white/15 text-white'
+                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  title="Workbench"
                 >
-                  auth
+                  Workbench
+                </button>
+                <button
+                  onClick={() => setView('console')}
+                  className={`rounded-full px-3 py-1 transition-colors ${
+                    view === 'console'
+                      ? 'bg-white/15 text-white'
+                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  title="Console"
+                >
+                  Console
                 </button>
               </div>
-            </div>
 
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-              <span
-                className={`rounded-full border px-2 py-0.5 ${
-                  canMakeApiCalls
-                    ? 'border-green-500/30 bg-green-950/50 text-green-300'
-                    : 'border-amber-500/30 bg-amber-950/40 text-amber-300'
-                }`}
+              <button
+                onClick={() => setShowAuthPanel(true)}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-200 hover:bg-white/10"
               >
-                {canMakeApiCalls
-                  ? `Connected: ${authLabel(authSource)}`
-                  : 'Authentication required'}
-              </span>
-              <span className="rounded-full border border-cyan-500/30 bg-cyan-950/40 px-2 py-0.5 text-cyan-300">
-                {workspace.mode === 'simulating'
-                  ? 'Simulation live'
-                  : workspace.mode === 'preview'
-                    ? 'Preview mode'
-                    : 'Draft mode'}
-              </span>
-              <span className="rounded-full border border-violet-500/30 bg-violet-950/30 px-2 py-0.5 text-violet-300">
-                Open windows: {workspace.panels.length}
-              </span>
-              <span
-                className={`rounded-full border px-2 py-0.5 ${
-                  voiceSupported && voiceAvailable && canMakeApiCalls
-                    ? 'border-cyan-500/30 bg-cyan-950/40 text-cyan-300'
-                    : 'border-gray-600/40 bg-gray-900/60 text-gray-400'
-                }`}
-              >
-                {voiceSupported && voiceAvailable && canMakeApiCalls
-                  ? 'Voice ready (hold space)'
-                  : 'Voice unavailable'}
-              </span>
+                Auth
+              </button>
             </div>
-          </header>
-
-          <div
-            ref={containerRef}
-            className="flex-1 overflow-y-auto px-4 py-3"
-            onClick={(e) => {
-              if (e.target === containerRef.current) {
-                inputRef.current?.focus();
-              }
-            }}
-          >
-            {lines.map((line, i) => (
-              <TerminalLine key={i} line={line} />
-            ))}
-
-            {streamingContent && (
-              <div className="my-2 text-gray-200" aria-live="polite">
-                <MarkdownContent content={streamingContent} />
-                <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-400" />
-              </div>
-            )}
           </div>
 
-          <footer
-            className="border-t border-cyan-900/30 bg-[#070b11]/90 px-3 pt-3 backdrop-blur"
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
-          >
-            <div className="mb-2 text-[11px] text-gray-500">
-              Panels now open: <span className="text-cyan-400">{panelSummary}</span>
-            </div>
+          <div className="mt-2 text-xs text-gray-400">
+            <span className={canMakeApiCalls ? 'text-emerald-300' : 'text-amber-300'}>
+              {canMakeApiCalls ? `Connected: ${authLabel(authSource)}` : 'Authentication required'}
+            </span>
+            <span className="mx-2 text-gray-600">•</span>
+            <span>
+              {workspace.mode === 'simulating'
+                ? 'Simulation live'
+                : workspace.mode === 'preview'
+                  ? 'Preview'
+                  : 'Draft'}
+            </span>
+            <span className="mx-2 text-gray-600">•</span>
+            <span className={voiceSupported && voiceAvailable && canMakeApiCalls ? 'text-cyan-300' : 'text-gray-500'}>
+              {voiceSupported && voiceAvailable && canMakeApiCalls
+                ? 'Voice ready (hold space)'
+                : 'Voice unavailable'}
+            </span>
+          </div>
+        </header>
 
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-900/40 bg-[#0d1117] px-3 py-2 sm:flex-nowrap">
-              <span className="text-cyan-500 select-none">❯</span>
-              <input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isProcessing}
-                aria-label="Terminal command input"
-                className="flex-1 bg-transparent text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
-                placeholder={
-                  isProcessing
-                    ? 'Processing...'
-                    : 'Try: build a simple led circuit with a 9v battery'
+        <main className="flex-1 overflow-hidden">
+          {view === 'console' ? (
+            <div
+              ref={containerRef}
+              className="h-full overflow-y-auto px-4 py-3 font-mono text-[13px]"
+              onClick={(e) => {
+                if (e.target === containerRef.current) {
+                  inputRef.current?.focus();
                 }
+              }}
+            >
+              {lines.map((line, i) => (
+                <TerminalLine key={i} line={line} />
+              ))}
+
+              {streamingContent && (
+                <div className="my-2 text-gray-200" aria-live="polite">
+                  <MarkdownContent content={streamingContent} />
+                  <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-400" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="h-full overflow-y-auto">
+              <AdaptiveStudio
+                workspace={workspace}
+                onQuickCommand={(command) => {
+                  setInput(command);
+                  inputRef.current?.focus();
+                }}
               />
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessing}
-                className="rounded border border-gray-700/80 px-2 py-1.5 text-xs text-gray-300 hover:border-cyan-700 hover:text-cyan-300 disabled:opacity-40"
-                title="Upload image"
-              >
-                Upload
-              </button>
-
-              <button
-                onClick={submitCurrentInput}
-                disabled={isProcessing || !input.trim()}
-                className="rounded bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-[#032a31] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-cyan-500"
-              >
-                Send
-              </button>
             </div>
+          )}
+        </main>
 
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
-              <span>
-                {voiceSupported && voiceAvailable && canMakeApiCalls
-                  ? 'Hold space for voice input'
-                  : ''}
-              </span>
-              <span>build • add • connect • remove • set • simulate • explain • focus</span>
-            </div>
+        <footer
+          className="border-t border-white/10 bg-[#070b11]/85 px-3 pt-3 backdrop-blur"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+        >
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+            <span>
+              Panels now open: <span className="text-cyan-400">{panelSummary || '—'}</span>
+            </span>
+            <button
+              onClick={() => setView(view === 'console' ? 'workbench' : 'console')}
+              className="text-cyan-400 hover:text-cyan-300 hover:underline"
+            >
+              {view === 'console' ? 'back to workbench' : 'open console'}
+            </button>
+          </div>
 
-            <div className="mt-2 flex gap-2 sm:hidden">
-              <button
-                onClick={() => setLayoutMode('terminal')}
-                className={`flex-1 rounded border px-3 py-2 text-xs transition-colors ${
-                  layoutMode === 'terminal'
-                    ? 'border-cyan-500/50 bg-cyan-950/30 text-cyan-200'
-                    : 'border-gray-800 bg-[#0a0f15] text-gray-400'
-                }`}
-              >
-                Console
-              </button>
-              <button
-                onClick={() => setLayoutMode('studio')}
-                className={`flex-1 rounded border px-3 py-2 text-xs transition-colors ${
-                  layoutMode === 'studio'
-                    ? 'border-cyan-500/50 bg-cyan-950/30 text-cyan-200'
-                    : 'border-gray-800 bg-[#0a0f15] text-gray-400'
-                }`}
-              >
-                Workbench
-              </button>
-            </div>
-          </footer>
-        </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-900/40 bg-[#0d1117] px-3 py-2 sm:flex-nowrap">
+            <span className="font-mono text-cyan-400 select-none">❯</span>
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isProcessing}
+              aria-label="Command input"
+              className="flex-1 bg-transparent font-mono text-gray-100 caret-cyan-400 outline-none placeholder:text-gray-600"
+              placeholder={
+                isProcessing ? 'Processing...' : 'Try: build a simple led circuit with a 9v battery'
+              }
+            />
 
-        <div className={layoutMode === 'terminal' ? 'hidden' : ''}>
-          <AdaptiveStudio
-            workspace={workspace}
-            onQuickCommand={(command) => {
-              setInput(command);
-              inputRef.current?.focus();
-            }}
-          />
-        </div>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              className="rounded border border-gray-700/80 px-2 py-1.5 text-xs text-gray-300 hover:border-cyan-700 hover:text-cyan-300 disabled:opacity-40"
+              title="Upload image"
+            >
+              Upload
+            </button>
+
+            <button
+              onClick={submitCurrentInput}
+              disabled={isProcessing || !input.trim()}
+              className="rounded bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-[#032a31] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-cyan-500"
+            >
+              Send
+            </button>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+            <span>
+              {voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' :
+              ''}
+            </span>
+            <span>build • add • connect • remove • set • simulate • explain • focus</span>
+          </div>
+        </footer>
       </div>
 
       {showAuthPanel && (
@@ -1227,10 +1195,15 @@ function AdaptiveStudio({
     'teacher'
   );
 
+  const [windowsOpen, setWindowsOpen] = useState(false);
+
   // Avoid state updates during render: react to focus events here.
   useEffect(() => {
     if (!uiFocus) return;
     applyFocus(uiFocus);
+
+    // If the system is trying to focus a panel, show windows automatically.
+    setWindowsOpen(true);
 
     if (uiFocus.panelId === 'graph-panel') setActiveTab('graph');
     if (uiFocus.panelId === 'inspector-panel') setActiveTab('inspector');
@@ -1265,24 +1238,24 @@ function AdaptiveStudio({
     sortedPanels.find((panel) => panel.kind === 'scene');
 
   return (
-    <aside className="relative flex min-h-[100dvh] flex-col overflow-y-auto bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
+    <aside className="relative flex min-h-0 flex-col bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
       <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-[#0a0f15] px-3 py-2 text-xs text-gray-400">
         <span className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Workbench</span>
         <span className="text-gray-500">Secondary panels live below (tabbed).</span>
       </div>
 
-      <div className="mb-4 rounded-2xl border border-cyan-900/30 bg-[#0c141d] p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.04)]">
+      <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-[11px] tracking-[0.24em] text-cyan-400 uppercase">
-              Workbench state
-            </div>
-            <h2 className="mt-2 text-xl font-semibold text-white">{workspace.title}</h2>
+            <div className="text-xs font-medium text-gray-400">Workbench</div>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              {workspace.title}
+            </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">
               {workspace.summary}
             </p>
           </div>
-          <div className="rounded-xl border border-cyan-700/30 bg-cyan-950/20 px-3 py-2 text-right text-xs text-cyan-200">
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-right text-xs text-gray-200">
             <div>
               {workspace.mode === 'simulating'
                 ? 'Simulation running'
@@ -1290,9 +1263,8 @@ function AdaptiveStudio({
                   ? 'Adaptive preview'
                   : 'Draft document'}
             </div>
-            <div className="mt-1 text-cyan-400/80">
-              {workspace.nodes.length} nodes • {workspace.connections.length} links •{' '}
-              {workspace.panels.length} windows
+            <div className="mt-1 text-gray-400">
+              {workspace.nodes.length} nodes • {workspace.connections.length} links
             </div>
           </div>
         </div>
@@ -1320,52 +1292,77 @@ function AdaptiveStudio({
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-gray-800 bg-[#0a0f15] p-4">
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Windows</div>
-          <div className="flex flex-wrap gap-2 text-xs">
-            {(
-              [
-                ['teacher', 'Teacher'],
-                ['inspector', 'Inspector'],
-                ['graph', 'Graph'],
-                ['topology', 'Topology'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`rounded-full border px-3 py-1.5 transition-colors ${
-                  activeTab === id
-                    ? 'border-cyan-500/40 bg-cyan-950/30 text-cyan-200'
-                    : 'border-gray-800 bg-[#0a0f15] text-gray-400 hover:border-gray-600 hover:text-gray-100'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div>
+            <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Windows</div>
+            <div className="mt-1 text-xs text-gray-500">
+              {windowsOpen ? 'Context is open' : 'Context is collapsed'} • Focus: {activeTab}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWindowsOpen((prev) => !prev)}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-gray-200 hover:bg-white/10"
+            >
+              {windowsOpen ? 'Hide' : 'Show'} windows
+            </button>
           </div>
         </div>
 
-        <div className="mt-4">
-          {activeTab === 'teacher' && teacherPanel ? (
-            <WindowCard panel={teacherPanel}>
-              <div className="space-y-3 text-sm text-gray-300">
-                {[...workspace.events, ...analysis.derivedEvents].slice(0, 5).map((event) => (
-                  <div
-                    key={event.id}
-                    className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
-                  >
-                    <div className="font-semibold text-emerald-200">{event.title}</div>
-                    <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
-                  </div>
-                ))}
-              </div>
-            </WindowCard>
-          ) : null}
+        {windowsOpen && (
+          <>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {(
+                [
+                  ['teacher', 'Teacher'],
+                  ['inspector', 'Inspector'],
+                  ['graph', 'Graph'],
+                  ['topology', 'Topology'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`rounded-full border px-3 py-1.5 transition-colors ${
+                    activeTab === id
+                      ? 'border-cyan-500/40 bg-cyan-950/30 text-cyan-200'
+                      : 'border-gray-800 bg-[#0a0f15] text-gray-400 hover:border-gray-600 hover:text-gray-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-          {activeTab === 'inspector' && inspectorPanel ? (
-            <WindowCard panel={inspectorPanel}>
+            <div className="mt-4">
+              {activeTab === 'teacher' && teacherPanel ? (
+                <WindowCard panel={teacherPanel}>
+                  <div className="space-y-3 text-sm text-gray-300">
+                    {Array.from(
+                      new Map(
+                        [...workspace.events, ...analysis.derivedEvents].map((event) => [event.id, event])
+                      ).values()
+                    )
+                      .slice(0, 5)
+                      .map((event) => (
+                        <div
+                          key={event.id}
+                          className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
+                        >
+                          <div className="font-semibold text-emerald-200">{event.title}</div>
+                          <div className="mt-1 leading-relaxed text-emerald-100/80">
+                            {event.detail}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </WindowCard>
+              ) : null}
+
+              {activeTab === 'inspector' && inspectorPanel ? (
+                <WindowCard panel={inspectorPanel}>
               <div className="space-y-3 text-sm text-gray-300">
                 <div>
                   <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
@@ -1469,19 +1466,19 @@ function AdaptiveStudio({
               <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
             </WindowCard>
           ) : null}
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-gray-800 bg-[#0a0f15] p-4">
-        <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-          Suggested next commands
-        </div>
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="text-xs font-medium text-gray-400">Suggested next commands</div>
         <div className="mt-3 flex flex-wrap gap-2">
           {workspace.nextActions.map((action) => (
             <button
               key={action}
               onClick={() => onQuickCommand(action)}
-              className="rounded-full border border-cyan-700/30 bg-cyan-950/20 px-3 py-1.5 text-xs text-cyan-200 transition hover:border-cyan-500/50 hover:bg-cyan-900/30"
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-gray-200 transition hover:bg-white/10"
             >
               {action}
             </button>
@@ -1606,176 +1603,6 @@ function PanelChrome({
       >
         ×
       </button>
-    </div>
-  );
-}
-
-function WorkbenchPreview({
-  nodes,
-  connections,
-  mode,
-}: {
-  nodes: CircuitDocument['nodes'];
-  connections: CircuitDocument['connections'];
-  mode: CircuitMode;
-}) {
-  const displayNodes = nodes.length
-    ? nodes
-    : [
-        { id: 'battery-1', key: 'battery', label: 'Battery', type: 'power', quantity: 1 },
-        { id: 'resistor-1', key: 'resistor', label: 'Resistor', type: 'passive', quantity: 1 },
-        { id: 'led-1', key: 'led', label: 'LED', type: 'output', quantity: 1 },
-      ];
-
-  return (
-    <div className="rounded-2xl border border-cyan-900/30 bg-[linear-gradient(180deg,#0a1017,#081019)] p-4">
-      <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
-        <span>Spatial circuit sketch</span>
-        <span>{mode === 'simulating' ? 'signal overlays on' : 'layout preview'}</span>
-      </div>
-
-      <div className="grid gap-3">
-        {displayNodes.map((node, index) => (
-          <div key={`${node.id}-${index}`} className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-700/30 bg-cyan-950/20 text-xs text-cyan-200">
-              {node.label.slice(0, 3).toUpperCase()}
-            </div>
-            <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/50 to-transparent" />
-            <div className="rounded-lg border border-gray-800 bg-[#0a0f15] px-2 py-1 text-xs text-gray-300">
-              {node.label}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 rounded-xl border border-cyan-900/25 bg-cyan-950/10 p-3 text-xs leading-relaxed text-cyan-100/80">
-        {connections.length} inferred connection{connections.length === 1 ? '' : 's'} currently
-        define the path. This is the bridge from pure concept UI to a real circuit document model.
-      </div>
-    </div>
-  );
-}
-
-function TopologyMap({
-  nodes,
-  connections,
-}: {
-  nodes: CircuitDocument['nodes'];
-  connections: CircuitDocument['connections'];
-}) {
-  const displayNodes = nodes.length
-    ? nodes
-    : [
-        { id: 'battery-1', key: 'battery', label: 'Battery', type: 'power', quantity: 1 },
-        { id: 'resistor-1', key: 'resistor', label: 'Resistor', type: 'passive', quantity: 1 },
-        { id: 'led-1', key: 'led', label: 'LED', type: 'output', quantity: 1 },
-      ];
-
-  return (
-    <div className="rounded-2xl border border-cyan-900/30 bg-[#0a1017] p-4">
-      <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
-        <span>2D topology</span>
-        <span>
-          {displayNodes.length} node{displayNodes.length === 1 ? '' : 's'} • {connections.length}{' '}
-          link{connections.length === 1 ? '' : 's'}
-        </span>
-      </div>
-
-      <div className="space-y-3">
-        {displayNodes.map((node, index) => {
-          const outgoing = connections.filter((connection) => connection.from === node.id);
-          return (
-            <div key={node.id} className="rounded-xl border border-gray-800 bg-[#0d141c] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-cyan-200">{node.label}</div>
-                  <div className="mt-1 text-[11px] tracking-[0.14em] text-gray-500 uppercase">
-                    {node.type}
-                  </div>
-                </div>
-                <div className="rounded-full border border-cyan-700/30 bg-cyan-950/20 px-2 py-1 text-[11px] text-cyan-200">
-                  {node.id}
-                </div>
-              </div>
-
-              <div className="mt-3 text-xs text-gray-400">
-                {outgoing.length
-                  ? outgoing.map((connection) => {
-                      const target = displayNodes.find(
-                        (candidate) => candidate.id === connection.to
-                      );
-                      return (
-                        <div key={connection.id} className="mb-1 flex items-center gap-2">
-                          <span className="text-cyan-500">→</span>
-                          <span>{target?.label ?? connection.to}</span>
-                          <span className="text-gray-600">({connection.label ?? 'link'})</span>
-                        </div>
-                      );
-                    })
-                  : index < displayNodes.length - 1
-                    ? 'No explicit outgoing link yet.'
-                    : 'Terminal node.'}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function GraphPreview({ workspace }: { workspace: CircuitDocument }) {
-  const mode = workspace.mode;
-  const sim = workspace.simulation?.kind === 'led-series' ? workspace.simulation : undefined;
-
-  const hasValues = Boolean(sim?.ok && sim.values);
-  const currentMa = hasValues ? sim!.values!.currentMa : null;
-  const resistorPowerMw = hasValues ? sim!.values!.resistorPowerMw : null;
-
-  const displayCurrent = currentMa ?? 0;
-  const displayPower = resistorPowerMw ?? 0;
-
-  // Simple normalisation bands for MVP visuals.
-  const currentPct = clamp((displayCurrent / 25) * 100, 0, 100);
-  const powerPct = clamp((displayPower / 500) * 100, 0, 100);
-  const bars =
-    mode === 'simulating'
-      ? [currentPct, powerPct, clamp((currentPct + powerPct) / 2, 0, 100), 40, 65, 55, 70]
-      : [20, 28, 36, 30, 42, 34, 40];
-
-  return (
-    <div className="rounded-2xl border border-violet-900/30 bg-[linear-gradient(180deg,#100d18,#0b0b14)] p-4">
-      <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
-        <span>{mode === 'simulating' ? 'Live behaviour' : 'Potential signal view'}</span>
-        <span>
-          {hasValues
-            ? `I = ${displayCurrent.toFixed(1)}mA • P = ${displayPower.toFixed(1)}mW`
-            : mode === 'simulating'
-              ? 'waiting for a valid circuit'
-              : 'waiting for simulation'}
-        </span>
-      </div>
-
-      <div className="flex h-40 items-end gap-2">
-        {bars.map((bar, index) => (
-          <div key={`${index}-${bar}`} className="flex flex-1 flex-col justify-end">
-            <div
-              className="rounded-t-md bg-gradient-to-t from-violet-500 to-cyan-400"
-              style={{ height: `${bar}%` }}
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 text-xs leading-relaxed text-violet-100/80">
-        {hasValues
-          ? `This is a DC snapshot (series LED). Current and power are driven by your parameters; change voltage/resistance and re-run simulate.`
-          : 'Graphs will wake up when simulation produces real values. Add the missing parts, connect the loop, and run simulate.'}
-      </div>
     </div>
   );
 }
