@@ -15,7 +15,7 @@ export interface LocalReplyOptions {
 export interface LocalModelStatus {
   status: 'idle' | 'ready' | 'resolving-model' | 'loading-model' | 'error';
   ready: boolean;
-  runtimeMode: 'local-model' | 'vercel-fallback';
+  runtimeMode: 'local-model' | 'guided-tools';
   modelRef: string;
   usingDefaultModel: boolean;
   localModelPresent: boolean;
@@ -41,8 +41,8 @@ const runtimeState: RuntimeState = {
 let modelPromise: Promise<LlamaModel> | null = null;
 let loadedModel: LlamaModel | null = null;
 
-function isVercelHosted() {
-  return process.env.VERCEL === '1';
+function isGuidedToolMode() {
+  return process.env.VERCEL === '1' || process.env.OPENCLAW_GUIDED_MODE === '1';
 }
 
 async function loadNodeLlamaCpp() {
@@ -140,15 +140,15 @@ function createHistory(messages: LocalChatMessage[]): ChatHistoryItem[] {
 }
 
 export async function getLocalModelStatus(): Promise<LocalModelStatus> {
-  if (isVercelHosted()) {
+  if (isGuidedToolMode()) {
     return {
       status: 'ready',
       ready: true,
-      runtimeMode: 'vercel-fallback',
-      modelRef: 'vercel-hobby-fallback',
+      runtimeMode: 'guided-tools',
+      modelRef: 'guided-tools',
       usingDefaultModel: true,
       localModelPresent: false,
-      note: 'Vercel Hobby fallback mode: built-in electronics tools stay available, but the full local GGUF runtime is reserved for local or self-hosted use.',
+      note: 'Guided electronics mode is active. Planning, calculation, and debugging tools stay available with fast responses.',
     };
   }
 
@@ -209,9 +209,9 @@ export async function generateLocalChatReply(
   messages: LocalChatMessage[],
   options?: LocalReplyOptions
 ): Promise<string> {
-  if (isVercelHosted()) {
+  if (isGuidedToolMode()) {
     throw new Error(
-      'The full local GGUF runtime is disabled on Vercel Hobby. Use the fallback responder instead.'
+      'The full local GGUF runtime is disabled in guided tools mode. Use the guided responder instead.'
     );
   }
 

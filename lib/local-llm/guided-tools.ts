@@ -8,10 +8,19 @@ function asString(value: unknown) {
   return typeof value === 'string' ? value : undefined;
 }
 
-export function createVercelFallbackReply(
-  userMessage: string,
-  toolInvocations: LocalToolInvocation[]
-) {
+function renderBulletSection(title: string, items: string[]) {
+  if (items.length === 0) return null;
+
+  return [title, ...items.map((item) => `- ${item}`)].join('\n');
+}
+
+function renderOrderedSection(title: string, items: string[]) {
+  if (items.length === 0) return null;
+
+  return [title, ...items.map((item, index) => `${index + 1}. ${item}`)].join('\n');
+}
+
+export function createGuidedToolReply(userMessage: string, toolInvocations: LocalToolInvocation[]) {
   const debugChecklistTool = toolInvocations.find(
     (tool) => tool.toolName === 'generate_debug_checklist'
   );
@@ -28,15 +37,13 @@ export function createVercelFallbackReply(
     return [
       `## ${title}`,
       '',
-      checks.length > 0 ? '### Debug checklist' : null,
-      ...checks.map((check, index) => `${index + 1}. ${check}`),
+      renderOrderedSection('### Debug checklist', checks),
       '',
       quickestTest ? `### Fastest next test\n${quickestTest}` : null,
       '',
-      likelyCauses.length > 0 ? '### Most likely causes' : null,
-      ...likelyCauses.map((cause) => `- ${cause}`),
+      renderBulletSection('### Most likely causes', likelyCauses),
       '',
-      'If you want, tell me **exactly what is happening** — for example “LED stays dark” or “Pi script runs but nothing blinks” — and I will narrow the diagnosis further.',
+      'If you want, tell me **exactly what is happening** — for example `LED stays dark` or `Pi script runs but nothing blinks` — and I will narrow the diagnosis further.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -55,6 +62,9 @@ export function createVercelFallbackReply(
     const safetyNotes = Array.isArray(circuitPlanTool.result.safety_notes)
       ? circuitPlanTool.result.safety_notes.map(String)
       : [];
+    const whyItWorks = Array.isArray(circuitPlanTool.result.why_it_works)
+      ? circuitPlanTool.result.why_it_works.map(String)
+      : [];
     const code = asString(circuitPlanTool.result.code);
 
     return [
@@ -62,18 +72,17 @@ export function createVercelFallbackReply(
       '',
       platform ? `**Platform:** ${platform}` : null,
       '',
-      parts.length > 0 ? '### Parts list' : null,
-      ...parts.map((part) => `- ${part}`),
+      renderBulletSection('### Parts list', parts),
       '',
-      wiringSteps.length > 0 ? '### Wiring plan' : null,
-      ...wiringSteps.map((step, index) => `${index + 1}. ${step}`),
+      renderOrderedSection('### Wiring plan', wiringSteps),
       '',
-      safetyNotes.length > 0 ? '### Safety notes' : null,
-      ...safetyNotes.map((note) => `- ${note}`),
+      renderBulletSection('### Why this works', whyItWorks),
+      '',
+      renderBulletSection('### Safety notes', safetyNotes),
       '',
       code ? ['### Starter code', '```', code, '```'].join('\n') : null,
       '',
-      'If you want, I can next turn this into a **debug checklist** or a **beginner explanation of why each connection is there**.',
+      'If you want, I can next turn this into a **debug checklist**, a **plain-English explanation**, or a **slightly more advanced version**.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -89,21 +98,25 @@ export function createVercelFallbackReply(
     return [
       resistance
         ? `Use a **${resistance} Ω** resistor as the safe first choice.`
-        : 'Use the tool-backed resistor recommendation as your safe first choice.',
+        : 'Use the tool-backed resistor recommendation as the safe first choice.',
       '',
-      'Why:',
-      exact !== undefined ? `- The raw calculation comes out around **${exact} Ω**.` : null,
-      resistance !== undefined
-        ? `- In practice you round **up** to a standard value, so **${resistance} Ω** is the cleaner beginner choice.`
-        : null,
-      current !== undefined
-        ? `- That gives roughly **${current} mA** through the LED, which is a sensible learning-friendly range.`
-        : null,
-      power !== undefined
-        ? `- Resistor dissipation is only about **${power} mW**, so a normal **1/4W resistor** is plenty.`
-        : null,
+      renderBulletSection(
+        '### Why',
+        [
+          exact !== undefined ? `The raw calculation comes out around **${exact} Ω**.` : '',
+          resistance !== undefined
+            ? `In practice you round **up** to a standard value, so **${resistance} Ω** is the cleaner beginner choice.`
+            : '',
+          current !== undefined
+            ? `That gives roughly **${current} mA** through the LED, which is a sensible learning-friendly range.`
+            : '',
+          power !== undefined
+            ? `Resistor dissipation is only about **${power} mW**, so a normal **1/4W resistor** is plenty.`
+            : '',
+        ].filter(Boolean)
+      ),
       '',
-      'If you want, next I can turn that into a **parts list + wiring plan** for a breadboard build.',
+      'If you want, I can next turn that into a **parts list + wiring plan** for Arduino, Raspberry Pi, or a plain breadboard build.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -142,12 +155,13 @@ export function createVercelFallbackReply(
       '',
       description,
       '',
-      keySpecs.length > 0 ? 'Key specs:' : null,
-      ...keySpecs.map((spec) => `- ${spec}`),
+      renderBulletSection('### Key specs', keySpecs),
       '',
-      circuitExample ? `Typical use: ${circuitExample}` : null,
-      pinout ? `Pinout: ${pinout}` : null,
-      tips ? `Practical tip: ${tips}` : null,
+      circuitExample ? `### Typical use\n${circuitExample}` : null,
+      '',
+      pinout ? `### Pinout\n${pinout}` : null,
+      '',
+      tips ? `### Practical tip\n${tips}` : null,
       '',
       mentionsArduino
         ? 'For Arduino work, keep the wiring conservative and use the component example above as the starting pattern.'
@@ -155,8 +169,6 @@ export function createVercelFallbackReply(
       mentionsRaspberryPi
         ? 'For Raspberry Pi GPIO, be even more careful with voltage and current limits than you would on Arduino.'
         : null,
-      '',
-      'This Vercel deployment is in **Hobby-safe fallback mode**, so I am answering from the built-in tool layer rather than a full local GGUF runtime.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -186,21 +198,18 @@ export function createVercelFallbackReply(
   }
 
   return [
-    'This Vercel deployment is running in **Hobby-safe fallback mode**.',
+    'Guided electronics mode is active right now.',
     '',
-    'That means:',
-    '- the app deploys cleanly on the free tier',
-    '- no remote model API is required',
-    '- but the full in-process local GGUF chat runtime is reserved for local or self-hosted use',
-    '',
-    'Right now this hosted version is strongest for built-in electronics help such as:',
-    '- LED resistor calculations',
+    'It is strongest for:',
+    '- resistor calculations',
     "- Ohm's law questions",
     '- component lookup',
+    '- parts lists and wiring plans',
+    '- first-pass debugging',
     '',
     'Try one of these:',
-    '- `What resistor should I use with a red LED on 5V?`',
-    '- `Explain a transistor and how I would use it with Arduino.`',
-    '- `List passive components.`',
+    '- `Help me build a simple Arduino LED breadboard circuit.`',
+    '- `Help me build a Raspberry Pi LED circuit.`',
+    '- `My Arduino LED circuit is not blinking. Give me a debug checklist.`',
   ].join('\n');
 }

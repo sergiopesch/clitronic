@@ -409,6 +409,11 @@ function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
           'Connect the other side of the resistor to Arduino digital pin 9.',
           'Connect Arduino GND to the breadboard ground rail if you are using one.',
         ],
+        why_it_works: [
+          'The Arduino pin can switch between HIGH and LOW, so it controls whether current flows.',
+          'The resistor limits current before it reaches the LED, which protects both the LED and the microcontroller pin.',
+          'The LED only lights when current can flow from the output pin, through the resistor and LED, back to ground.',
+        ],
         code: [
           'const int ledPin = 9;',
           '',
@@ -456,6 +461,11 @@ function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
           'Connect the other side of the resistor to GPIO17 (physical pin 11).',
           'Double-check pin numbering before powering up.',
         ],
+        why_it_works: [
+          'GPIO17 acts like a controllable 3.3V signal source.',
+          'The resistor keeps the LED current low enough for a GPIO-driven learning circuit.',
+          'Ground completes the circuit so current can flow through the LED when the pin goes high.',
+        ],
         code: [
           'from gpiozero import LED',
           'from time import sleep',
@@ -497,6 +507,11 @@ function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
         'Connect the positive side of the 5V supply to one side of the 220 Ω resistor.',
         'Connect the other side of the resistor to the LED anode (long leg).',
         'Connect the LED cathode (short leg) back to ground.',
+      ],
+      why_it_works: [
+        'Current flows from the supply, through the resistor, through the LED, and back to ground.',
+        'The resistor drops excess voltage and limits current so the LED is not overdriven.',
+        'The LED polarity matters: anode toward positive, cathode toward ground.',
       ],
       safety_notes: [
         'Always keep the resistor in series with the LED.',

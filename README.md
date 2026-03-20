@@ -14,32 +14,25 @@ This refactor deliberately removes provider auth and the workbench-first default
 - runs against a **local in-process model runtime** via `node-llama-cpp`
 - avoids **remote vendor model calls**
 - avoids **provider auth** in the main user flow
-- includes a **first local tool layer** for resistor calculation, component lookup, circuit planning, and LED debug checklists
+- includes a **guided tool layer** for resistor calculation, component lookup, circuit planning, and LED debug checklists
 - keeps the MVP **text-only and honest**
 
-## Vercel Hobby deployment reality
+## Runtime modes
 
-Clitronic now takes the Vercel free tier into account explicitly.
+Clitronic currently supports two honest operating modes:
 
-Confirmed from current Vercel docs:
+- **Local model mode** → full `node-llama-cpp` conversation path
+- **Guided tools mode** → fast structured electronics help for planning, calculation, and debugging
 
-- **Node function max duration on Hobby:** configurable up to **300 seconds**
-- **Node function memory on Hobby:** up to **2 GB**
+Guided tools mode is designed to stay useful rather than pretending to be a full local-model runtime when the environment is better suited to fast structured responses.
 
-That is enough for lightweight server logic, but it is **not a good home for an in-process GGUF model runtime**. So the app now behaves differently by environment:
-
-- **Local / self-hosted runtime** → full `node-llama-cpp` local model path
-- **Vercel Hobby deployment** → safe hosted fallback mode using built-in electronics tools and deterministic responses
-
-The hosted fallback now covers useful beginner flows such as:
+Guided tools mode currently covers useful beginner flows such as:
 
 - resistor recommendations
 - component lookup
 - Arduino LED parts list + wiring plan
 - Raspberry Pi LED parts list + wiring plan
 - first-pass LED debug checklists
-
-This keeps auto-deploys to Vercel working while preserving the stronger full-local experience for real local runs.
 
 ## What this version does not do yet
 

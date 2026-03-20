@@ -27,7 +27,7 @@ type ToolInvocation = {
 type ModelStatus = {
   status: 'idle' | 'ready' | 'resolving-model' | 'loading-model' | 'error';
   ready: boolean;
-  runtimeMode: 'local-model' | 'vercel-fallback';
+  runtimeMode: 'local-model' | 'guided-tools';
   modelRef: string;
   usingDefaultModel: boolean;
   localModelPresent: boolean;
@@ -119,8 +119,8 @@ export function LocalConsole() {
   }, [messages, isLoading]);
 
   const subtitle = useMemo(() => {
-    if (status?.runtimeMode === 'vercel-fallback') {
-      return 'Vercel-safe fallback mode. Built-in electronics help stays available.';
+    if (status?.runtimeMode === 'guided-tools') {
+      return 'Guided electronics mode. Planning, calculation, and debugging are ready.';
     }
 
     if (status?.ready) return 'Local model ready. Text-only MVP.';
@@ -135,7 +135,19 @@ export function LocalConsole() {
   }, [status]);
 
   const starterPrompts =
-    status?.runtimeMode === 'vercel-fallback' ? HOSTED_STARTER_PROMPTS : LOCAL_STARTER_PROMPTS;
+    status?.runtimeMode === 'guided-tools' ? HOSTED_STARTER_PROMPTS : LOCAL_STARTER_PROMPTS;
+
+  const engineLabel =
+    status?.runtimeMode === 'guided-tools'
+      ? 'Clitronic guided engine'
+      : (status?.modelRef ?? 'Loading…');
+
+  const modeLabel =
+    status?.runtimeMode === 'guided-tools'
+      ? 'guided mode'
+      : status?.runtimeMode === 'local-model'
+        ? 'local model mode'
+        : 'loading';
 
   const submitPrompt = async (value?: string) => {
     const nextPrompt = (value ?? prompt).trim();
@@ -205,13 +217,13 @@ export function LocalConsole() {
               <span>Console-first local MVP</span>
             </div>
             <h1 className="mt-4 max-w-3xl font-mono text-3xl font-semibold text-white sm:text-4xl">
-              {status?.runtimeMode === 'vercel-fallback'
-                ? 'Hosted electronics guidance, tuned for Vercel Hobby.'
+              {status?.runtimeMode === 'guided-tools'
+                ? 'Electronics guidance that can plan, calculate, and debug.'
                 : 'Local electronics chat, stripped back to the real loop.'}
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
-              {status?.runtimeMode === 'vercel-fallback'
-                ? 'This hosted path is deliberately shaped for the free Vercel tier: deterministic electronics helpers, planning, and debugging without pretending a full local GGUF runtime belongs inside a Hobby function.'
+              {status?.runtimeMode === 'guided-tools'
+                ? 'Clitronic can already do useful work here: pick resistor values, explain components, generate starter plans, and help debug simple learner circuits without hiding behind vague chat.'
                 : 'This pass removes provider auth and the workbench from the main path. What remains is the core thing to validate: can a local open-source model hold a useful electronics conversation inside a console-first interface.'}
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-400">
@@ -225,7 +237,7 @@ export function LocalConsole() {
                 no remote vendor calls
               </span>
               <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
-                vercel hobby safe
+                guided tools live
               </span>
             </div>
           </section>
@@ -242,16 +254,14 @@ export function LocalConsole() {
             </div>
             <dl className="mt-4 space-y-3 text-sm text-zinc-300">
               <div>
-                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">
-                  Configured model
-                </dt>
-                <dd className="mt-1 font-mono text-xs break-all text-zinc-300">
-                  {status?.modelRef ?? 'Loading…'}
-                </dd>
+                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">Active engine</dt>
+                <dd className="mt-1 font-mono text-xs break-all text-zinc-300">{engineLabel}</dd>
               </div>
               <div>
-                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">Runtime mode</dt>
-                <dd className="mt-1">{status?.runtimeMode ?? 'loading'}</dd>
+                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">
+                  Interaction mode
+                </dt>
+                <dd className="mt-1">{modeLabel}</dd>
               </div>
               <div>
                 <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">
@@ -304,8 +314,8 @@ export function LocalConsole() {
                   Start with a real electronics question.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
-                  {status?.runtimeMode === 'vercel-fallback'
-                    ? 'The hosted MVP is now good for concrete learner help: parts lists, wiring plans, resistor picks, and first-pass debug guidance.'
+                  {status?.runtimeMode === 'guided-tools'
+                    ? 'Guided mode is now good for concrete learner help: parts lists, wiring plans, resistor picks, and first-pass debug guidance.'
                     : 'The point of this MVP is simple: test whether the local chat loop feels sharp enough before layering tools and workbench behaviour back in.'}
                 </p>
                 <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
@@ -418,8 +428,8 @@ export function LocalConsole() {
                       <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-amber-300/70 uppercase">
                         clitronic
                       </div>
-                      {status?.runtimeMode === 'vercel-fallback'
-                        ? 'Working through the hosted fallback tool layer…'
+                      {status?.runtimeMode === 'guided-tools'
+                        ? 'Working through the guided tool layer…'
                         : 'Thinking locally… first run can take longer if the model still needs to download.'}
                     </div>
                   </div>

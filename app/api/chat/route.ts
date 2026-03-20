@@ -5,7 +5,7 @@ import {
   type LocalChatMessage,
 } from '@/lib/local-llm/runtime';
 import { runLocalTools } from '@/lib/local-llm/tooling';
-import { createVercelFallbackReply } from '@/lib/local-llm/vercel-fallback';
+import { createGuidedToolReply } from '@/lib/local-llm/guided-tools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,11 +54,8 @@ export async function POST(req: Request) {
     const status = await getLocalModelStatus();
 
     const message =
-      status.runtimeMode === 'vercel-fallback'
-        ? createVercelFallbackReply(
-            messages[messages.length - 1]?.content ?? '',
-            toolPass.invocations
-          )
+      status.runtimeMode === 'guided-tools'
+        ? createGuidedToolReply(messages[messages.length - 1]?.content ?? '', toolPass.invocations)
         : await generateLocalChatReply(messages, {
             promptContext: toolPass.promptContext,
           });
