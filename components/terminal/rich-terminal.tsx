@@ -1148,6 +1148,52 @@ function AdaptiveStudio({
     });
   }, []);
 
+  const reorderPanel = useCallback((sourceId: string, targetId: string) => {
+    setPanelState((prev) => {
+      const orderList = Object.entries(prev)
+        .map(([id, state]) => ({ id, order: state.order }))
+        .sort((a, b) => a.order - b.order);
+
+      const fromIndex = orderList.findIndex((item) => item.id === sourceId);
+      const toIndex = orderList.findIndex((item) => item.id === targetId);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return prev;
+
+      const ids = orderList.map((item) => item.id);
+      const [moved] = ids.splice(fromIndex, 1);
+      if (!moved) return prev;
+      ids.splice(toIndex, 0, moved);
+
+      const next: typeof prev = { ...prev };
+      ids.forEach((id, index) => {
+        const current = next[id];
+        if (!current) return;
+        next[id] = { ...current, order: index + 1 };
+      });
+
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setPanelState((prev) => {
+        const next: typeof prev = { ...prev };
+        let changed = false;
+        for (const [id, state] of Object.entries(prev)) {
+          if (!state.isPinned && state.isOpen) {
+            next[id] = { ...state, isOpen: false };
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   return (
     <aside className="relative flex min-h-[100dvh] flex-col overflow-y-auto bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-800 bg-[#0a0f15] px-3 py-2 text-xs text-gray-400">
@@ -1232,6 +1278,7 @@ function AdaptiveStudio({
                 onPin={() => togglePin(panel.id)}
                 onMoveUp={() => movePanel(panel.id, 'up')}
                 onMoveDown={() => movePanel(panel.id, 'down')}
+                onDropPanel={(sourceId) => reorderPanel(sourceId, panel.id)}
               />
               {panel.kind === 'scene' && panel.id === 'scene-panel' ? (
                 <WorkbenchPreview
@@ -1424,17 +1471,39 @@ function PanelChrome({
   onPin,
   onMoveUp,
   onMoveDown,
+  onDropPanel,
 }: {
   panel: CircuitPanel;
   onClose: () => void;
   onPin: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onDropPanel: (sourceId: string) => void;
 }) {
   const pinned = panel.state?.isPinned ?? false;
 
+  const dragId = panel.id;
+
   return (
-    <div className="-mt-1 mb-3 flex items-center justify-end gap-1 text-[11px] text-gray-500">
+    <div
+      className="-mt-1 mb-3 flex items-center justify-end gap-1 text-[11px] text-gray-500"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', dragId);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        const sourceId = e.dataTransfer.getData('text/plain');
+        if (!sourceId || sourceId === dragId) return;
+        onDropPanel(sourceId);
+      }}
+      title="Drag to reorder"
+    >
       <button
         onClick={onMoveUp}
         className="rounded border border-gray-800 bg-[#0a0f15] px-2 py-1 hover:border-gray-600 hover:text-gray-200"
