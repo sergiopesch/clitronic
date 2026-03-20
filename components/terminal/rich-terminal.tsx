@@ -17,7 +17,7 @@ import {
   focusCircuitPanel,
   parseCircuitCommand,
 } from '@/lib/circuit';
-import type { CircuitDocument, CircuitMode, CircuitPanel } from '@/lib/circuit';
+import type { CircuitDocument, CircuitPanel } from '@/lib/circuit';
 
 interface TerminalLine {
   type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
@@ -1039,209 +1039,64 @@ function AdaptiveStudio({
 }) {
   const analysis = analyzeCircuit(workspace);
 
-  const panels = useMemo(() => {
-    return [...workspace.panels]
-      .map((panel, index) => ({
-        ...panel,
-        state: {
-          ...panel.state,
-          order: panel.state?.order ?? index + 1,
-          isOpen: panel.state?.isOpen ?? true,
-          isPinned: panel.state?.isPinned ?? false,
-        },
-      }))
-      .sort((a, b) => (a.state?.order ?? 0) - (b.state?.order ?? 0));
-  }, [workspace.panels]);
-
-  const [panelState, setPanelState] = useState<
-    Record<string, { isOpen: boolean; isPinned: boolean; order: number }>
-  >(() => {
-    const initial: Record<string, { isOpen: boolean; isPinned: boolean; order: number }> = {};
-    for (const panel of panels) {
-      initial[panel.id] = {
-        isOpen: panel.state?.isOpen ?? true,
-        isPinned: panel.state?.isPinned ?? false,
-        order: panel.state?.order ?? 0,
-      };
-    }
-    return initial;
-  });
-
-  useEffect(() => {
-    const key = 'clitronic_panel_state_v1';
-    try {
-      const stored = window.localStorage.getItem(key);
-      if (!stored) return;
-      const parsed = JSON.parse(stored) as Record<
-        string,
-        { isOpen: boolean; isPinned: boolean; order: number }
-      >;
-      if (!parsed || typeof parsed !== 'object') return;
-
-      const event = new window.CustomEvent('clitronic:panel-state-load', {
-        detail: parsed,
-      });
-      window.dispatchEvent(event);
-    } catch {
-      // ignore
-    }
-    // Load once.
-  }, []);
-
-  useEffect(() => {
-    const onLoad = (event: Event) => {
-      const custom = event as CustomEvent<
-        Record<string, { isOpen: boolean; isPinned: boolean; order: number }>
-      >;
-      const parsed = custom.detail;
-      if (!parsed || typeof parsed !== 'object') return;
-      setPanelState((prev) => {
-        const next: typeof prev = { ...prev };
-        for (const [id, state] of Object.entries(parsed)) {
-          if (!next[id]) continue;
-          next[id] = {
-            ...next[id],
-            isOpen: Boolean(state.isOpen),
-            isPinned: Boolean(state.isPinned),
-            order: Number.isFinite(state.order) ? state.order : next[id].order,
-          };
-        }
-        return next;
-      });
-    };
-
-    window.addEventListener('clitronic:panel-state-load', onLoad);
-    return () => window.removeEventListener('clitronic:panel-state-load', onLoad);
-  }, []);
-
-  useEffect(() => {
-    const key = 'clitronic_panel_state_v1';
-    try {
-      window.localStorage.setItem(key, JSON.stringify(panelState));
-    } catch {
-      // ignore
-    }
-  }, [panelState]);
-
-  const sortedPanels = useMemo(() => {
-    return panels
-      .map((panel) => {
-        const state = panelState[panel.id];
-        return {
-          ...panel,
-          state: state
-            ? { ...panel.state, ...state }
-            : { ...panel.state, isOpen: panel.state?.isOpen ?? true },
-        };
-      })
-      .sort((a, b) => ((a.state?.order ?? 0) as number) - ((b.state?.order ?? 0) as number));
-  }, [panels, panelState]);
-
-  const lastEvent = workspace.events[0];
-
-  const uiFocus = useMemo(() => {
-    if (!lastEvent) return null;
-    if (lastEvent.id === 'simulation-failed')
-      return { kind: 'keep-only' as const, panelId: 'inspector-panel' };
-    if (lastEvent.id === 'simulation-ok') return { kind: 'open' as const, panelId: 'graph-panel' };
-    if (lastEvent.kind === 'focus') {
-      const focus = lastEvent.title.toLowerCase();
-      const panelId = focus.includes('graph')
-        ? 'graph-panel'
-        : focus.includes('teacher')
-          ? 'teacher-panel'
-          : focus.includes('workbench')
-            ? 'scene-panel'
-            : 'inspector-panel';
-      return { kind: 'keep-only' as const, panelId };
-    }
-    return null;
-  }, [lastEvent]);
-
-  const applyFocus = useCallback(
-    (focus: { kind: 'keep-only'; panelId: string } | { kind: 'open'; panelId: string }) => {
-      setPanelState((prev) => {
-        const next: typeof prev = { ...prev };
-        let changed = false;
-
-        if (focus.kind === 'open') {
-          const current = next[focus.panelId];
-          if (!current || current.isOpen) return prev;
-          next[focus.panelId] = { ...current, isOpen: true };
-          return next;
-        }
-
-        for (const [id, state] of Object.entries(prev)) {
-          if (id === focus.panelId) {
-            if (!state.isOpen) {
-              next[id] = { ...state, isOpen: true };
-              changed = true;
-            }
-            continue;
-          }
-          if (!state.isPinned && state.isOpen) {
-            next[id] = { ...state, isOpen: false };
-            changed = true;
-          }
-        }
-
-        return changed ? next : prev;
-      });
-    },
-    []
+  const teacherPanel = useMemo(
+    () => workspace.panels.find((panel) => panel.kind === 'teacher'),
+    [workspace.panels]
+  );
+  const inspectorPanel = useMemo(
+    () => workspace.panels.find((panel) => panel.kind === 'inspector'),
+    [workspace.panels]
+  );
+  const graphPanel = useMemo(
+    () => workspace.panels.find((panel) => panel.kind === 'graph'),
+    [workspace.panels]
+  );
+  const topologyPanel = useMemo(
+    () =>
+      workspace.panels.find((panel) => panel.kind === 'scene' && panel.id !== 'scene-panel') ??
+      workspace.panels.find((panel) => panel.kind === 'scene'),
+    [workspace.panels]
   );
 
   const [activeTab, setActiveTab] = useState<'teacher' | 'inspector' | 'graph' | 'topology'>(
     'teacher'
   );
-
   const [windowsOpen, setWindowsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-  // Avoid state updates during render: react to focus events here.
-  useEffect(() => {
-    if (!uiFocus) return;
-    applyFocus(uiFocus);
+  const headlineSummary = useMemo(() => {
+    const summary = workspace.summary.trim();
+    if (!summary) return 'Start with a build command to open a circuit workspace.';
+    const firstSentence = summary.split(/(?<=[.!?])\s+/)[0];
+    return firstSentence ?? summary;
+  }, [workspace.summary]);
 
-    // If the system is trying to focus a panel, show windows automatically.
-    setWindowsOpen(true);
+  const stats = useMemo(() => {
+    return [
+      {
+        label: 'Mode',
+        value:
+          workspace.mode === 'simulating'
+            ? 'Simulation'
+            : workspace.mode === 'preview'
+              ? 'Preview'
+              : 'Draft',
+      },
+      { label: 'Components', value: String(workspace.nodes.length) },
+      { label: 'Connections', value: String(workspace.connections.length) },
+    ];
+  }, [workspace.connections.length, workspace.mode, workspace.nodes.length]);
 
-    if (uiFocus.panelId === 'graph-panel') setActiveTab('graph');
-    if (uiFocus.panelId === 'inspector-panel') setActiveTab('inspector');
-    if (uiFocus.panelId === 'teacher-panel') setActiveTab('teacher');
-  }, [applyFocus, uiFocus]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setPanelState((prev) => {
-        const next: typeof prev = { ...prev };
-        let changed = false;
-        for (const [id, state] of Object.entries(prev)) {
-          if (!state.isPinned && state.isOpen) {
-            next[id] = { ...state, isOpen: false };
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  const teacherPanel = sortedPanels.find((panel) => panel.kind === 'teacher');
-  const inspectorPanel = sortedPanels.find((panel) => panel.kind === 'inspector');
-  const graphPanel = sortedPanels.find((panel) => panel.kind === 'graph');
-  const topologyPanel =
-    sortedPanels.find((panel) => panel.kind === 'scene' && panel.id !== 'scene-panel') ??
-    sortedPanels.find((panel) => panel.kind === 'scene');
+  const teacherEvents = useMemo(() => {
+    const merged = [...workspace.events, ...analysis.derivedEvents];
+    return Array.from(new Map(merged.map((event) => [event.id, event])).values()).slice(0, 5);
+  }, [analysis.derivedEvents, workspace.events]);
 
   return (
     <aside className="relative flex min-h-0 flex-col bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
       <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-[#0a0f15] px-3 py-2 text-xs text-gray-400">
         <span className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Workbench</span>
-        <span className="text-gray-500">Secondary panels live below (tabbed).</span>
+        <span className="text-gray-500">Pro layout: one canvas, optional context.</span>
       </div>
 
       <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
@@ -1252,36 +1107,44 @@ function AdaptiveStudio({
               {workspace.title}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">
-              {workspace.summary}
+              {headlineSummary}
             </p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-right text-xs text-gray-200">
-            <div>
-              {workspace.mode === 'simulating'
-                ? 'Simulation running'
-                : workspace.mode === 'preview'
-                  ? 'Adaptive preview'
-                  : 'Draft document'}
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {stats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-200"
+                >
+                  <span className="text-gray-400">{stat.label}:</span> {stat.value}
+                </div>
+              ))}
             </div>
-            <div className="mt-1 text-gray-400">
-              {workspace.nodes.length} nodes • {workspace.connections.length} links
-            </div>
+            <button
+              onClick={() => setDetailsOpen((prev) => !prev)}
+              className="text-xs text-gray-400 hover:text-gray-200"
+            >
+              {detailsOpen ? 'Hide details' : 'Show details'}
+            </button>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {workspace.metrics.map((metric) => (
-            <div
-              key={`${metric.label}-${metric.value}`}
-              className="rounded-xl border border-gray-800 bg-[#0a0f15] p-3"
-            >
-              <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                {metric.label}
+        {detailsOpen && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {workspace.metrics.map((metric) => (
+              <div
+                key={`${metric.label}-${metric.value}`}
+                className="rounded-xl border border-gray-800 bg-[#0a0f15] p-3"
+              >
+                <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                  {metric.label}
+                </div>
+                <div className="mt-1 text-sm font-medium text-gray-100">{metric.value}</div>
               </div>
-              <div className="mt-1 text-sm font-medium text-gray-100">{metric.value}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4">
           <WorkbenchPreview
@@ -1340,23 +1203,17 @@ function AdaptiveStudio({
               {activeTab === 'teacher' && teacherPanel ? (
                 <WindowCard panel={teacherPanel}>
                   <div className="space-y-3 text-sm text-gray-300">
-                    {Array.from(
-                      new Map(
-                        [...workspace.events, ...analysis.derivedEvents].map((event) => [event.id, event])
-                      ).values()
-                    )
-                      .slice(0, 5)
-                      .map((event) => (
-                        <div
-                          key={event.id}
-                          className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
-                        >
-                          <div className="font-semibold text-emerald-200">{event.title}</div>
-                          <div className="mt-1 leading-relaxed text-emerald-100/80">
-                            {event.detail}
-                          </div>
+                    {teacherEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
+                      >
+                        <div className="font-semibold text-emerald-200">{event.title}</div>
+                        <div className="mt-1 leading-relaxed text-emerald-100/80">
+                          {event.detail}
                         </div>
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 </WindowCard>
               ) : null}
@@ -1520,90 +1377,6 @@ function WindowCard({ panel, children }: { panel?: CircuitPanel; children: React
       </div>
       {children}
     </section>
-  );
-}
-
-function PanelChrome({
-  panel,
-  onClose,
-  onPin,
-  onMoveUp,
-  onMoveDown,
-  onDropPanel,
-}: {
-  panel: CircuitPanel;
-  onClose: () => void;
-  onPin: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onDropPanel: (sourceId: string) => void;
-}) {
-  const pinned = panel.state?.isPinned ?? false;
-
-  const dragId = panel.id;
-
-  const [dragOver, setDragOver] = useState(false);
-
-  return (
-    <div
-      className={`-mt-1 mb-3 flex items-center justify-end gap-1 rounded-md border px-1 py-1 text-[11px] text-gray-500 transition-colors ${
-        dragOver ? 'border-cyan-600/60 bg-cyan-950/25' : 'border-transparent'
-      }`}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', dragId);
-        e.dataTransfer.effectAllowed = 'move';
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (!dragOver) setDragOver(true);
-      }}
-      onDragLeave={() => {
-        if (dragOver) setDragOver(false);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const sourceId = e.dataTransfer.getData('text/plain');
-        if (!sourceId || sourceId === dragId) return;
-        onDropPanel(sourceId);
-      }}
-      title="Drag to reorder"
-    >
-      <button
-        onClick={onMoveUp}
-        className="rounded border border-gray-800 bg-[#0a0f15] px-2 py-1 hover:border-gray-600 hover:text-gray-200"
-        title="Move up"
-      >
-        ↑
-      </button>
-      <button
-        onClick={onMoveDown}
-        className="rounded border border-gray-800 bg-[#0a0f15] px-2 py-1 hover:border-gray-600 hover:text-gray-200"
-        title="Move down"
-      >
-        ↓
-      </button>
-      <button
-        onClick={onPin}
-        className={`rounded border px-2 py-1 hover:text-gray-200 ${
-          pinned
-            ? 'border-cyan-700/50 bg-cyan-950/30 text-cyan-300'
-            : 'border-gray-800 bg-[#0a0f15] text-gray-500 hover:border-gray-600'
-        }`}
-        title={pinned ? 'Unpin' : 'Pin'}
-      >
-        pin
-      </button>
-      <button
-        onClick={onClose}
-        className="rounded border border-gray-800 bg-[#0a0f15] px-2 py-1 hover:border-gray-600 hover:text-gray-200"
-        title="Close"
-      >
-        ×
-      </button>
-    </div>
   );
 }
 
