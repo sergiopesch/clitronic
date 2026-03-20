@@ -1,5 +1,23 @@
 import type { CircuitDocument, LedSeriesSimulation } from '@/lib/circuit/types';
 
+function isConnected(document: CircuitDocument, leftKey: string, rightKey: string): boolean {
+  const left = document.nodes.find((node) => node.key === leftKey);
+  const right = document.nodes.find((node) => node.key === rightKey);
+  if (!left || !right) return false;
+
+  return document.connections.some(
+    (connection) =>
+      (connection.from === left.id && connection.to === right.id) ||
+      (connection.from === right.id && connection.to === left.id)
+  );
+}
+
+function connectionsForNode(document: CircuitDocument, nodeId: string): number {
+  return document.connections.filter(
+    (connection) => connection.from === nodeId || connection.to === nodeId
+  ).length;
+}
+
 function findNode(document: CircuitDocument, key: string) {
   return document.nodes.find((node) => node.key === key);
 }
@@ -58,6 +76,41 @@ export function simulateLedSeries(document: CircuitDocument): LedSeriesSimulatio
       reason: 'Missing required component(s).',
       warnings,
     };
+  }
+
+  // Topology MVP: require the explicit series loop to be present.
+  const hasBatteryToResistor = isConnected(document, 'battery', 'resistor');
+  const hasResistorToLed = isConnected(document, 'resistor', 'led');
+  const hasLedToGround = isConnected(document, 'led', 'ground');
+
+  if (!hasBatteryToResistor || !hasResistorToLed || !hasLedToGround) {
+    const missing = !hasBatteryToResistor
+      ? 'connect battery to resistor'
+      : !hasResistorToLed
+        ? 'connect resistor to led'
+        : 'connect led to ground';
+
+    return {
+      kind: 'led-series',
+      ok: false,
+      reason: 'Topology incomplete for LED-series simulation.',
+      warnings: [...warnings, `Missing link: ${missing}`],
+    };
+  }
+
+  // Loose MVP ambiguity detection: warn if the loop nodes have "extra" connections.
+  const degrees = {
+    battery: connectionsForNode(document, battery.id),
+    resistor: connectionsForNode(document, resistor.id),
+    led: connectionsForNode(document, led.id),
+    ground: connectionsForNode(document, ground.id),
+  };
+
+  // In a simple series loop, battery/resistor/led each have degree 2, ground has degree 1.
+  if (degrees.battery > 2 || degrees.resistor > 2 || degrees.led > 2 || degrees.ground > 1) {
+    warnings.push(
+      'Topology looks ambiguous (extra connections). MVP solver assumes a single series loop: battery → resistor → led → ground.'
+    );
   }
 
   const supplyVoltageV = parseVoltage(getParam(battery, 'voltage')) ?? 5;
