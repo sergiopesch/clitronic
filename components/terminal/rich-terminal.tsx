@@ -162,15 +162,15 @@ export function RichTerminal() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthPanel, setShowAuthPanel] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<'split' | 'terminal' | 'studio'>(() => {
-    if (typeof window === 'undefined') return 'split';
+  const [layoutMode, setLayoutMode] = useState<'terminal' | 'studio'>(() => {
+    if (typeof window === 'undefined') return 'studio';
     try {
       const stored = window.localStorage.getItem('clitronic_layout_mode_v1');
-      if (stored === 'terminal' || stored === 'studio' || stored === 'split') return stored;
+      if (stored === 'terminal' || stored === 'studio') return stored;
     } catch {
       // ignore
     }
-    return 'split';
+    return 'studio';
   });
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -831,24 +831,8 @@ export function RichTerminal() {
 
       <VoiceIndicator state={voiceState} />
 
-      <div
-        className={
-          layoutMode === 'terminal'
-            ? 'relative z-10 grid min-h-[100dvh] grid-cols-1'
-            : layoutMode === 'studio'
-              ? 'relative z-10 grid min-h-[100dvh] grid-cols-1'
-              : 'relative z-10 grid min-h-[100dvh] grid-cols-1 2xl:grid-cols-[1.3fr_0.7fr]'
-        }
-      >
-        <div
-          className={
-            layoutMode === 'studio'
-              ? 'hidden'
-              : layoutMode === 'split'
-                ? 'flex min-h-[100dvh] flex-col border-r border-cyan-900/20'
-                : 'flex min-h-[100dvh] flex-col'
-          }
-        >
+      <div className="relative z-10 grid min-h-[100dvh] grid-cols-1">
+        <div className={layoutMode === 'studio' ? 'hidden' : 'flex min-h-[100dvh] flex-col'}>
           <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -862,35 +846,26 @@ export function RichTerminal() {
               <div className="flex items-center gap-2">
                 <div className="hidden items-center gap-1 rounded border border-gray-800 bg-[#0a0f15] p-1 text-[11px] text-gray-300 sm:flex">
                   <button
-                    onClick={() => setLayoutMode('terminal')}
-                    className={`rounded px-2 py-1 transition-colors ${
-                      layoutMode === 'terminal'
-                        ? 'bg-cyan-500 text-[#032a31]'
-                        : 'hover:bg-gray-800/70'
-                    }`}
-                    title="Terminal only"
-                  >
-                    Terminal
-                  </button>
-                  <button
-                    onClick={() => setLayoutMode('split')}
-                    className={`rounded px-2 py-1 transition-colors ${
-                      layoutMode === 'split' ? 'bg-cyan-500 text-[#032a31]' : 'hover:bg-gray-800/70'
-                    }`}
-                    title="Split view"
-                  >
-                    Split
-                  </button>
-                  <button
                     onClick={() => setLayoutMode('studio')}
                     className={`rounded px-2 py-1 transition-colors ${
                       layoutMode === 'studio'
                         ? 'bg-cyan-500 text-[#032a31]'
                         : 'hover:bg-gray-800/70'
                     }`}
-                    title="Studio only"
+                    title="Workbench"
                   >
-                    Studio
+                    Workbench
+                  </button>
+                  <button
+                    onClick={() => setLayoutMode('terminal')}
+                    className={`rounded px-2 py-1 transition-colors ${
+                      layoutMode === 'terminal'
+                        ? 'bg-cyan-500 text-[#032a31]'
+                        : 'hover:bg-gray-800/70'
+                    }`}
+                    title="Console"
+                  >
+                    Console
                   </button>
                 </div>
 
@@ -1021,7 +996,7 @@ export function RichTerminal() {
                     : 'border-gray-800 bg-[#0a0f15] text-gray-400'
                 }`}
               >
-                Terminal
+                Console
               </button>
               <button
                 onClick={() => setLayoutMode('studio')}
@@ -1031,7 +1006,7 @@ export function RichTerminal() {
                     : 'border-gray-800 bg-[#0a0f15] text-gray-400'
                 }`}
               >
-                Studio
+                Workbench
               </button>
             </div>
           </footer>
@@ -1194,22 +1169,6 @@ function AdaptiveStudio({
       .sort((a, b) => ((a.state?.order ?? 0) as number) - ((b.state?.order ?? 0) as number));
   }, [panels, panelState]);
 
-  const closePanel = useCallback((panelId: string) => {
-    setPanelState((prev) => {
-      const current = prev[panelId];
-      if (!current) return prev;
-      return { ...prev, [panelId]: { ...current, isOpen: false } };
-    });
-  }, []);
-
-  const openPanel = useCallback((panelId: string) => {
-    setPanelState((prev) => {
-      const current = prev[panelId];
-      if (!current) return prev;
-      return { ...prev, [panelId]: { ...current, isOpen: true } };
-    });
-  }, []);
-
   const lastEvent = workspace.events[0];
 
   const uiFocus = useMemo(() => {
@@ -1264,66 +1223,19 @@ function AdaptiveStudio({
     []
   );
 
-  const togglePin = useCallback((panelId: string) => {
-    setPanelState((prev) => {
-      const current = prev[panelId];
-      if (!current) return prev;
-      return { ...prev, [panelId]: { ...current, isPinned: !current.isPinned } };
-    });
-  }, []);
+  const [activeTab, setActiveTab] = useState<'teacher' | 'inspector' | 'graph' | 'topology'>(
+    'teacher'
+  );
 
-  const movePanel = useCallback((panelId: string, direction: 'up' | 'down') => {
-    setPanelState((prev) => {
-      const entries = Object.entries(prev);
-      const current = prev[panelId];
-      if (!current) return prev;
+  // Avoid state updates during render: react to focus events here.
+  useEffect(() => {
+    if (!uiFocus) return;
+    applyFocus(uiFocus);
 
-      const orderList = entries
-        .map(([id, state]) => ({ id, order: state.order }))
-        .sort((a, b) => a.order - b.order);
-
-      const index = orderList.findIndex((item) => item.id === panelId);
-      if (index < 0) return prev;
-      const swapWith = direction === 'up' ? index - 1 : index + 1;
-      if (swapWith < 0 || swapWith >= orderList.length) return prev;
-
-      const a = orderList[index];
-      const b = orderList[swapWith];
-      if (!a || !b) return prev;
-
-      return {
-        ...prev,
-        [a.id]: { ...prev[a.id]!, order: b.order },
-        [b.id]: { ...prev[b.id]!, order: a.order },
-      };
-    });
-  }, []);
-
-  const reorderPanel = useCallback((sourceId: string, targetId: string) => {
-    setPanelState((prev) => {
-      const orderList = Object.entries(prev)
-        .map(([id, state]) => ({ id, order: state.order }))
-        .sort((a, b) => a.order - b.order);
-
-      const fromIndex = orderList.findIndex((item) => item.id === sourceId);
-      const toIndex = orderList.findIndex((item) => item.id === targetId);
-      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return prev;
-
-      const ids = orderList.map((item) => item.id);
-      const [moved] = ids.splice(fromIndex, 1);
-      if (!moved) return prev;
-      ids.splice(toIndex, 0, moved);
-
-      const next: typeof prev = { ...prev };
-      ids.forEach((id, index) => {
-        const current = next[id];
-        if (!current) return;
-        next[id] = { ...current, order: index + 1 };
-      });
-
-      return next;
-    });
-  }, []);
+    if (uiFocus.panelId === 'graph-panel') setActiveTab('graph');
+    if (uiFocus.panelId === 'inspector-panel') setActiveTab('inspector');
+    if (uiFocus.panelId === 'teacher-panel') setActiveTab('teacher');
+  }, [applyFocus, uiFocus]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1345,29 +1257,18 @@ function AdaptiveStudio({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  const teacherPanel = sortedPanels.find((panel) => panel.kind === 'teacher');
+  const inspectorPanel = sortedPanels.find((panel) => panel.kind === 'inspector');
+  const graphPanel = sortedPanels.find((panel) => panel.kind === 'graph');
+  const topologyPanel =
+    sortedPanels.find((panel) => panel.kind === 'scene' && panel.id !== 'scene-panel') ??
+    sortedPanels.find((panel) => panel.kind === 'scene');
+
   return (
     <aside className="relative flex min-h-[100dvh] flex-col overflow-y-auto bg-[#0b1118]/92 px-4 py-4 backdrop-blur-sm">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-800 bg-[#0a0f15] px-3 py-2 text-xs text-gray-400">
-        <span className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Windows</span>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-500">Tip:</span>
-          <span>× close • pin • ↑ ↓ reorder</span>
-        </div>
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Open</div>
-        {sortedPanels
-          .filter((panel) => !(panelState[panel.id]?.isOpen ?? true))
-          .map((panel) => (
-            <button
-              key={`open-${panel.id}`}
-              onClick={() => openPanel(panel.id)}
-              className="rounded-full border border-gray-800 bg-[#0a0f15] px-3 py-1.5 text-xs text-gray-300 hover:border-gray-600 hover:text-gray-100"
-            >
-              + {panel.title}
-            </button>
-          ))}
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-[#0a0f15] px-3 py-2 text-xs text-gray-400">
+        <span className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Workbench</span>
+        <span className="text-gray-500">Secondary panels live below (tabbed).</span>
       </div>
 
       <div className="mb-4 rounded-2xl border border-cyan-900/30 bg-[#0c141d] p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.04)]">
@@ -1409,157 +1310,166 @@ function AdaptiveStudio({
             </div>
           ))}
         </div>
+
+        <div className="mt-4">
+          <WorkbenchPreview
+            nodes={workspace.nodes}
+            connections={workspace.connections}
+            mode={workspace.mode}
+          />
+        </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ApplyUiFocus focus={uiFocus} apply={applyFocus} />
-        {sortedPanels
-          .filter((panel) => panel.kind !== 'next-step')
-          .map((panel) => (
-            <WindowCard
-              key={panel.id}
-              panel={{
-                ...panel,
-                state: panel.state,
-              }}
-            >
-              <PanelChrome
-                panel={panel}
-                onClose={() => closePanel(panel.id)}
-                onPin={() => togglePin(panel.id)}
-                onMoveUp={() => movePanel(panel.id, 'up')}
-                onMoveDown={() => movePanel(panel.id, 'down')}
-                onDropPanel={(sourceId) => reorderPanel(sourceId, panel.id)}
-              />
-              {panel.kind === 'scene' && panel.id === 'scene-panel' ? (
-                <WorkbenchPreview
-                  nodes={workspace.nodes}
-                  connections={workspace.connections}
-                  mode={workspace.mode}
-                />
-              ) : panel.kind === 'scene' ? (
-                <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
-              ) : panel.kind === 'teacher' ? (
-                <div className="space-y-3 text-sm text-gray-300">
-                  {[...workspace.events, ...analysis.derivedEvents].slice(0, 8).map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
-                    >
-                      <div className="font-semibold text-emerald-200">{event.title}</div>
-                      <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : panel.kind === 'inspector' ? (
-                <div className="space-y-3 text-sm text-gray-300">
-                  <div>
-                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                      Detected circuit nodes
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {workspace.nodes.map((node) => (
+      <div className="mt-4 rounded-2xl border border-gray-800 bg-[#0a0f15] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Windows</div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {(
+              [
+                ['teacher', 'Teacher'],
+                ['inspector', 'Inspector'],
+                ['graph', 'Graph'],
+                ['topology', 'Topology'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`rounded-full border px-3 py-1.5 transition-colors ${
+                  activeTab === id
+                    ? 'border-cyan-500/40 bg-cyan-950/30 text-cyan-200'
+                    : 'border-gray-800 bg-[#0a0f15] text-gray-400 hover:border-gray-600 hover:text-gray-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          {activeTab === 'teacher' && teacherPanel ? (
+            <WindowCard panel={teacherPanel}>
+              <div className="space-y-3 text-sm text-gray-300">
+                {[...workspace.events, ...analysis.derivedEvents].slice(0, 5).map((event) => (
+                  <div
+                    key={event.id}
+                    className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
+                  >
+                    <div className="font-semibold text-emerald-200">{event.title}</div>
+                    <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </WindowCard>
+          ) : null}
+
+          {activeTab === 'inspector' && inspectorPanel ? (
+            <WindowCard panel={inspectorPanel}>
+              <div className="space-y-3 text-sm text-gray-300">
+                <div>
+                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                    Detected circuit nodes
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {workspace.nodes.length ? (
+                      workspace.nodes.map((node) => (
                         <span
                           key={node.id}
                           className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200"
                         >
                           {node.label}
                         </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                      Parameters
-                    </div>
-                    <div className="space-y-2">
-                      {workspace.nodes.map((node) =>
-                        node.parameters && node.parameters.length > 0 ? (
-                          <div
-                            key={`${node.id}-params`}
-                            className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
-                          >
-                            <div className="text-xs font-semibold text-amber-200">{node.label}</div>
-                            <div className="mt-1 flex flex-wrap gap-2">
-                              {node.parameters.map((param) => (
-                                <span
-                                  key={`${node.id}-${param.key}`}
-                                  className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100"
-                                >
-                                  {param.label}: {param.value}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                      Derived analysis
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {analysis.derivedMetrics.map((metric) => (
-                        <div
-                          key={`${metric.label}-${metric.value}`}
-                          className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
-                        >
-                          <div className="text-[11px] tracking-[0.12em] text-gray-500 uppercase">
-                            {metric.label}
-                          </div>
-                          <div className="mt-1 text-sm font-medium text-white">{metric.value}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                      Recommended fixes
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {analysis.suggestedFixes.length > 0 ? (
-                        analysis.suggestedFixes.map((fix) => (
-                          <button
-                            key={fix}
-                            onClick={() => onQuickCommand(fix)}
-                            className="rounded-full border border-emerald-700/30 bg-emerald-950/20 px-3 py-1.5 text-xs text-emerald-200 transition hover:border-emerald-500/50 hover:bg-emerald-900/30"
-                          >
-                            {fix}
-                          </button>
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-500">
-                          No targeted fixes suggested right now.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                      Why these windows are open
-                    </div>
-                    <ul className="space-y-2 text-gray-300">
-                      {workspace.insights.map((insight, index) => (
-                        <li
-                          key={`${index}-${insight}`}
-                          className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2 leading-relaxed"
-                        >
-                          {insight}
-                        </li>
-                      ))}
-                    </ul>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500">No nodes yet.</span>
+                    )}
                   </div>
                 </div>
-              ) : panel.kind === 'graph' ? (
-                <GraphPreview workspace={workspace} />
-              ) : null}
+
+                <div>
+                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                    Parameters
+                  </div>
+                  <div className="space-y-2">
+                    {workspace.nodes.map((node) =>
+                      node.parameters && node.parameters.length > 0 ? (
+                        <div
+                          key={`${node.id}-params`}
+                          className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                        >
+                          <div className="text-xs font-semibold text-amber-200">{node.label}</div>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {node.parameters.map((param) => (
+                              <span
+                                key={`${node.id}-${param.key}`}
+                                className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100"
+                              >
+                                {param.label}: {param.value}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                    Derived analysis
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {analysis.derivedMetrics.map((metric) => (
+                      <div
+                        key={`${metric.label}-${metric.value}`}
+                        className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                      >
+                        <div className="text-[11px] tracking-[0.12em] text-gray-500 uppercase">
+                          {metric.label}
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-white">{metric.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                    Recommended fixes
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {analysis.suggestedFixes.length > 0 ? (
+                      analysis.suggestedFixes.map((fix) => (
+                        <button
+                          key={fix}
+                          onClick={() => onQuickCommand(fix)}
+                          className="rounded-full border border-emerald-700/30 bg-emerald-950/20 px-3 py-1.5 text-xs text-emerald-200 transition hover:border-emerald-500/50 hover:bg-emerald-900/30"
+                        >
+                          {fix}
+                        </button>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500">No targeted fixes suggested.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </WindowCard>
-          ))}
+          ) : null}
+
+          {activeTab === 'graph' && graphPanel ? (
+            <WindowCard panel={graphPanel}>
+              <GraphPreview workspace={workspace} />
+            </WindowCard>
+          ) : null}
+
+          {activeTab === 'topology' && topologyPanel ? (
+            <WindowCard panel={topologyPanel}>
+              <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
+            </WindowCard>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-4 rounded-2xl border border-gray-800 bg-[#0a0f15] p-4">
@@ -1698,21 +1608,6 @@ function PanelChrome({
       </button>
     </div>
   );
-}
-
-function ApplyUiFocus({
-  focus,
-  apply,
-}: {
-  focus: { kind: 'keep-only'; panelId: string } | { kind: 'open'; panelId: string } | null;
-  apply: (
-    focus: { kind: 'keep-only'; panelId: string } | { kind: 'open'; panelId: string }
-  ) => void;
-}) {
-  if (focus) {
-    apply(focus);
-  }
-  return null;
 }
 
 function WorkbenchPreview({
