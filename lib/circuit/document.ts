@@ -4,6 +4,7 @@ import type {
   CircuitConnection,
   CircuitDocument,
   CircuitEvent,
+  CircuitFocusTarget,
   CircuitMetric,
   CircuitMode,
   CircuitNode,
@@ -283,6 +284,51 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
   return panels;
 }
 
+function normalizeFocusTarget(value?: string): CircuitFocusTarget {
+  const normalized = value?.trim().toLowerCase() ?? 'workbench';
+
+  if (normalized.includes('inspect')) return 'inspector';
+  if (normalized.includes('graph') || normalized.includes('signal')) return 'graph';
+  if (normalized.includes('topology') || normalized.includes('map')) return 'topology';
+  if (normalized.includes('teach')) return 'teacher';
+  return 'workbench';
+}
+
+function applyFocusToPanels(
+  panels: CircuitPanel[],
+  focusedPanel: CircuitFocusTarget | undefined
+): CircuitPanel[] {
+  const focus = focusedPanel ?? 'workbench';
+
+  return panels.map((panel) => {
+    if (!panel.state) return panel;
+
+    if (focus === 'workbench') {
+      return panel.id === 'topology-panel' || panel.id === 'graph-panel'
+        ? { ...panel, state: { ...panel.state, isOpen: false } }
+        : panel;
+    }
+
+    if (focus === 'teacher' && panel.kind === 'teacher') {
+      return { ...panel, state: { ...panel.state, isOpen: true } };
+    }
+
+    if (focus === 'inspector' && panel.kind === 'inspector') {
+      return { ...panel, state: { ...panel.state, isOpen: true } };
+    }
+
+    if (focus === 'graph' && panel.kind === 'graph') {
+      return { ...panel, state: { ...panel.state, isOpen: true } };
+    }
+
+    if (focus === 'topology' && panel.id === 'topology-panel') {
+      return { ...panel, state: { ...panel.state, isOpen: true } };
+    }
+
+    return panel;
+  });
+}
+
 function buildInsights(
   nodes: CircuitNode[],
   mode: CircuitMode,
@@ -411,6 +457,52 @@ function buildNextActions(
   return unique(next).slice(0, 6);
 }
 
+function documentSummary(prompt: string): string {
+  return `Structured circuit document derived from the command: ${prompt}. This gives Clitronic a foundation for event-driven teaching windows, validation, and later true simulation state.`;
+}
+
+export function syncCircuitDocument(
+  document: Pick<
+    CircuitDocument,
+    'id' | 'prompt' | 'title' | 'mode' | 'nodes' | 'connections' | 'simulation' | 'focusedPanel'
+  > &
+    Partial<Pick<CircuitDocument, 'summary' | 'events'>>
+): CircuitDocument {
+  const cleanPrompt = document.prompt.trim() || 'new circuit idea';
+  const events = buildEvents(document.nodes, document.connections, document.mode);
+  const focus = normalizeFocusTarget(document.focusedPanel);
+  const panels = applyFocusToPanels(buildPanels(document.nodes, document.mode), focus);
+  const insights = buildInsights(document.nodes, document.mode, document.connections);
+
+  return {
+    id:
+      document.id ||
+      `circuit-${
+        cleanPrompt
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || 'draft'
+      }`,
+    prompt: cleanPrompt,
+    title: document.title.trim() || titleCase(cleanPrompt),
+    mode: document.mode,
+    focusedPanel: focus,
+    summary: document.summary?.trim() || documentSummary(cleanPrompt),
+    nodes: document.nodes,
+    connections: document.connections,
+    simulation: document.simulation,
+    metrics: buildMetrics(document.nodes, document.connections, events, document.mode),
+    events: [...(document.events ?? []), ...events]
+      .filter(
+        (event, index, arr) => arr.findIndex((candidate) => candidate.id === event.id) === index
+      )
+      .slice(0, 8),
+    panels,
+    insights,
+    nextActions: buildNextActions(document.nodes, document.connections, document.mode),
+  };
+}
+
 export function createCircuitDocument(
   prompt: string,
   mode: CircuitMode = 'preview'
@@ -418,11 +510,7 @@ export function createCircuitDocument(
   const cleanPrompt = prompt.trim() || 'new circuit idea';
   const nodes = buildNodes(cleanPrompt);
   const connections = buildConnections(nodes);
-  const events = buildEvents(nodes, connections, mode);
-  const panels = buildPanels(nodes, mode);
-  const insights = buildInsights(nodes, mode, connections);
-
-  return {
+  return syncCircuitDocument({
     id: `circuit-${
       cleanPrompt
         .toLowerCase()
@@ -432,15 +520,12 @@ export function createCircuitDocument(
     prompt: cleanPrompt,
     title: titleCase(cleanPrompt),
     mode,
-    summary: `Structured circuit document derived from the command: ${cleanPrompt}. This gives Clitronic a foundation for event-driven teaching windows, validation, and later true simulation state.`,
+    focusedPanel: 'workbench',
+    summary: documentSummary(cleanPrompt),
     nodes,
     connections,
-    metrics: buildMetrics(nodes, connections, events, mode),
-    events,
-    panels,
-    insights,
-    nextActions: buildNextActions(nodes, connections, mode),
-  };
+    simulation: undefined,
+  });
 }
 
 export function activateCircuitSimulation(document: CircuitDocument): CircuitDocument {
@@ -448,7 +533,8 @@ export function activateCircuitSimulation(document: CircuitDocument): CircuitDoc
 }
 
 export function focusCircuitPanel(document: CircuitDocument, panelName: string): CircuitDocument {
-  const label = titleCase(panelName.trim() || 'inspector');
+  const focus = normalizeFocusTarget(panelName);
+  const label = titleCase(focus === 'workbench' ? 'workbench' : focus);
   const focusEvent: CircuitEvent = {
     id: `focus-${panelName.toLowerCase().replace(/\s+/g, '-') || 'inspector'}`,
     kind: 'focus',
@@ -456,14 +542,9 @@ export function focusCircuitPanel(document: CircuitDocument, panelName: string):
     detail: `The interface should emphasise the ${label.toLowerCase()} window while keeping enough context to avoid disorienting the learner.`,
   };
 
-  const events = [focusEvent, ...document.events].slice(0, 6);
-
-  return {
+  return syncCircuitDocument({
     ...document,
-    metrics: [
-      ...document.metrics.filter((metric) => metric.label !== 'Focus'),
-      { label: 'Focus', value: label },
-    ],
-    events,
-  };
+    focusedPanel: focus,
+    events: [focusEvent, ...document.events],
+  });
 }

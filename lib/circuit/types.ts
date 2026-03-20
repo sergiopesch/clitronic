@@ -47,6 +47,8 @@ export interface CircuitEvent {
 
 export type CircuitPanelKind = 'scene' | 'teacher' | 'inspector' | 'graph' | 'next-step';
 
+export type CircuitFocusTarget = 'workbench' | 'teacher' | 'inspector' | 'graph' | 'topology';
+
 export interface CircuitPanel {
   id: string;
   kind: CircuitPanelKind;
@@ -65,6 +67,7 @@ export interface CircuitDocument {
   prompt: string;
   title: string;
   mode: CircuitMode;
+  focusedPanel?: CircuitFocusTarget;
   summary: string;
   nodes: CircuitNode[];
   connections: CircuitConnection[];

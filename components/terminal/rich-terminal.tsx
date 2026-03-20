@@ -119,11 +119,26 @@ function titleCase(value: string): string {
     .join(' ');
 }
 
+function getOpenPanelTitles(workspace: CircuitDocument): string[] {
+  return workspace.panels
+    .filter((panel) => panel.state?.isOpen !== false)
+    .map((panel) => panel.title);
+}
+
+function getFocusedTab(
+  focus?: CircuitDocument['focusedPanel']
+): 'teacher' | 'inspector' | 'graph' | 'topology' {
+  if (focus === 'inspector') return 'inspector';
+  if (focus === 'graph') return 'graph';
+  if (focus === 'topology') return 'topology';
+  return 'teacher';
+}
+
 function buildTeacherPrompt(userInput: string, workspace: CircuitDocument): string {
   const nodes = workspace.nodes.length
     ? workspace.nodes.map((node) => node.label).join(', ')
     : 'none yet';
-  const panels = workspace.panels.map((panel) => panel.title).join(', ');
+  const panels = getOpenPanelTitles(workspace).join(', ') || 'workbench only';
 
   return `You are helping design Clitronic as a command-first adaptive electronics studio.
 
@@ -302,10 +317,7 @@ export function RichTerminal() {
     inputRef.current?.focus();
   }, []);
 
-  const panelSummary = useMemo(
-    () => workspace.panels.map((panel) => panel.title).join(' • '),
-    [workspace.panels]
-  );
+  const panelSummary = useMemo(() => getOpenPanelTitles(workspace).join(' • '), [workspace]);
 
   const handleConnectClaudeCode = useCallback(async () => {
     const result = await connectClaudeCode();
@@ -707,6 +719,15 @@ export function RichTerminal() {
     void handleCommand(currentInput);
   }, [handleCommand, input, isProcessing]);
 
+  const runQuickCommand = useCallback(
+    (command: string) => {
+      if (isProcessing) return;
+      setInput('');
+      void handleCommand(command);
+    },
+    [handleCommand, isProcessing]
+  );
+
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -929,13 +950,7 @@ export function RichTerminal() {
             </div>
           ) : (
             <div className="h-full overflow-y-auto">
-              <AdaptiveStudio
-                workspace={workspace}
-                onQuickCommand={(command) => {
-                  setInput(command);
-                  inputRef.current?.focus();
-                }}
-              />
+              <AdaptiveStudio workspace={workspace} onQuickCommand={runQuickCommand} />
             </div>
           )}
         </main>
@@ -1067,11 +1082,19 @@ function AdaptiveStudio({
     [workspace.panels]
   );
 
-  const [activeTab, setActiveTab] = useState<'teacher' | 'inspector' | 'graph' | 'topology'>(
-    'teacher'
-  );
-  const [windowsOpen, setWindowsOpen] = useState(false);
+  const [manualActiveTab, setManualActiveTab] = useState<
+    'teacher' | 'inspector' | 'graph' | 'topology'
+  >(getFocusedTab(workspace.focusedPanel));
+  const [manualWindowsOpen, setManualWindowsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const activeTab =
+    workspace.focusedPanel && workspace.focusedPanel !== 'workbench'
+      ? getFocusedTab(workspace.focusedPanel)
+      : manualActiveTab;
+
+  const windowsOpen =
+    manualWindowsOpen || Boolean(workspace.focusedPanel && workspace.focusedPanel !== 'workbench');
 
   const headlineSummary = useMemo(() => {
     const summary = workspace.summary.trim();
@@ -1175,7 +1198,7 @@ function AdaptiveStudio({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setWindowsOpen((prev) => !prev)}
+              onClick={() => setManualWindowsOpen((prev) => !prev)}
               className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-gray-200 hover:bg-white/10"
             >
               {windowsOpen ? 'Hide' : 'Show'} windows
@@ -1196,7 +1219,10 @@ function AdaptiveStudio({
               ).map(([id, label]) => (
                 <button
                   key={id}
-                  onClick={() => setActiveTab(id)}
+                  onClick={() => {
+                    setManualWindowsOpen(true);
+                    setManualActiveTab(id);
+                  }}
                   className={`rounded-full border px-3 py-1.5 transition-colors ${
                     activeTab === id
                       ? 'border-cyan-500/40 bg-cyan-950/30 text-cyan-200'

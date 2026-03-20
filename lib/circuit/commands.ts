@@ -1,4 +1,4 @@
-import { createCircuitDocument } from './document';
+import { createCircuitDocument, syncCircuitDocument } from './document';
 import type { CircuitDocument, CircuitNode, CircuitNodeParameter } from './types';
 
 function titleCase(value: string): string {
@@ -103,18 +103,12 @@ function ensureNode(document: CircuitDocument, label: string) {
 }
 
 function refreshDocument(document: CircuitDocument): CircuitDocument {
-  const prompt = document.nodes.map((node) => node.label).join(' connected to ');
-  const rebuilt = createCircuitDocument(prompt || document.prompt, document.mode);
-
-  return {
-    ...rebuilt,
-    nodes: document.nodes,
-    connections: document.connections,
-    simulation: document.simulation,
+  return syncCircuitDocument({
+    ...document,
     summary:
-      rebuilt.summary +
-      ' This version includes explicit command edits layered onto the circuit document.',
-  };
+      `Structured circuit document derived from the command: ${document.prompt}. ` +
+      'This version includes explicit command edits layered onto the original intent.',
+  });
 }
 
 function ensureDefaultsForLedSeries(document: CircuitDocument): CircuitDocument {
