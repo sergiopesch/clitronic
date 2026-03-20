@@ -102,6 +102,60 @@ function refreshDocument(document: CircuitDocument): CircuitDocument {
   };
 }
 
+function ensureDefaultsForLedSeries(document: CircuitDocument): CircuitDocument {
+  const draft: CircuitDocument = {
+    ...document,
+    nodes: [...document.nodes],
+    connections: [...document.connections],
+  };
+
+  const battery = ensureNode(draft, 'battery');
+  battery.type = 'power';
+  if (!battery.parameters?.some((p) => p.key === 'voltage')) {
+    upsertParameter(battery, { key: 'voltage', label: 'Voltage', value: '9V' });
+  }
+
+  const resistor = ensureNode(draft, 'resistor');
+  resistor.type = 'passive';
+  if (!resistor.parameters?.some((p) => p.key === 'resistance')) {
+    upsertParameter(resistor, { key: 'resistance', label: 'Resistance', value: '220Ω' });
+  }
+
+  const led = ensureNode(draft, 'led');
+  led.type = 'output';
+  if (!led.parameters?.some((p) => p.key === 'forward-voltage')) {
+    upsertParameter(led, { key: 'forward-voltage', label: 'Forward voltage', value: '2.0V' });
+  }
+
+  const ground = ensureNode(draft, 'ground');
+  ground.type = 'ground';
+
+  const addConnection = (fromId: string, toId: string, label: string) => {
+    const exists = draft.connections.some(
+      (connection) =>
+        (connection.from === fromId && connection.to === toId) ||
+        (connection.from === toId && connection.to === fromId)
+    );
+    if (!exists) {
+      draft.connections = [
+        ...draft.connections,
+        {
+          id: `connection-${draft.connections.length + 1}`,
+          from: fromId,
+          to: toId,
+          label,
+        },
+      ];
+    }
+  };
+
+  addConnection(battery.id, resistor.id, 'auto-wired series loop');
+  addConnection(resistor.id, led.id, 'auto-wired series loop');
+  addConnection(led.id, ground.id, 'auto-wired series loop');
+
+  return draft;
+}
+
 function upsertParameter(node: CircuitNode, parameter: CircuitNodeParameter) {
   const nextParameters = [...(node.parameters ?? [])];
   const existingIndex = nextParameters.findIndex((item) => item.key === parameter.key);
@@ -120,7 +174,20 @@ export async function applyStructuredCommand(
   parsed: ParsedCircuitCommand
 ): Promise<CircuitDocument> {
   if (parsed.kind === 'build') {
-    return createCircuitDocument(parsed.args || 'new circuit idea', 'preview');
+    const intent = parsed.args.trim().toLowerCase();
+    const built = createCircuitDocument(parsed.args || 'new circuit idea', 'preview');
+
+    if (intent === 'led' || intent.includes('led circuit')) {
+      const seeded = ensureDefaultsForLedSeries(built);
+      return refreshDocument({
+        ...seeded,
+        summary:
+          built.summary +
+          ' Quick build: seeded a battery → resistor → LED → ground loop with safe defaults.',
+      });
+    }
+
+    return built;
   }
 
   if (parsed.kind === 'add') {

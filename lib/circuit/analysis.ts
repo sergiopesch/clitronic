@@ -167,8 +167,8 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
     }
   }
 
-  if (led && !ground) {
-    suggestedFixes.push('add ground');
+  if (!ground) {
+    suggestedFixes.unshift('add ground');
   }
 
   if (led && battery && !resistor) {
@@ -179,6 +179,7 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
     derivedMetrics,
     derivedEvents,
     derivedInsights,
+    // Preserve order: we intentionally unshift "add ground" as a first suggestion.
     suggestedFixes: Array.from(new Set(suggestedFixes.filter(Boolean))).slice(0, 5),
   };
 }
