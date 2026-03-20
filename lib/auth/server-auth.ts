@@ -100,9 +100,7 @@ async function getClaudeProviderAvailability(): Promise<AuthProviderAvailability
     id: 'claude-code',
     name: 'Claude Code',
     available: false,
-    reason: isHostedRuntime()
-      ? 'No server Anthropic credentials configured'
-      : check.reason,
+    reason: isHostedRuntime() ? 'No server Anthropic credentials configured' : check.reason,
   };
 }
 
@@ -139,9 +137,7 @@ async function getCodexProviderAvailability(): Promise<AuthProviderAvailability>
     id: 'openai-codex',
     name: 'OpenAI Codex',
     available: false,
-    reason: isHostedRuntime()
-      ? 'No server OpenAI credentials configured'
-      : check.reason,
+    reason: isHostedRuntime() ? 'No server OpenAI credentials configured' : check.reason,
   };
 }
 

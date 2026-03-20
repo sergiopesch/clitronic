@@ -5,6 +5,7 @@
 Clitronic is evolving from an AI terminal companion into a **command-first web studio** for electronics learning and experimentation.
 
 The terminal is still the spine, but the interface now sketches a bigger idea:
+
 - commands create intent
 - the workspace reacts visually
 - teacher windows open when they are useful

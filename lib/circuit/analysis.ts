@@ -1,4 +1,10 @@
-import type { CircuitConnection, CircuitDocument, CircuitEvent, CircuitMetric, CircuitNode } from './types';
+import type {
+  CircuitConnection,
+  CircuitDocument,
+  CircuitEvent,
+  CircuitMetric,
+  CircuitNode,
+} from './types';
 
 function getNode(nodes: CircuitNode[], key: string): CircuitNode | undefined {
   return nodes.find((node) => node.key === key);
@@ -59,13 +65,22 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
   if (battery && resistor && led && supplyVoltage && resistance && ledForward) {
     const currentMa = ((supplyVoltage - ledForward) / resistance) * 1000;
     const resistorDrop = supplyVoltage - ledForward;
-    const resistorPowerMw = ((currentMa / 1000) ** 2) * resistance * 1000;
-    const recommendedResistance = Math.round(((supplyVoltage - ledForward) / 0.012) / 10) * 10;
+    const resistorPowerMw = (currentMa / 1000) ** 2 * resistance * 1000;
+    const recommendedResistance = Math.round((supplyVoltage - ledForward) / 0.012 / 10) * 10;
     const brightnessBand =
-      currentMa < 5 ? 'Very dim' : currentMa < 12 ? 'Comfortable' : currentMa < 20 ? 'Bright' : 'Aggressive';
+      currentMa < 5
+        ? 'Very dim'
+        : currentMa < 12
+          ? 'Comfortable'
+          : currentMa < 20
+            ? 'Bright'
+            : 'Aggressive';
 
     derivedMetrics.push({ label: 'Estimated LED current', value: `${currentMa.toFixed(1)}mA` });
-    derivedMetrics.push({ label: 'Resistor dissipation', value: `${resistorPowerMw.toFixed(1)}mW` });
+    derivedMetrics.push({
+      label: 'Resistor dissipation',
+      value: `${resistorPowerMw.toFixed(1)}mW`,
+    });
     derivedMetrics.push({ label: 'Brightness band', value: brightnessBand });
     derivedMetrics.push({ label: 'Suggested resistor', value: `${recommendedResistance}Ω` });
 

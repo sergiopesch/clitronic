@@ -9,10 +9,15 @@ import { useLongPress, useVoiceRecording } from '@/hooks';
 import { VoiceIndicator, type VoiceState } from '@/components/voice';
 import { playAudioFeedback, preloadAudioFeedback } from '@/lib/utils/audio';
 import { AnimatedWelcome } from './animated-welcome';
-import { electronicsComponents } from '@/lib/data/components';
-import { activateCircuitSimulation, analyzeCircuit, applyStructuredCommand, createCircuitDocument, focusCircuitPanel, parseCircuitCommand } from '@/lib/circuit';
+import {
+  activateCircuitSimulation,
+  analyzeCircuit,
+  applyStructuredCommand,
+  createCircuitDocument,
+  focusCircuitPanel,
+  parseCircuitCommand,
+} from '@/lib/circuit';
 import type { CircuitDocument, CircuitMode, CircuitPanel } from '@/lib/circuit';
-
 
 interface TerminalLine {
   type: 'text' | 'command' | 'response' | 'error' | 'system' | 'image' | 'welcome' | 'ascii';
@@ -41,7 +46,10 @@ interface AuthPanelProps {
   onRefresh: () => void;
 }
 
-const DEFAULT_WORKSPACE: CircuitDocument = createCircuitDocument('simple led circuit with a resistor and battery', 'draft');
+const DEFAULT_WORKSPACE: CircuitDocument = createCircuitDocument(
+  'simple led circuit with a resistor and battery',
+  'draft'
+);
 
 const HELP_TEXT = `
   ┌──────────────────────────────────────────────────────────────────────────┐
@@ -109,30 +117,10 @@ function titleCase(value: string): string {
     .join(' ');
 }
 
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
-function inferCircuitTokens(input: string): string[] {
-  const source = input.toLowerCase();
-  const matches = electronicsComponents
-    .filter((component) => source.includes(component.id) || source.includes(component.name.toLowerCase()))
-    .map((component) => component.id.replace(/-/g, ' '));
-
-  if (source.includes('battery')) matches.unshift('battery');
-  if (source.includes('ground') || source.includes('gnd')) matches.push('ground');
-  if (source.includes('wire')) matches.push('wire');
-
-  if (matches.length === 0) {
-    if (source.includes('sensor')) matches.push('sensor');
-    if (source.includes('circuit')) matches.push('circuit');
-  }
-
-  return unique(matches).slice(0, 6);
-}
-
 function buildTeacherPrompt(userInput: string, workspace: CircuitDocument): string {
-  const nodes = workspace.nodes.length ? workspace.nodes.map((node) => node.label).join(', ') : 'none yet';
+  const nodes = workspace.nodes.length
+    ? workspace.nodes.map((node) => node.label).join(', ')
+    : 'none yet';
   const panels = workspace.panels.map((panel) => panel.title).join(', ');
 
   return `You are helping design Clitronic as a command-first adaptive electronics studio.
@@ -543,7 +531,10 @@ export function RichTerminal() {
       if (command === 'simulate') {
         const nextWorkspace = activateCircuitSimulation(workspace);
         setWorkspace(nextWorkspace);
-        addLine({ type: 'system', content: '✓ Simulation mode active — graph and next-step windows opened' });
+        addLine({
+          type: 'system',
+          content: '✓ Simulation mode active — graph and next-step windows opened',
+        });
         return;
       }
 
@@ -660,7 +651,10 @@ export function RichTerminal() {
           return;
         }
 
-        const draftWorkspace = createCircuitDocument(trimmedCmd, workspace.mode === 'simulating' ? 'simulating' : 'preview');
+        const draftWorkspace = createCircuitDocument(
+          trimmedCmd,
+          workspace.mode === 'simulating' ? 'simulating' : 'preview'
+        );
         setWorkspace(draftWorkspace);
         await askTeacher(trimmedCmd, draftWorkspace);
       } catch (err) {
@@ -673,14 +667,7 @@ export function RichTerminal() {
         setIsProcessing(false);
       }
     },
-    [
-      addLine,
-      askTeacher,
-      authSource,
-      canMakeApiCalls,
-      showAuthRequiredError,
-      workspace,
-    ]
+    [addLine, askTeacher, authSource, canMakeApiCalls, showAuthRequiredError, workspace]
   );
 
   const submitCurrentInput = useCallback(() => {
@@ -806,7 +793,9 @@ export function RichTerminal() {
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#070b11]/90 backdrop-blur-sm">
           <div className="rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-500/10 px-8 py-6 text-center">
             <div className="mb-3 text-4xl">📷</div>
-            <div className="text-lg font-semibold text-cyan-300">Drop image to identify component</div>
+            <div className="text-lg font-semibold text-cyan-300">
+              Drop image to identify component
+            </div>
             <div className="mt-1 text-xs text-gray-400">JPEG, PNG, WEBP supported</div>
           </div>
         </div>
@@ -819,8 +808,12 @@ export function RichTerminal() {
           <header className="border-b border-cyan-900/30 bg-[#070b11]/80 px-4 py-3 backdrop-blur">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs tracking-[0.24em] text-cyan-400 uppercase">⚡ Clitronic Studio</div>
-                <div className="mt-1 text-sm text-gray-300">Command-first electronics workspace with adaptive teaching windows.</div>
+                <div className="text-xs tracking-[0.24em] text-cyan-400 uppercase">
+                  ⚡ Clitronic Studio
+                </div>
+                <div className="mt-1 text-sm text-gray-300">
+                  Command-first electronics workspace with adaptive teaching windows.
+                </div>
               </div>
               <button
                 onClick={() => setShowAuthPanel(true)}
@@ -838,10 +831,16 @@ export function RichTerminal() {
                     : 'border-amber-500/30 bg-amber-950/40 text-amber-300'
                 }`}
               >
-                {canMakeApiCalls ? `Connected: ${authLabel(authSource)}` : 'Authentication required'}
+                {canMakeApiCalls
+                  ? `Connected: ${authLabel(authSource)}`
+                  : 'Authentication required'}
               </span>
               <span className="rounded-full border border-cyan-500/30 bg-cyan-950/40 px-2 py-0.5 text-cyan-300">
-                {workspace.mode === 'simulating' ? 'Simulation live' : workspace.mode === 'preview' ? 'Preview mode' : 'Draft mode'}
+                {workspace.mode === 'simulating'
+                  ? 'Simulation live'
+                  : workspace.mode === 'preview'
+                    ? 'Preview mode'
+                    : 'Draft mode'}
               </span>
               <span className="rounded-full border border-violet-500/30 bg-violet-950/30 px-2 py-0.5 text-violet-300">
                 Open windows: {workspace.panels.length}
@@ -925,16 +924,23 @@ export function RichTerminal() {
             </div>
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
-              <span>{voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' : ''}</span>
+              <span>
+                {voiceSupported && voiceAvailable && canMakeApiCalls
+                  ? 'Hold space for voice input'
+                  : ''}
+              </span>
               <span>build • add • connect • remove • set • simulate • explain • focus</span>
             </div>
           </footer>
         </div>
 
-        <AdaptiveStudio workspace={workspace} onQuickCommand={(command) => {
-          setInput(command);
-          inputRef.current?.focus();
-        }} />
+        <AdaptiveStudio
+          workspace={workspace}
+          onQuickCommand={(command) => {
+            setInput(command);
+            inputRef.current?.focus();
+          }}
+        />
       </div>
 
       {showAuthPanel && (
@@ -990,20 +996,38 @@ function AdaptiveStudio({
       <div className="mb-4 rounded-2xl border border-cyan-900/30 bg-[#0c141d] p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.04)]">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-[11px] tracking-[0.24em] text-cyan-400 uppercase">Workbench state</div>
+            <div className="text-[11px] tracking-[0.24em] text-cyan-400 uppercase">
+              Workbench state
+            </div>
             <h2 className="mt-2 text-xl font-semibold text-white">{workspace.title}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">{workspace.summary}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">
+              {workspace.summary}
+            </p>
           </div>
           <div className="rounded-xl border border-cyan-700/30 bg-cyan-950/20 px-3 py-2 text-right text-xs text-cyan-200">
-            <div>{workspace.mode === 'simulating' ? 'Simulation running' : workspace.mode === 'preview' ? 'Adaptive preview' : 'Draft document'}</div>
-            <div className="mt-1 text-cyan-400/80">{workspace.nodes.length} nodes • {workspace.connections.length} links • {workspace.panels.length} windows</div>
+            <div>
+              {workspace.mode === 'simulating'
+                ? 'Simulation running'
+                : workspace.mode === 'preview'
+                  ? 'Adaptive preview'
+                  : 'Draft document'}
+            </div>
+            <div className="mt-1 text-cyan-400/80">
+              {workspace.nodes.length} nodes • {workspace.connections.length} links •{' '}
+              {workspace.panels.length} windows
+            </div>
           </div>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           {workspace.metrics.map((metric) => (
-            <div key={`${metric.label}-${metric.value}`} className="rounded-xl border border-gray-800 bg-[#0a0f15] p-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-gray-500">{metric.label}</div>
+            <div
+              key={`${metric.label}-${metric.value}`}
+              className="rounded-xl border border-gray-800 bg-[#0a0f15] p-3"
+            >
+              <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                {metric.label}
+              </div>
               <div className="mt-1 text-sm font-medium text-gray-100">{metric.value}</div>
             </div>
           ))}
@@ -1011,8 +1035,14 @@ function AdaptiveStudio({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'scene') ?? workspace.panels[0]}>
-          <WorkbenchPreview nodes={workspace.nodes} connections={workspace.connections} mode={workspace.mode} />
+        <WindowCard
+          panel={workspace.panels.find((panel) => panel.kind === 'scene') ?? workspace.panels[0]}
+        >
+          <WorkbenchPreview
+            nodes={workspace.nodes}
+            connections={workspace.connections}
+            mode={workspace.mode}
+          />
         </WindowCard>
 
         <WindowCard
@@ -1020,17 +1050,23 @@ function AdaptiveStudio({
             id: 'topology-panel',
             kind: 'scene',
             title: 'Topology map',
-            description: 'A 2D graph of the active circuit document, showing explicit and inferred links.',
+            description:
+              'A 2D graph of the active circuit document, showing explicit and inferred links.',
             accent: 'cyan',
           }}
         >
           <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
         </WindowCard>
 
-        <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'teacher') ?? workspace.panels[1]}>
+        <WindowCard
+          panel={workspace.panels.find((panel) => panel.kind === 'teacher') ?? workspace.panels[1]}
+        >
           <div className="space-y-3 text-sm text-gray-300">
             {[...workspace.events, ...analysis.derivedEvents].slice(0, 8).map((event) => (
-              <div key={event.id} className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3">
+              <div
+                key={event.id}
+                className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3"
+              >
                 <div className="font-semibold text-emerald-200">{event.title}</div>
                 <div className="mt-1 leading-relaxed text-emerald-100/80">{event.detail}</div>
               </div>
@@ -1038,13 +1074,22 @@ function AdaptiveStudio({
           </div>
         </WindowCard>
 
-        <WindowCard panel={workspace.panels.find((panel) => panel.kind === 'inspector') ?? workspace.panels[2]}>
+        <WindowCard
+          panel={
+            workspace.panels.find((panel) => panel.kind === 'inspector') ?? workspace.panels[2]
+          }
+        >
           <div className="space-y-3 text-sm text-gray-300">
             <div>
-              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Detected circuit nodes</div>
+              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                Detected circuit nodes
+              </div>
               <div className="flex flex-wrap gap-2">
                 {workspace.nodes.map((node) => (
-                  <span key={node.id} className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200">
+                  <span
+                    key={node.id}
+                    className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200"
+                  >
                     {node.label}
                   </span>
                 ))}
@@ -1052,11 +1097,16 @@ function AdaptiveStudio({
             </div>
 
             <div>
-              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Parameters</div>
+              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                Parameters
+              </div>
               <div className="space-y-2">
                 {workspace.nodes.map((node) =>
                   node.parameters && node.parameters.length > 0 ? (
-                    <div key={`${node.id}-params`} className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2">
+                    <div
+                      key={`${node.id}-params`}
+                      className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                    >
                       <div className="text-xs font-semibold text-amber-200">{node.label}</div>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {node.parameters.map((param) => (
@@ -1075,11 +1125,18 @@ function AdaptiveStudio({
             </div>
 
             <div>
-              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Derived analysis</div>
+              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                Derived analysis
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {analysis.derivedMetrics.map((metric) => (
-                  <div key={`${metric.label}-${metric.value}`} className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-gray-500">{metric.label}</div>
+                  <div
+                    key={`${metric.label}-${metric.value}`}
+                    className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                  >
+                    <div className="text-[11px] tracking-[0.12em] text-gray-500 uppercase">
+                      {metric.label}
+                    </div>
                     <div className="mt-1 text-sm font-medium text-white">{metric.value}</div>
                   </div>
                 ))}
@@ -1087,7 +1144,9 @@ function AdaptiveStudio({
             </div>
 
             <div>
-              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Recommended fixes</div>
+              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                Recommended fixes
+              </div>
               <div className="flex flex-wrap gap-2">
                 {analysis.suggestedFixes.length > 0 ? (
                   analysis.suggestedFixes.map((fix) => (
@@ -1100,16 +1159,23 @@ function AdaptiveStudio({
                     </button>
                   ))
                 ) : (
-                  <span className="text-xs text-gray-500">No targeted fixes suggested right now.</span>
+                  <span className="text-xs text-gray-500">
+                    No targeted fixes suggested right now.
+                  </span>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-gray-500">Why these windows are open</div>
+              <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                Why these windows are open
+              </div>
               <ul className="space-y-2 text-gray-300">
                 {workspace.insights.map((insight, index) => (
-                  <li key={`${index}-${insight}`} className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2 leading-relaxed">
+                  <li
+                    key={`${index}-${insight}`}
+                    className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2 leading-relaxed"
+                  >
                     {insight}
                   </li>
                 ))}
@@ -1134,7 +1200,9 @@ function AdaptiveStudio({
       </div>
 
       <div className="mt-4 rounded-2xl border border-gray-800 bg-[#0a0f15] p-4">
-        <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Suggested next commands</div>
+        <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+          Suggested next commands
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {workspace.nextActions.map((action) => (
             <button
@@ -1165,20 +1233,32 @@ function WindowCard({ panel, children }: { panel?: CircuitPanel; children: React
     <section className="rounded-2xl border border-gray-800 bg-[#0f1721] p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.18em] ${accentClasses[panel.accent]}`}>
+          <div
+            className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] tracking-[0.18em] uppercase ${accentClasses[panel.accent]}`}
+          >
             {panel.kind}
           </div>
           <h3 className="mt-2 text-lg font-semibold text-white">{panel.title}</h3>
           <p className="mt-1 text-sm leading-relaxed text-gray-400">{panel.description}</p>
         </div>
-        <div className="rounded-lg border border-gray-800 bg-[#0a0f15] px-2 py-1 text-[11px] text-gray-500">adaptive</div>
+        <div className="rounded-lg border border-gray-800 bg-[#0a0f15] px-2 py-1 text-[11px] text-gray-500">
+          adaptive
+        </div>
       </div>
       {children}
     </section>
   );
 }
 
-function WorkbenchPreview({ nodes, connections, mode }: { nodes: CircuitDocument['nodes']; connections: CircuitDocument['connections']; mode: CircuitMode }) {
+function WorkbenchPreview({
+  nodes,
+  connections,
+  mode,
+}: {
+  nodes: CircuitDocument['nodes'];
+  connections: CircuitDocument['connections'];
+  mode: CircuitMode;
+}) {
   const displayNodes = nodes.length
     ? nodes
     : [
@@ -1209,7 +1289,8 @@ function WorkbenchPreview({ nodes, connections, mode }: { nodes: CircuitDocument
       </div>
 
       <div className="mt-4 rounded-xl border border-cyan-900/25 bg-cyan-950/10 p-3 text-xs leading-relaxed text-cyan-100/80">
-        {connections.length} inferred connection{connections.length === 1 ? '' : 's'} currently define the path. This is the bridge from pure concept UI to a real circuit document model.
+        {connections.length} inferred connection{connections.length === 1 ? '' : 's'} currently
+        define the path. This is the bridge from pure concept UI to a real circuit document model.
       </div>
     </div>
   );
@@ -1234,7 +1315,10 @@ function TopologyMap({
     <div className="rounded-2xl border border-cyan-900/30 bg-[#0a1017] p-4">
       <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
         <span>2D topology</span>
-        <span>{displayNodes.length} node{displayNodes.length === 1 ? '' : 's'} • {connections.length} link{connections.length === 1 ? '' : 's'}</span>
+        <span>
+          {displayNodes.length} node{displayNodes.length === 1 ? '' : 's'} • {connections.length}{' '}
+          link{connections.length === 1 ? '' : 's'}
+        </span>
       </div>
 
       <div className="space-y-3">
@@ -1245,7 +1329,9 @@ function TopologyMap({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-cyan-200">{node.label}</div>
-                  <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-gray-500">{node.type}</div>
+                  <div className="mt-1 text-[11px] tracking-[0.14em] text-gray-500 uppercase">
+                    {node.type}
+                  </div>
                 </div>
                 <div className="rounded-full border border-cyan-700/30 bg-cyan-950/20 px-2 py-1 text-[11px] text-cyan-200">
                   {node.id}
@@ -1255,7 +1341,9 @@ function TopologyMap({
               <div className="mt-3 text-xs text-gray-400">
                 {outgoing.length
                   ? outgoing.map((connection) => {
-                      const target = displayNodes.find((candidate) => candidate.id === connection.to);
+                      const target = displayNodes.find(
+                        (candidate) => candidate.id === connection.to
+                      );
                       return (
                         <div key={connection.id} className="mb-1 flex items-center gap-2">
                           <span className="text-cyan-500">→</span>
@@ -1283,7 +1371,9 @@ function GraphPreview({ mode }: { mode: CircuitMode }) {
     <div className="rounded-2xl border border-violet-900/30 bg-[linear-gradient(180deg,#100d18,#0b0b14)] p-4">
       <div className="mb-4 flex items-center justify-between text-xs text-gray-400">
         <span>{mode === 'simulating' ? 'Live behaviour' : 'Potential signal view'}</span>
-        <span>{mode === 'simulating' ? 'watching change over time' : 'waiting for simulation'}</span>
+        <span>
+          {mode === 'simulating' ? 'watching change over time' : 'waiting for simulation'}
+        </span>
       </div>
 
       <div className="flex h-40 items-end gap-2">
@@ -1298,7 +1388,8 @@ function GraphPreview({ mode }: { mode: CircuitMode }) {
       </div>
 
       <div className="mt-4 text-xs leading-relaxed text-violet-100/80">
-        Dynamic graphs should open only when they help explain behaviour — RC charge, PWM duty cycle, signal timing, or instability.
+        Dynamic graphs should open only when they help explain behaviour — RC charge, PWM duty
+        cycle, signal timing, or instability.
       </div>
     </div>
   );
@@ -1417,14 +1508,19 @@ function AuthPanel({
             refresh
           </button>
           {isConfigured && (
-            <button onClick={onDisconnect} className="text-red-400 hover:text-red-300 hover:underline">
+            <button
+              onClick={onDisconnect}
+              className="text-red-400 hover:text-red-300 hover:underline"
+            >
               disconnect
             </button>
           )}
         </div>
       </div>
 
-      {isCheckingAuth && <p className="mt-2 text-xs text-cyan-400">Checking provider availability...</p>}
+      {isCheckingAuth && (
+        <p className="mt-2 text-xs text-cyan-400">Checking provider availability...</p>
+      )}
     </div>
   );
 }
@@ -1538,7 +1634,9 @@ function MarkdownContent({ content }: { content: string }) {
             </code>
           );
         },
-        pre: ({ children }) => <pre className="my-2 overflow-x-auto rounded bg-gray-900">{children}</pre>,
+        pre: ({ children }) => (
+          <pre className="my-2 overflow-x-auto rounded bg-gray-900">{children}</pre>
+        ),
         a: ({ href, children }) => (
           <a
             href={href}

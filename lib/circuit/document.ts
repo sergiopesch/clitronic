@@ -42,7 +42,10 @@ function inferParameters(key: string, prompt: string): CircuitNodeParameter[] {
   }
 
   if (key === 'resistor') {
-    const resistance = extractParameter(source, /(\d+(?:\.\d+)?)\s*(k?\s?ohm|k?\s?ω|k?\s?ohms|k?\s?Ω|k)/i);
+    const resistance = extractParameter(
+      source,
+      /(\d+(?:\.\d+)?)\s*(k?\s?ohm|k?\s?ω|k?\s?ohms|k?\s?Ω|k)/i
+    );
     params.push({
       key: 'resistance',
       label: 'Resistance',
@@ -61,7 +64,11 @@ function inferParameters(key: string, prompt: string): CircuitNodeParameter[] {
           ? 'Yellow'
           : 'Red';
     params.push({ key: 'colour', label: 'Colour', value: colour });
-    params.push({ key: 'forward-voltage', label: 'Forward voltage', value: colour === 'Red' ? '2.0V' : '3.2V' });
+    params.push({
+      key: 'forward-voltage',
+      label: 'Forward voltage',
+      value: colour === 'Red' ? '2.0V' : '3.2V',
+    });
   }
 
   if (key === 'capacitor') {
@@ -127,11 +134,11 @@ function hasNode(nodes: CircuitNode[], key: string): boolean {
   return nodes.some((node) => node.key === key);
 }
 
-function getNode(nodes: CircuitNode[], key: string): CircuitNode | undefined {
-  return nodes.find((node) => node.key === key);
-}
-
-function buildEvents(nodes: CircuitNode[], connections: CircuitConnection[], mode: CircuitMode): CircuitEvent[] {
+function buildEvents(
+  nodes: CircuitNode[],
+  connections: CircuitConnection[],
+  mode: CircuitMode
+): CircuitEvent[] {
   const events: CircuitEvent[] = [
     {
       id: 'teacher-observed-intent',
@@ -225,7 +232,8 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
       id: 'teacher-panel',
       kind: 'teacher',
       title: 'Teacher',
-      description: 'Explains why the interface opened these windows and what the learner should notice.',
+      description:
+        'Explains why the interface opened these windows and what the learner should notice.',
       accent: 'emerald',
     },
     {
@@ -260,22 +268,32 @@ function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
   return panels;
 }
 
-function buildInsights(nodes: CircuitNode[], mode: CircuitMode, connections: CircuitConnection[]): string[] {
+function buildInsights(
+  nodes: CircuitNode[],
+  mode: CircuitMode,
+  connections: CircuitConnection[]
+): string[] {
   const insights: string[] = [
     'The command layer should create a circuit document that windows can respond to deterministically.',
     'Adaptive panels should open because of circuit state and events, not because the UI feels chatty.',
   ];
 
   if (hasNode(nodes, 'led')) {
-    insights.push('An LED is a strong teaching trigger because current limiting, polarity, brightness, and safe current all become teachable immediately.');
+    insights.push(
+      'An LED is a strong teaching trigger because current limiting, polarity, brightness, and safe current all become teachable immediately.'
+    );
   }
 
   if (hasNode(nodes, 'capacitor')) {
-    insights.push('Capacitors justify graph windows because time is part of the concept, not an optional flourish.');
+    insights.push(
+      'Capacitors justify graph windows because time is part of the concept, not an optional flourish.'
+    );
   }
 
   if (mode === 'simulating') {
-    insights.push('When simulation is active, the graph and inspector should outrank generic explanation panels.');
+    insights.push(
+      'When simulation is active, the graph and inspector should outrank generic explanation panels.'
+    );
   }
 
   const analysis = analyzeCircuit({
@@ -298,8 +316,15 @@ function buildInsights(nodes: CircuitNode[], mode: CircuitMode, connections: Cir
   return unique(insights);
 }
 
-function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], events: CircuitEvent[], mode: CircuitMode): CircuitMetric[] {
-  const validations = events.filter((event) => event.kind === 'validation' || event.kind === 'warning');
+function buildMetrics(
+  nodes: CircuitNode[],
+  connections: CircuitConnection[],
+  events: CircuitEvent[],
+  mode: CircuitMode
+): CircuitMetric[] {
+  const validations = events.filter(
+    (event) => event.kind === 'validation' || event.kind === 'warning'
+  );
 
   const analysis = analyzeCircuit({
     id: 'analysis',
@@ -329,7 +354,11 @@ function buildMetrics(nodes: CircuitNode[], connections: CircuitConnection[], ev
   ];
 }
 
-function buildNextActions(nodes: CircuitNode[], connections: CircuitConnection[], mode: CircuitMode): string[] {
+function buildNextActions(
+  nodes: CircuitNode[],
+  connections: CircuitConnection[],
+  mode: CircuitMode
+): string[] {
   const next = ['simulate', 'focus inspector', 'explain what changed'];
   const analysis = analyzeCircuit({
     id: 'analysis',
@@ -367,7 +396,10 @@ function buildNextActions(nodes: CircuitNode[], connections: CircuitConnection[]
   return unique(next).slice(0, 6);
 }
 
-export function createCircuitDocument(prompt: string, mode: CircuitMode = 'preview'): CircuitDocument {
+export function createCircuitDocument(
+  prompt: string,
+  mode: CircuitMode = 'preview'
+): CircuitDocument {
   const cleanPrompt = prompt.trim() || 'new circuit idea';
   const nodes = buildNodes(cleanPrompt);
   const connections = buildConnections(nodes);
@@ -376,7 +408,12 @@ export function createCircuitDocument(prompt: string, mode: CircuitMode = 'previ
   const insights = buildInsights(nodes, mode, connections);
 
   return {
-    id: `circuit-${cleanPrompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'draft'}`,
+    id: `circuit-${
+      cleanPrompt
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'draft'
+    }`,
     prompt: cleanPrompt,
     title: titleCase(cleanPrompt),
     mode,

@@ -36,7 +36,11 @@ function normalizeLabel(value: string): string {
 }
 
 function createNodeKey(label: string): string {
-  return normalizeLabel(label).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'node';
+  return (
+    normalizeLabel(label)
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'node'
+  );
 }
 
 function nextNodeId(document: CircuitDocument, key: string): string {

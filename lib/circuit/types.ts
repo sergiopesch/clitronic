@@ -40,14 +40,7 @@ export interface CircuitMetric {
 
 export interface CircuitEvent {
   id: string;
-  kind:
-    | 'info'
-    | 'warning'
-    | 'teaching'
-    | 'window-opened'
-    | 'simulation'
-    | 'focus'
-    | 'validation';
+  kind: 'info' | 'warning' | 'teaching' | 'window-opened' | 'simulation' | 'focus' | 'validation';
   title: string;
   detail: string;
 }
