@@ -8,6 +8,14 @@ type ConsoleMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  toolInvocations?: ToolInvocation[];
+};
+
+type ToolInvocation = {
+  toolName: 'lookup_component' | 'search_components' | 'calculate_resistor' | 'ohms_law';
+  summary: string;
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
 };
 
 type ModelStatus = {
@@ -28,12 +36,29 @@ const STARTER_PROMPTS = [
   'Help me think through an MVP for a tiny breadboard electronics project.',
 ];
 
-function createMessage(role: ConsoleMessage['role'], content: string): ConsoleMessage {
+function createMessage(
+  role: ConsoleMessage['role'],
+  content: string,
+  toolInvocations?: ToolInvocation[]
+): ConsoleMessage {
   return {
     id: `${role}-${crypto.randomUUID()}`,
     role,
     content,
+    toolInvocations,
   };
+}
+
+function formatToolResultValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => formatToolResultValue(item)).join(', ');
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
 }
 
 function statusClasses(status: ModelStatus['status']) {
@@ -119,13 +144,17 @@ export function LocalConsole() {
         message?: string;
         error?: string;
         status?: ModelStatus;
+        toolInvocations?: ToolInvocation[];
       };
 
       if (!response.ok || !payload.message) {
         throw new Error(payload.error ?? 'Local chat failed.');
       }
 
-      setMessages((current) => [...current, createMessage('assistant', payload.message ?? '')]);
+      setMessages((current) => [
+        ...current,
+        createMessage('assistant', payload.message ?? '', payload.toolInvocations),
+      ]);
       if (payload.status) setStatus(payload.status);
     } catch (submitError) {
       const nextError =
@@ -205,8 +234,8 @@ export function LocalConsole() {
                   Current MVP limits
                 </dt>
                 <dd className="mt-1 text-zinc-400">
-                  Tool execution, voice, images, and workbench visuals are intentionally out of the
-                  main flow for now.
+                  First local tools are now wired for calculation and component lookup. Voice,
+                  images, and workbench visuals are still out of the main flow.
                 </dd>
               </div>
             </dl>
@@ -286,6 +315,42 @@ export function LocalConsole() {
                         <div
                           className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'dark:prose-invert'}`}
                         >
+                          {!isUser &&
+                          message.toolInvocations &&
+                          message.toolInvocations.length > 0 ? (
+                            <div className="not-prose mb-4 space-y-2">
+                              {message.toolInvocations.map((toolInvocation, index) => (
+                                <div
+                                  key={`${message.id}-tool-${index}`}
+                                  className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3"
+                                >
+                                  <div className="font-mono text-[11px] tracking-[0.18em] text-cyan-300 uppercase">
+                                    tool · {toolInvocation.toolName}
+                                  </div>
+                                  <p className="mt-2 text-sm text-zinc-200">
+                                    {toolInvocation.summary}
+                                  </p>
+                                  <dl className="mt-3 space-y-2 text-xs text-zinc-400">
+                                    {Object.entries(toolInvocation.result).map(([key, value]) => {
+                                      if (key === 'component_context') return null;
+
+                                      return (
+                                        <div key={key}>
+                                          <dt className="font-mono tracking-[0.16em] text-zinc-500 uppercase">
+                                            {key.replaceAll('_', ' ')}
+                                          </dt>
+                                          <dd className="mt-1 break-words whitespace-pre-wrap text-zinc-300">
+                                            {formatToolResultValue(value)}
+                                          </dd>
+                                        </div>
+                                      );
+                                    })}
+                                  </dl>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{

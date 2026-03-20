@@ -14,6 +14,7 @@ This refactor deliberately removes provider auth and the workbench-first default
 - runs against a **local in-process model runtime** via `node-llama-cpp`
 - avoids **remote vendor model calls**
 - avoids **provider auth** in the main user flow
+- includes a **first local tool layer** for resistor calculation and component lookup
 - keeps the MVP **text-only and honest**
 
 ## What this version does not do yet
@@ -23,7 +24,7 @@ Right now the default route does **not** attempt to provide:
 - image understanding
 - voice input
 - workbench / topology / graph windows
-- real tool execution
+- broad tool execution beyond the first local calculation / lookup helpers
 - provider switching / auth flows
 
 Those can return later, one by one, once the local conversation loop is solid.

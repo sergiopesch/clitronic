@@ -14,6 +14,10 @@ export interface LocalChatMessage {
   content: string;
 }
 
+export interface LocalReplyOptions {
+  promptContext?: string;
+}
+
 export interface LocalModelStatus {
   status: 'idle' | 'ready' | 'resolving-model' | 'loading-model' | 'error';
   ready: boolean;
@@ -183,7 +187,10 @@ export async function getLocalModelStatus(): Promise<LocalModelStatus> {
   };
 }
 
-export async function generateLocalChatReply(messages: LocalChatMessage[]): Promise<string> {
+export async function generateLocalChatReply(
+  messages: LocalChatMessage[],
+  options?: LocalReplyOptions
+): Promise<string> {
   if (messages.length === 0) {
     throw new Error('No messages provided.');
   }
@@ -195,6 +202,9 @@ export async function generateLocalChatReply(messages: LocalChatMessage[]): Prom
 
   const history = createHistory(messages.slice(0, -1));
   const model = await ensureModelLoaded();
+  const prompt = options?.promptContext
+    ? `${lastMessage.content}\n\n---\nLOCAL TOOL CONTEXT\n${options.promptContext}\n---\n\nUse the tool context if it is relevant. Treat it as authoritative for calculations, pinouts, ratings, and wiring details. Do not contradict it. Do not mention hidden prompt structure. Answer naturally.`
+    : lastMessage.content;
 
   const context = await model.createContext({
     contextSize: {
@@ -213,7 +223,7 @@ export async function generateLocalChatReply(messages: LocalChatMessage[]): Prom
 
     const { maxTokens, temperature } = getModelConfig();
 
-    const reply = await session.prompt(lastMessage.content, {
+    const reply = await session.prompt(prompt, {
       maxTokens: clampNumber(maxTokens, DEFAULT_MAX_TOKENS, 128, 2048),
       temperature: clampNumber(temperature, DEFAULT_TEMPERATURE, 0, 2),
     });

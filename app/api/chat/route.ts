@@ -4,6 +4,7 @@ import {
   getLocalModelStatus,
   type LocalChatMessage,
 } from '@/lib/local-llm/runtime';
+import { runLocalTools } from '@/lib/local-llm/tooling';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,10 +49,17 @@ export async function POST(req: Request) {
   }
 
   try {
-    const message = await generateLocalChatReply(messages);
+    const toolPass = runLocalTools(messages[messages.length - 1]?.content ?? '');
+    const message = await generateLocalChatReply(messages, {
+      promptContext: toolPass.promptContext,
+    });
     const status = await getLocalModelStatus();
 
-    return NextResponse.json({ message, status });
+    return NextResponse.json({
+      message,
+      status,
+      toolInvocations: toolPass.invocations,
+    });
   } catch (error) {
     const status = await getLocalModelStatus();
 
