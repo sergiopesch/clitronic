@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   typedRoutes: true,
   outputFileTracingRoot: __dirname,
+  serverExternalPackages: ['node-llama-cpp'],
   turbopack: {
     root: __dirname,
   },

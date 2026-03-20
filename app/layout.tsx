@@ -1,38 +1,34 @@
 import type { Metadata, Viewport } from 'next';
-import { Providers } from '@/components/providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Clitronic - AI Hardware Companion',
+  title: 'Clitronic - Local Electronics Console',
   description:
-    'Your multimodal AI companion for learning electronics. Identify components, understand circuits, and get hands-on guidance.',
+    'Console-first local electronics chat for testing the core interaction loop without provider auth or remote model calls.',
   keywords: [
     'electronics',
     'hardware',
-    'AI',
-    'components',
+    'local llm',
+    'llama.cpp',
+    'console ui',
     'circuits',
-    'Arduino',
-    'Raspberry Pi',
-    'resistor',
-    'LED',
-    'capacitor',
+    'components',
   ],
   authors: [{ name: 'Sergio Peschiera' }],
   creator: 'Sergio Peschiera',
   openGraph: {
-    title: 'Clitronic - AI Hardware Companion',
+    title: 'Clitronic - Local Electronics Console',
     description:
-      'Your multimodal AI companion for learning electronics. Identify components, understand circuits, and get hands-on guidance.',
+      'A console-first local chat MVP for electronics thinking, learning, and future tool use.',
     type: 'website',
     locale: 'en_US',
     siteName: 'Clitronic',
   },
   twitter: {
     card: 'summary',
-    title: 'Clitronic - AI Hardware Companion',
+    title: 'Clitronic - Local Electronics Console',
     description:
-      'Your multimodal AI companion for learning electronics. Identify components, understand circuits, and get hands-on guidance.',
+      'Console-first local electronics chat for testing the interaction loop before tools and workbench layers return.',
   },
   appleWebApp: {
     capable: true,
@@ -44,7 +40,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0d1117',
+  themeColor: '#05070a',
   colorScheme: 'dark',
   width: 'device-width',
   initialScale: 1,
@@ -57,9 +53,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        <Providers>{children}</Providers>
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

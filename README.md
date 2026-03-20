@@ -1,117 +1,83 @@
 # Clitronic
 
-**Workbench-first electronics studio with adaptive teaching windows**
+**Console-first local electronics chat MVP**
 
-Clitronic is evolving from an AI terminal companion into a **workbench-first web studio** for electronics learning and experimentation.
+Clitronic is now focused on the simplest thing worth validating first:
 
-The command bar is still the spine, but the interface now sketches a bigger idea:
+> can a local open-source model hold a genuinely useful electronics conversation inside a console-first interface?
 
-- commands create intent
-- the workspace reacts visually
-- teacher windows open when they are useful
-- simulation, inspection, and learning sit side by side
+This refactor deliberately removes provider auth and the workbench-first default flow from the main route. The goal is to test the core interaction loop before rebuilding tools, voice, image analysis, and richer workspace behaviour on top.
 
-This first refactor is not full circuit simulation yet. It is a **product prototype** that makes the concept visible and testable.
+## What this version does
 
-## Core product idea
+- opens into a **console-first local chat UI**
+- runs against a **local in-process model runtime** via `node-llama-cpp`
+- avoids **remote vendor model calls**
+- avoids **provider auth** in the main user flow
+- keeps the MVP **text-only and honest**
 
-Clitronic should feel like:
+## What this version does not do yet
 
-> a great electronics teacher standing beside you, noticing what you are building, and opening the right view at the right moment.
+Right now the default route does **not** attempt to provide:
 
-Instead of choosing between CLI or GUI, Clitronic combines both:
+- image understanding
+- voice input
+- workbench / topology / graph windows
+- real tool execution
+- provider switching / auth flows
 
-- **CLI / command layer** for speed, precision, and intent
-- **adaptive web workspace** for spatial understanding and guidance
-- **teaching windows** for explanation, warnings, and next steps
-- **simulation surfaces** for behaviour, graphs, and debugging
+Those can return later, one by one, once the local conversation loop is solid.
 
-## What the current prototype demonstrates
+## Local model behaviour
 
-The web app now includes:
+Clitronic loads a GGUF model locally using `node-llama-cpp`.
 
-- a **workbench-first** layout
-- a command bar (terminal-style input)
-- an optional **Console** view (for history/debug)
-- a collapsible **Windows** section (Teacher / Inspector / Graph / Topology)
-- suggested next commands
-- dynamic state changes for commands like:
-  - `build ...`
-  - `simulate`
-  - `explain ...`
-  - `focus ...`
+### Default model
 
-Example flow:
+If you do not configure anything, Clitronic defaults to:
 
-```bash
-build a simple led circuit with a 9v battery
-simulate
-explain why the led is dim
-focus graph
+```text
+hf:Qwen/Qwen2.5-1.5B-Instruct-GGUF:qwen2.5-1.5b-instruct-q4_k_m.gguf
 ```
 
-The goal of this prototype is to prove the **interaction model**, not final simulation fidelity.
+That is a **small but more credible default** than the ultra-tiny variants, so the local MVP stays fast enough to boot while still being useful for real conversation.
 
-## Existing capabilities
+### First run
 
-### Commands
+On the first real chat request, if the model is not cached yet, Clitronic will try to download it into the `node-llama-cpp` model cache (global by default, unless you override the cache directory).
 
-- `help` — Show available commands
-- `auth` — Connect Claude Code or OpenAI Codex
-- `build <idea>` — Open adaptive teaching windows for a circuit idea
-- `simulate` — Switch workspace into simulation mode
-- `explain <question>` — Ask the teacher layer about the active circuit
-- `focus <panel>` — Emphasise a panel such as teacher, graph, or inspector
-- `list [category]` — List components
-- `info <component>` — Component details
-- `identify` — Upload image to identify a component
-- `clear` — Reset the terminal and workspace
+That means:
 
-## Demo mode (no user credentials)
+- the **very first prompt can take longer**
+- later prompts should be much faster
+- you can replace the default with a larger or better GGUF as soon as you want
 
-For a public demo, it should be possible to try Clitronic **without entering any credentials**.
+## Configuration
 
-Recommended product posture:
+Copy the env file:
 
-1. **Demo mode** (default): the server routes requests to a hosted **open-source model** so first-time users can interact instantly.
-2. **Bring-your-own-provider**: users can then connect Claude/OpenAI/etc for higher capability.
+```bash
+cp .env.example .env.local
+```
 
-Status: **planned** (not fully wired yet).
+Available settings:
 
-Implementation note (recommended): keep the server-side chat layer compatible with an **OpenAI-compatible base URL** (Ollama/vLLM/etc), so the demo model is a configuration choice, not a forked codepath.
+```bash
+# direct file path
+LOCAL_LLM_MODEL_PATH=/absolute/path/to/model.gguf
 
-### Voice Mode
+# or auto-resolved model URI
+LOCAL_LLM_MODEL_URI=hf:Qwen/Qwen2.5-1.5B-Instruct-GGUF:qwen2.5-1.5b-instruct-q4_k_m.gguf
 
-**Hold spacebar** to record, release to transcribe, then **Enter to send**.
+# optional model cache directory
+LOCAL_LLM_MODELS_DIR=/absolute/path/to/model-cache
 
-### Image Analysis
+# optional generation controls
+LOCAL_LLM_MAX_TOKENS=512
+LOCAL_LLM_TEMPERATURE=0.7
+```
 
-- drag and drop images
-- paste from clipboard
-- upload via `identify`
-
-## Why this direction matters
-
-Most electronics tools optimise for one of two things:
-
-- schematic accuracy
-- intuitive understanding
-
-Clitronic is aiming for something broader:
-
-- **intent expressed by command**
-- **state shown visually**
-- **understanding surfaced contextually**
-
-That gives us a path toward:
-
-- multimodality
-- adaptive teaching
-- 3D workbench thinking
-- signal and simulation views
-- eventually richer circuit construction and co-simulation
-
-## Quick Start
+## Quick start
 
 ```bash
 git clone https://github.com/sergiopesch/clitronic.git
@@ -122,103 +88,48 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-If a provider is available it auto-connects; otherwise run `auth` and choose `Claude Code` or `OpenAI Codex`.
+If no GGUF is cached yet, the app will tell you. The first real message may trigger the model download.
 
-## Usage
-
-### Web App
+## Development
 
 ```bash
 npm run dev
 npm run build
-npm start
+npm run validate
 ```
 
-Then try commands such as:
-
-```bash
-build a simple led circuit with a 9v battery
-simulate
-explain why the led is dim
-focus inspector
-```
-
-### CLI
-
-The standalone CLI package still exists and can continue to inform the command language.
-
-```bash
-cd cli && npm install
-npm run start -- chat
-npm run start -- ask "What resistor do I need for a 5V LED?"
-npm run start -- info resistor
-npm run start -- list
-```
-
-## Architecture
+## Current architecture
 
 ```text
 clitronic/
-├── app/                    # Next.js App Router
+├── app/
 │   ├── api/
-│   │   ├── chat/           # Streaming AI responses
-│   │   ├── auth/providers/ # Provider availability
-│   │   └── speech-to-text/ # Voice transcription
-│   └── page.tsx            # Main command-first studio
-├── cli/                    # Standalone CLI package
+│   │   └── chat/            # local model status + local chat endpoint
+│   ├── layout.tsx           # app shell metadata
+│   └── page.tsx             # console-first local chat route
 ├── components/
-│   ├── api-key/           # Provider selection UI
-│   ├── studio/            # Workbench visuals (previews)
-│   ├── terminal/          # Command bar + console
-│   └── voice/             # Voice mode indicator
-├── hooks/                  # Recording and long-press hooks
-└── lib/
-    ├── ai/                # System prompt + tools
-    ├── auth/              # Provider auth resolution
-    ├── data/              # Component knowledge base
-    └── utils/             # Audio/image helpers
+│   └── console/             # local console UI
+├── lib/
+│   ├── ai/                  # prompt and response posture
+│   └── local-llm/           # node-llama-cpp runtime wiring
+└── cli/                     # legacy CLI package, still available separately
 ```
 
-## Product direction after this prototype
+## Direction after this pass
 
-The next meaningful steps are:
+The likely next sequence is:
 
-1. introduce a real circuit document/state model
-2. map commands to structured state changes rather than prompt inference alone
-3. add a proper 2D topology view
-4. add a true 3D workbench pass
-5. open windows from simulation events, not just command parsing
-6. make the teacher layer explain actual circuit state and failures
+1. keep improving local chat quality
+2. add a minimal tool layer with explicit invocation rules
+3. reintroduce structured circuit actions one by one
+4. bring the workbench back only when it is grounded in real state
 
 ## Tech stack
 
 - **Web**: Next.js 16, React 19, Tailwind CSS
-- **AI**: Claude Sonnet via Vercel AI SDK v5
-- **Voice**: OpenAI speech-to-text + browser recording APIs
-- **CLI**: Commander.js
-
-## Development
-
-````bash
-npm run dev
-npm run build
-npm run lint
-npm run type-check
-npm run format
-npm run validate
-
-### CI note
-
-CI runs `npm run validate` (type-check + lint + prettier check). If CI fails, run:
-
-```bash
-npm run format
-npm run validate
-````
-
-```
+- **Local inference**: `node-llama-cpp`
+- **Rendering**: React Markdown + remark-gfm
 
 ## License
 
 MIT
-```

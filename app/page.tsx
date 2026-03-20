@@ -1,7 +1,5 @@
-'use client';
-
-import { RichTerminal } from '@/components/terminal/rich-terminal';
+import { LocalConsole } from '@/components/console/local-console';
 
 export default function Home() {
-  return <RichTerminal />;
+  return <LocalConsole />;
 }
