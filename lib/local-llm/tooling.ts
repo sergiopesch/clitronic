@@ -7,7 +7,8 @@ export type LocalToolName =
   | 'search_components'
   | 'calculate_resistor'
   | 'ohms_law'
-  | 'generate_circuit_plan';
+  | 'generate_circuit_plan'
+  | 'generate_debug_checklist';
 
 export interface LocalToolInvocation {
   toolName: LocalToolName;
@@ -505,11 +506,97 @@ function maybeGenerateCircuitPlan(message: string): LocalToolInvocation | null {
   };
 }
 
+function maybeGenerateDebugChecklist(message: string): LocalToolInvocation | null {
+  const lowered = message.toLowerCase();
+  const wantsDebugHelp =
+    lowered.includes('debug') ||
+    lowered.includes('troubleshoot') ||
+    lowered.includes("isn't working") ||
+    lowered.includes('not working') ||
+    lowered.includes("doesn't work") ||
+    lowered.includes("won't light") ||
+    lowered.includes("won't turn on") ||
+    lowered.includes('no light') ||
+    lowered.includes('not blinking');
+
+  if (!wantsDebugHelp || !lowered.includes('led')) {
+    return null;
+  }
+
+  const platform =
+    lowered.includes('raspberry pi') || lowered.includes('raspberrypi')
+      ? 'raspberry-pi'
+      : lowered.includes('arduino')
+        ? 'arduino'
+        : 'breadboard';
+
+  const platformSpecificChecks =
+    platform === 'raspberry-pi'
+      ? [
+          'Make sure you are using a real GND pin and GPIO17 physical pin 11, not the wrong numbering scheme.',
+          'Confirm the GPIO pin is configured as an output in your Python code.',
+          'Do not feed 5V into Raspberry Pi GPIO.',
+        ]
+      : platform === 'arduino'
+        ? [
+            'Confirm your code is using the same Arduino pin you actually wired.',
+            'Upload a known-simple blink sketch first so you separate wiring bugs from code bugs.',
+            'Make sure the Arduino ground is actually tied into the breadboard ground you are using.',
+          ]
+        : [
+            'Measure that your supply is really delivering the voltage you think it is.',
+            'Make sure the resistor and LED are in series, not accidentally in parallel.',
+          ];
+
+  return {
+    toolName: 'generate_debug_checklist',
+    summary: `Generated a beginner-friendly LED debug checklist for ${platform}.`,
+    input: {
+      platform,
+      project: `${platform}-led-debug`,
+    },
+    result: {
+      title:
+        platform === 'raspberry-pi'
+          ? 'Raspberry Pi LED debug checklist'
+          : platform === 'arduino'
+            ? 'Arduino LED debug checklist'
+            : 'Breadboard LED debug checklist',
+      platform,
+      checks: [
+        'Check LED polarity: long leg = anode, short leg = cathode.',
+        'Make sure the resistor is in series with the LED, not bypassing it.',
+        'Confirm every jumper wire is fully seated in the breadboard.',
+        'Try a fresh LED if you suspect the part was damaged earlier.',
+        ...platformSpecificChecks,
+      ],
+      quickest_test:
+        platform === 'raspberry-pi'
+          ? 'Move back to a minimal gpiozero blink script on GPIO17 and verify the LED wiring before changing anything else.'
+          : platform === 'arduino'
+            ? 'Load a minimal blink sketch on one known pin, then match the resistor+LED wiring to that exact pin.'
+            : 'Power the LED from a known 5V source with the resistor in series and verify the LED lights before adding anything else.',
+      likely_causes: [
+        'LED polarity reversed',
+        'Wrong GPIO / digital pin',
+        'Missing common ground',
+        'Breadboard row mismatch',
+        'Code targeting a different pin from the wiring',
+      ],
+    },
+  };
+}
+
 export function runLocalTools(message: string): LocalToolPass {
   const invocations: LocalToolInvocation[] = [];
 
+  const debugChecklistTool = maybeGenerateDebugChecklist(message);
+  if (debugChecklistTool) {
+    invocations.push(debugChecklistTool);
+  }
+
   const circuitPlanTool = maybeGenerateCircuitPlan(message);
-  if (circuitPlanTool) {
+  if (circuitPlanTool && invocations.length === 0) {
     invocations.push(circuitPlanTool);
   }
 
@@ -531,6 +618,8 @@ export function runLocalTools(message: string): LocalToolPass {
   const componentTool = maybeLookupComponent(message);
   if (
     componentTool &&
+    invocations.every((invocation) => invocation.toolName !== 'generate_circuit_plan') &&
+    invocations.every((invocation) => invocation.toolName !== 'generate_debug_checklist') &&
     invocations.every((invocation) => invocation.toolName !== 'lookup_component')
   ) {
     invocations.push(componentTool);

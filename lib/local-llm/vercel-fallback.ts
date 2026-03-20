@@ -12,6 +12,36 @@ export function createVercelFallbackReply(
   userMessage: string,
   toolInvocations: LocalToolInvocation[]
 ) {
+  const debugChecklistTool = toolInvocations.find(
+    (tool) => tool.toolName === 'generate_debug_checklist'
+  );
+  if (debugChecklistTool) {
+    const title = asString(debugChecklistTool.result.title) ?? 'LED debug checklist';
+    const checks = Array.isArray(debugChecklistTool.result.checks)
+      ? debugChecklistTool.result.checks.map(String)
+      : [];
+    const likelyCauses = Array.isArray(debugChecklistTool.result.likely_causes)
+      ? debugChecklistTool.result.likely_causes.map(String)
+      : [];
+    const quickestTest = asString(debugChecklistTool.result.quickest_test);
+
+    return [
+      `## ${title}`,
+      '',
+      checks.length > 0 ? '### Debug checklist' : null,
+      ...checks.map((check, index) => `${index + 1}. ${check}`),
+      '',
+      quickestTest ? `### Fastest next test\n${quickestTest}` : null,
+      '',
+      likelyCauses.length > 0 ? '### Most likely causes' : null,
+      ...likelyCauses.map((cause) => `- ${cause}`),
+      '',
+      'If you want, tell me **exactly what is happening** — for example “LED stays dark” or “Pi script runs but nothing blinks” — and I will narrow the diagnosis further.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
   const circuitPlanTool = toolInvocations.find((tool) => tool.toolName === 'generate_circuit_plan');
   if (circuitPlanTool) {
     const title = asString(circuitPlanTool.result.title) ?? 'Circuit plan';

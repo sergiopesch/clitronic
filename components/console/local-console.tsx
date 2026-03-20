@@ -12,7 +12,13 @@ type ConsoleMessage = {
 };
 
 type ToolInvocation = {
-  toolName: 'lookup_component' | 'search_components' | 'calculate_resistor' | 'ohms_law';
+  toolName:
+    | 'lookup_component'
+    | 'search_components'
+    | 'calculate_resistor'
+    | 'ohms_law'
+    | 'generate_circuit_plan'
+    | 'generate_debug_checklist';
   summary: string;
   input: Record<string, unknown>;
   result: Record<string, unknown>;
@@ -30,11 +36,18 @@ type ModelStatus = {
   note: string;
 };
 
-const STARTER_PROMPTS = [
+const LOCAL_STARTER_PROMPTS = [
   'I want to build a simple LED circuit from scratch. Walk me through it.',
   'What resistor should I use with a red LED on 5V, and why?',
   'Explain transistors like I am smart but rusty.',
   'Help me think through an MVP for a tiny breadboard electronics project.',
+];
+
+const HOSTED_STARTER_PROMPTS = [
+  'Help me build a simple Arduino LED breadboard circuit. Give me the parts list and wiring plan.',
+  'Help me build a Raspberry Pi LED circuit. Give me the parts list and wiring plan.',
+  'My Arduino LED circuit is not blinking. Give me a debug checklist.',
+  'What resistor should I use with a red LED on 5V, and why?',
 ];
 
 function createMessage(
@@ -121,6 +134,9 @@ export function LocalConsole() {
     return 'Console-first local electronics copilot.';
   }, [status]);
 
+  const starterPrompts =
+    status?.runtimeMode === 'vercel-fallback' ? HOSTED_STARTER_PROMPTS : LOCAL_STARTER_PROMPTS;
+
   const submitPrompt = async (value?: string) => {
     const nextPrompt = (value ?? prompt).trim();
     if (!nextPrompt || isLoading) return;
@@ -189,12 +205,14 @@ export function LocalConsole() {
               <span>Console-first local MVP</span>
             </div>
             <h1 className="mt-4 max-w-3xl font-mono text-3xl font-semibold text-white sm:text-4xl">
-              Local electronics chat, stripped back to the real loop.
+              {status?.runtimeMode === 'vercel-fallback'
+                ? 'Hosted electronics guidance, tuned for Vercel Hobby.'
+                : 'Local electronics chat, stripped back to the real loop.'}
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
-              This pass removes provider auth and the workbench from the main path. What remains is
-              the core thing to validate: can a local open-source model hold a useful electronics
-              conversation inside a console-first interface.
+              {status?.runtimeMode === 'vercel-fallback'
+                ? 'This hosted path is deliberately shaped for the free Vercel tier: deterministic electronics helpers, planning, and debugging without pretending a full local GGUF runtime belongs inside a Hobby function.'
+                : 'This pass removes provider auth and the workbench from the main path. What remains is the core thing to validate: can a local open-source model hold a useful electronics conversation inside a console-first interface.'}
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-400">
               <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
@@ -246,8 +264,9 @@ export function LocalConsole() {
                   Current MVP limits
                 </dt>
                 <dd className="mt-1 text-zinc-400">
-                  First local tools are now wired for calculation and component lookup. Voice,
-                  images, and workbench visuals are still out of the main flow.
+                  First local tools now cover calculation, component lookup, circuit planning, and
+                  LED debug checklists. Voice, images, and workbench visuals are still out of the
+                  main flow.
                 </dd>
               </div>
             </dl>
@@ -285,11 +304,12 @@ export function LocalConsole() {
                   Start with a real electronics question.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
-                  The point of this MVP is simple: test whether the local chat loop feels sharp
-                  enough before layering tools and workbench behaviour back in.
+                  {status?.runtimeMode === 'vercel-fallback'
+                    ? 'The hosted MVP is now good for concrete learner help: parts lists, wiring plans, resistor picks, and first-pass debug guidance.'
+                    : 'The point of this MVP is simple: test whether the local chat loop feels sharp enough before layering tools and workbench behaviour back in.'}
                 </p>
                 <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
-                  {STARTER_PROMPTS.map((starter) => (
+                  {starterPrompts.map((starter) => (
                     <button
                       key={starter}
                       type="button"
@@ -398,8 +418,9 @@ export function LocalConsole() {
                       <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-amber-300/70 uppercase">
                         clitronic
                       </div>
-                      Thinking locally… first run can take longer if the model still needs to
-                      download.
+                      {status?.runtimeMode === 'vercel-fallback'
+                        ? 'Working through the hosted fallback tool layer…'
+                        : 'Thinking locally… first run can take longer if the model still needs to download.'}
                     </div>
                   </div>
                 ) : null}

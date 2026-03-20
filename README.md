@@ -14,7 +14,7 @@ This refactor deliberately removes provider auth and the workbench-first default
 - runs against a **local in-process model runtime** via `node-llama-cpp`
 - avoids **remote vendor model calls**
 - avoids **provider auth** in the main user flow
-- includes a **first local tool layer** for resistor calculation and component lookup
+- includes a **first local tool layer** for resistor calculation, component lookup, circuit planning, and LED debug checklists
 - keeps the MVP **text-only and honest**
 
 ## Vercel Hobby deployment reality
@@ -30,6 +30,14 @@ That is enough for lightweight server logic, but it is **not a good home for an 
 
 - **Local / self-hosted runtime** → full `node-llama-cpp` local model path
 - **Vercel Hobby deployment** → safe hosted fallback mode using built-in electronics tools and deterministic responses
+
+The hosted fallback now covers useful beginner flows such as:
+
+- resistor recommendations
+- component lookup
+- Arduino LED parts list + wiring plan
+- Raspberry Pi LED parts list + wiring plan
+- first-pass LED debug checklists
 
 This keeps auto-deploys to Vercel working while preserving the stronger full-local experience for real local runs.
 
