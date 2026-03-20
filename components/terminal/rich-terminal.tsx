@@ -1051,6 +1051,68 @@ function AdaptiveStudio({
     });
   }, []);
 
+  const openPanel = useCallback((panelId: string) => {
+    setPanelState((prev) => {
+      const current = prev[panelId];
+      if (!current) return prev;
+      return { ...prev, [panelId]: { ...current, isOpen: true } };
+    });
+  }, []);
+
+  const lastEvent = workspace.events[0];
+
+  const uiFocus = useMemo(() => {
+    if (!lastEvent) return null;
+    if (lastEvent.id === 'simulation-failed')
+      return { kind: 'keep-only' as const, panelId: 'inspector-panel' };
+    if (lastEvent.id === 'simulation-ok') return { kind: 'open' as const, panelId: 'graph-panel' };
+    if (lastEvent.kind === 'focus') {
+      const focus = lastEvent.title.toLowerCase();
+      const panelId = focus.includes('graph')
+        ? 'graph-panel'
+        : focus.includes('teacher')
+          ? 'teacher-panel'
+          : focus.includes('workbench')
+            ? 'scene-panel'
+            : 'inspector-panel';
+      return { kind: 'keep-only' as const, panelId };
+    }
+    return null;
+  }, [lastEvent]);
+
+  const applyFocus = useCallback(
+    (focus: { kind: 'keep-only'; panelId: string } | { kind: 'open'; panelId: string }) => {
+      setPanelState((prev) => {
+        const next: typeof prev = { ...prev };
+        let changed = false;
+
+        if (focus.kind === 'open') {
+          const current = next[focus.panelId];
+          if (!current || current.isOpen) return prev;
+          next[focus.panelId] = { ...current, isOpen: true };
+          return next;
+        }
+
+        for (const [id, state] of Object.entries(prev)) {
+          if (id === focus.panelId) {
+            if (!state.isOpen) {
+              next[id] = { ...state, isOpen: true };
+              changed = true;
+            }
+            continue;
+          }
+          if (!state.isPinned && state.isOpen) {
+            next[id] = { ...state, isOpen: false };
+            changed = true;
+          }
+        }
+
+        return changed ? next : prev;
+      });
+    },
+    []
+  );
+
   const togglePin = useCallback((panelId: string) => {
     setPanelState((prev) => {
       const current = prev[panelId];
@@ -1092,8 +1154,23 @@ function AdaptiveStudio({
         <span className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Windows</span>
         <div className="flex items-center gap-2">
           <span className="text-gray-500">Tip:</span>
-          <span>close (×), pin, reorder (↑ ↓)</span>
+          <span>× close • pin • ↑ ↓ reorder</span>
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="text-[11px] tracking-[0.16em] text-gray-500 uppercase">Open</div>
+        {sortedPanels
+          .filter((panel) => !(panelState[panel.id]?.isOpen ?? true))
+          .map((panel) => (
+            <button
+              key={`open-${panel.id}`}
+              onClick={() => openPanel(panel.id)}
+              className="rounded-full border border-gray-800 bg-[#0a0f15] px-3 py-1.5 text-xs text-gray-300 hover:border-gray-600 hover:text-gray-100"
+            >
+              + {panel.title}
+            </button>
+          ))}
       </div>
 
       <div className="mb-4 rounded-2xl border border-cyan-900/30 bg-[#0c141d] p-4 shadow-[0_0_0_1px_rgba(34,211,238,0.04)]">
@@ -1138,6 +1215,7 @@ function AdaptiveStudio({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <ApplyUiFocus focus={uiFocus} apply={applyFocus} />
         {sortedPanels
           .filter((panel) => panel.kind !== 'next-step')
           .map((panel) => (
@@ -1391,6 +1469,21 @@ function PanelChrome({
       </button>
     </div>
   );
+}
+
+function ApplyUiFocus({
+  focus,
+  apply,
+}: {
+  focus: { kind: 'keep-only'; panelId: string } | { kind: 'open'; panelId: string } | null;
+  apply: (
+    focus: { kind: 'keep-only'; panelId: string } | { kind: 'open'; panelId: string }
+  ) => void;
+}) {
+  if (focus) {
+    apply(focus);
+  }
+  return null;
 }
 
 function WorkbenchPreview({
