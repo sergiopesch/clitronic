@@ -26,11 +26,15 @@ export interface CircuitNode {
   parameters?: CircuitNodeParameter[];
 }
 
+export type CircuitConnectionKind = 'explicit' | 'inferred';
+
 export interface CircuitConnection {
   id: string;
   from: string;
   to: string;
+  kind: CircuitConnectionKind;
   label?: string;
+  rationale?: string;
 }
 
 export interface CircuitMetric {
@@ -45,9 +49,55 @@ export interface CircuitEvent {
   detail: string;
 }
 
-export type CircuitPanelKind = 'scene' | 'teacher' | 'inspector' | 'graph' | 'next-step';
+export type CircuitPanelKind =
+  | 'workbench'
+  | 'teacher'
+  | 'inspector'
+  | 'graph'
+  | 'topology'
+  | 'diagram'
+  | 'next-step';
 
-export type CircuitFocusTarget = 'workbench' | 'teacher' | 'inspector' | 'graph' | 'topology';
+export type CircuitWindowTarget =
+  | 'workbench'
+  | 'teacher'
+  | 'inspector'
+  | 'graph'
+  | 'topology'
+  | 'diagram';
+
+export type CircuitFocusTarget = CircuitWindowTarget;
+
+export interface CircuitDiagramState {
+  componentKey: string;
+  title: string;
+  isOpen: boolean;
+}
+
+export interface CircuitWindowState {
+  openWindows: CircuitWindowTarget[];
+  focusedWindow: CircuitWindowTarget;
+  diagram?: CircuitDiagramState;
+}
+
+export interface CircuitTopologyLink {
+  id: string;
+  fromId: string;
+  toId: string;
+  fromLabel: string;
+  toLabel: string;
+  status: 'explicit' | 'inferred' | 'missing';
+  detail: string;
+  command: string;
+}
+
+export interface CircuitChecklistItem {
+  id: string;
+  label: string;
+  status: 'ready' | 'inferred' | 'missing';
+  detail: string;
+  command?: string;
+}
 
 export interface CircuitPanel {
   id: string;
@@ -68,6 +118,7 @@ export interface CircuitDocument {
   title: string;
   mode: CircuitMode;
   focusedPanel?: CircuitFocusTarget;
+  windowState: CircuitWindowState;
   summary: string;
   nodes: CircuitNode[];
   connections: CircuitConnection[];
@@ -83,6 +134,7 @@ export interface LedSeriesSimulation {
   kind: 'led-series';
   ok: boolean;
   reason?: string;
+  explanation?: string;
   values?: {
     supplyVoltageV: number;
     resistorOhms: number;
@@ -92,6 +144,9 @@ export interface LedSeriesSimulation {
     resistorPowerMw: number;
   };
   brightnessBand?: 'Very dim' | 'Comfortable' | 'Bright' | 'Aggressive';
+  checklist: CircuitChecklistItem[];
+  blockers: string[];
+  suggestedCommands: string[];
   warnings: string[];
 }
 

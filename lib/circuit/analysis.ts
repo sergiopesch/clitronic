@@ -1,9 +1,11 @@
 import type {
+  CircuitChecklistItem,
   CircuitConnection,
   CircuitDocument,
   CircuitEvent,
   CircuitMetric,
   CircuitNode,
+  CircuitTopologyLink,
 } from './types';
 
 function formatOhms(value: number): string {
@@ -37,12 +39,157 @@ function parseResistance(value: string | undefined): number | undefined {
   return normalized.includes('k') ? base * 1000 : base;
 }
 
-function isConnected(connections: CircuitConnection[], leftId: string, rightId: string): boolean {
-  return connections.some(
+function findConnection(
+  connections: CircuitConnection[],
+  leftId: string,
+  rightId: string
+): CircuitConnection | undefined {
+  return connections.find(
     (connection) =>
       (connection.from === leftId && connection.to === rightId) ||
       (connection.from === rightId && connection.to === leftId)
   );
+}
+
+interface RequiredLinkDefinition {
+  id: string;
+  fromKey: string;
+  toKey: string;
+  command: string;
+  detail: string;
+}
+
+const REQUIRED_LED_SERIES_LINKS: RequiredLinkDefinition[] = [
+  {
+    id: 'battery-resistor',
+    fromKey: 'battery',
+    toKey: 'resistor',
+    command: 'connect battery to resistor',
+    detail: 'Source current must leave the battery and enter the current-limiting resistor first.',
+  },
+  {
+    id: 'resistor-led',
+    fromKey: 'resistor',
+    toKey: 'led',
+    command: 'connect resistor to led',
+    detail: 'The resistor must sit in series with the LED to limit current before the diode.',
+  },
+  {
+    id: 'led-ground',
+    fromKey: 'led',
+    toKey: 'ground',
+    command: 'connect led to ground',
+    detail: 'The return path must close back to ground so the loop is complete.',
+  },
+];
+
+function buildTopologyLinks(document: CircuitDocument): CircuitTopologyLink[] {
+  const links: CircuitTopologyLink[] = [];
+
+  for (const required of REQUIRED_LED_SERIES_LINKS) {
+    const from = getNode(document.nodes, required.fromKey);
+    const to = getNode(document.nodes, required.toKey);
+
+    if (!from || !to) {
+      links.push({
+        id: required.id,
+        fromId: from?.id ?? required.fromKey,
+        toId: to?.id ?? required.toKey,
+        fromLabel: from?.label ?? required.fromKey,
+        toLabel: to?.label ?? required.toKey,
+        status: 'missing',
+        detail: `${required.detail} Add the missing part first if needed, then wire it explicitly.`,
+        command: required.command,
+      });
+      continue;
+    }
+
+    const connection = findConnection(document.connections, from.id, to.id);
+    if (!connection) {
+      links.push({
+        id: required.id,
+        fromId: from.id,
+        toId: to.id,
+        fromLabel: from.label,
+        toLabel: to.label,
+        status: 'missing',
+        detail: `${required.detail} This link is still absent from the topology.`,
+        command: required.command,
+      });
+      continue;
+    }
+
+    links.push({
+      id: required.id,
+      fromId: from.id,
+      toId: to.id,
+      fromLabel: from.label,
+      toLabel: to.label,
+      status: connection.kind,
+      detail:
+        connection.kind === 'explicit'
+          ? `Confirmed by command: ${connection.label ?? 'explicit wire'}.`
+          : `Only inferred so far: ${connection.label ?? 'adjacent relationship'}. Confirm it with an explicit connect command before trusting simulation.`,
+      command: required.command,
+    });
+  }
+
+  return links;
+}
+
+function buildChecklist(document: CircuitDocument, topologyLinks: CircuitTopologyLink[]) {
+  const battery = getNode(document.nodes, 'battery');
+  const resistor = getNode(document.nodes, 'resistor');
+  const led = getNode(document.nodes, 'led');
+  const ground = getNode(document.nodes, 'ground');
+
+  const checklist: CircuitChecklistItem[] = [
+    {
+      id: 'battery-present',
+      label: 'Battery present',
+      status: battery ? 'ready' : 'missing',
+      detail: battery
+        ? 'Power source detected.'
+        : 'Add a battery so the circuit has a voltage source.',
+      command: battery ? undefined : 'add battery',
+    },
+    {
+      id: 'resistor-present',
+      label: 'Resistor present',
+      status: resistor ? 'ready' : 'missing',
+      detail: resistor
+        ? 'Current limiter detected.'
+        : 'Add a resistor before driving an LED from a battery.',
+      command: resistor ? undefined : 'add resistor',
+    },
+    {
+      id: 'led-present',
+      label: 'LED present',
+      status: led ? 'ready' : 'missing',
+      detail: led ? 'Output device detected.' : 'Add an LED to build the series example.',
+      command: led ? undefined : 'add led',
+    },
+    {
+      id: 'ground-present',
+      label: 'Ground present',
+      status: ground ? 'ready' : 'missing',
+      detail: ground ? 'Return node detected.' : 'Add ground to close the return path.',
+      command: ground ? undefined : 'add ground',
+    },
+    ...topologyLinks.map((link) => ({
+      id: `link-${link.id}`,
+      label: `${link.fromLabel} → ${link.toLabel}`,
+      status: (link.status === 'explicit'
+        ? 'ready'
+        : link.status === 'inferred'
+          ? 'inferred'
+          : 'missing') as CircuitChecklistItem['status'],
+      detail: link.detail,
+      command: link.status === 'explicit' ? undefined : link.command,
+    })),
+  ];
+
+  return checklist;
 }
 
 export interface CircuitAnalysis {
@@ -50,6 +197,9 @@ export interface CircuitAnalysis {
   derivedEvents: CircuitEvent[];
   derivedInsights: string[];
   suggestedFixes: string[];
+  blockers: string[];
+  topologyLinks: CircuitTopologyLink[];
+  checklist: CircuitChecklistItem[];
 }
 
 export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
@@ -57,11 +207,14 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
   const derivedEvents: CircuitEvent[] = [];
   const derivedInsights: string[] = [];
   const suggestedFixes: string[] = [];
+  const blockers: string[] = [];
+
+  const topologyLinks = buildTopologyLinks(document);
+  const checklist = buildChecklist(document, topologyLinks);
 
   const battery = getNode(document.nodes, 'battery');
   const resistor = getNode(document.nodes, 'resistor');
   const led = getNode(document.nodes, 'led');
-  const ground = getNode(document.nodes, 'ground');
 
   const supplyVoltage = parseVoltage(getParameter(battery, 'voltage'));
   const resistance = parseResistance(getParameter(resistor, 'resistance'));
@@ -94,7 +247,7 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
         kind: 'teaching',
         title: 'LED will likely appear dim',
         detail:
-          'The current estimate is quite low. Clitronic should explain that brightness is current-driven and invite a lower resistor value experiment.',
+          'The current estimate is quite low. Lower the resistor value if you want a brighter LED while staying within a safe current range.',
       });
       suggestedFixes.push(
         `set resistor resistance = ${formatOhms(Math.max(100, recommendedResistance))}`
@@ -107,18 +260,18 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
         kind: 'warning',
         title: 'LED current likely too high',
         detail:
-          'The estimated current exceeds a safe everyday target. The teacher should propose a safer resistor value before encouraging simulation confidence.',
+          'The estimated current exceeds a safe everyday target. Increase the resistor value before treating this as a healthy circuit.',
       });
       suggestedFixes.push(
         `set resistor resistance = ${formatOhms(Math.max(recommendedResistance, 330))}`
       );
+      blockers.push('LED current is above a typical safe 20mA target.');
     }
 
     derivedInsights.push(
-      'Once simulation outputs exist, the teacher can stop speaking in generalities and instead comment on this exact circuit state.'
+      'When simulation is valid, the graph can explain this exact loop instead of speaking in generic circuit theory.'
     );
   } else if (battery && resistor && led && supplyVoltage && resistance && ledForward) {
-    // Fallback (pre-simulation): keep the lightweight heuristic analysis.
     const currentMa = ((supplyVoltage - ledForward) / resistance) * 1000;
     const resistorDrop = supplyVoltage - ledForward;
     const resistorPowerMw = (currentMa / 1000) ** 2 * resistance * 1000;
@@ -132,54 +285,71 @@ export function analyzeCircuit(document: CircuitDocument): CircuitAnalysis {
     derivedEvents.push({
       id: 'derived-led-analysis',
       kind: 'info',
-      title: 'LED path analysed',
-      detail: `Estimated current is ${currentMa.toFixed(1)}mA with about ${resistorDrop.toFixed(1)}V dropped across the resistor.`,
+      title: 'Pre-simulation estimate ready',
+      detail: `If the loop is wired explicitly, the LED should see about ${currentMa.toFixed(1)}mA with ${resistorDrop.toFixed(1)}V across the resistor.`,
     });
   }
 
-  if (battery && led && resistor) {
-    const batteryToResistor = isConnected(document.connections, battery.id, resistor.id);
-    const resistorToLed = isConnected(document.connections, resistor.id, led.id);
-    const ledToGround = ground ? isConnected(document.connections, led.id, ground.id) : false;
+  for (const item of checklist) {
+    if (item.status === 'missing') {
+      blockers.push(item.detail);
+      if (item.command) suggestedFixes.push(item.command);
+    }
 
-    if (batteryToResistor && resistorToLed && ledToGround) {
-      derivedEvents.push({
-        id: 'derived-complete-led-path',
-        kind: 'info',
-        title: 'A complete LED path is present',
-        detail:
-          'The topology contains a plausible series path from battery through resistor to LED and then ground. This is enough to justify stronger simulation surfaces.',
-      });
-    } else {
-      const missingLink = !batteryToResistor
-        ? 'connect battery to resistor'
-        : !resistorToLed
-          ? 'connect resistor to led'
-          : 'connect led to ground';
-
-      derivedEvents.push({
-        id: 'derived-incomplete-led-path',
-        kind: 'validation',
-        title: 'LED path is structurally incomplete',
-        detail: `The required parts exist but the explicit topology is incomplete. The next missing link is: ${missingLink}.`,
-      });
-      suggestedFixes.push(missingLink);
+    if (item.status === 'inferred' && item.command) {
+      blockers.push(`Confirm the inferred path: ${item.label}.`);
+      suggestedFixes.push(item.command);
     }
   }
 
-  if (!ground) {
-    suggestedFixes.unshift('add ground');
+  const explicitLinks = topologyLinks.filter((link) => link.status === 'explicit').length;
+  const inferredLinks = topologyLinks.filter((link) => link.status === 'inferred').length;
+  const missingLinks = topologyLinks.filter((link) => link.status === 'missing').length;
+
+  derivedMetrics.push({ label: 'Explicit links', value: String(explicitLinks) });
+  derivedMetrics.push({ label: 'Inferred links', value: String(inferredLinks) });
+  derivedMetrics.push({ label: 'Missing links', value: String(missingLinks) });
+
+  if (missingLinks === 0 && inferredLinks === 0 && topologyLinks.length > 0) {
+    derivedEvents.push({
+      id: 'derived-complete-led-path',
+      kind: 'info',
+      title: 'Explicit LED path is complete',
+      detail:
+        'Every required series link has been confirmed by command, so topology and simulation now agree on the same loop.',
+    });
+  } else if (missingLinks > 0 || inferredLinks > 0) {
+    derivedEvents.push({
+      id: 'derived-incomplete-led-path',
+      kind: 'validation',
+      title: 'Topology still needs confirmation',
+      detail:
+        missingLinks > 0
+          ? `${missingLinks} required link${missingLinks === 1 ? '' : 's'} are still missing from the circuit.`
+          : `${inferredLinks} required link${inferredLinks === 1 ? '' : 's'} are only inferred and still need explicit wiring commands.`,
+    });
   }
 
-  if (led && battery && !resistor) {
-    suggestedFixes.push('add resistor');
+  if (!resistor && led && battery) {
+    derivedEvents.push({
+      id: 'warning-led-resistor',
+      kind: 'warning',
+      title: 'LED protection missing',
+      detail: 'A resistor still needs to be added before this LED path is safe to trust.',
+    });
   }
+
+  derivedInsights.push(
+    'Topology should show three states: explicitly wired, inferred from intent, and still missing.'
+  );
 
   return {
     derivedMetrics,
     derivedEvents,
     derivedInsights,
-    // Preserve order: we intentionally unshift "add ground" as a first suggestion.
-    suggestedFixes: Array.from(new Set(suggestedFixes.filter(Boolean))).slice(0, 5),
+    suggestedFixes: Array.from(new Set(suggestedFixes.filter(Boolean))).slice(0, 8),
+    blockers: Array.from(new Set(blockers.filter(Boolean))).slice(0, 8),
+    topologyLinks,
+    checklist,
   };
 }

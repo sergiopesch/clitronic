@@ -1,4 +1,9 @@
-import { createCircuitDocument, syncCircuitDocument } from './document';
+import {
+  createCircuitDocument,
+  setCircuitDiagram,
+  setCircuitWindow,
+  syncCircuitDocument,
+} from './document';
 import type { CircuitDocument, CircuitNode, CircuitNodeParameter } from './types';
 
 function titleCase(value: string): string {
@@ -14,9 +19,12 @@ export interface ParsedCircuitCommand {
     | 'build'
     | 'add'
     | 'connect'
+    | 'show'
+    | 'hide'
     | 'remove'
     | 'simulate'
     | 'focus'
+    | 'diagram'
     | 'explain'
     | 'set'
     | 'reset'
@@ -38,9 +46,12 @@ export function parseCircuitCommand(input: string): ParsedCircuitCommand {
       'build',
       'add',
       'connect',
+      'show',
+      'hide',
       'remove',
       'simulate',
       'focus',
+      'diagram',
       'explain',
       'set',
       'reset',
@@ -152,7 +163,9 @@ function ensureDefaultsForLedSeries(document: CircuitDocument): CircuitDocument 
           id: `connection-${draft.connections.length + 1}`,
           from: fromId,
           to: toId,
+          kind: 'explicit',
           label,
+          rationale: 'Auto-seeded for the default LED series loop.',
         },
       ];
     }
@@ -272,7 +285,9 @@ export async function applyStructuredCommand(
           id: `connection-${draft.connections.length + 1}`,
           from: left.id,
           to: right.id,
+          kind: 'explicit',
           label: 'explicit command connection',
+          rationale: `Wired directly from the command: ${parsed.raw}`,
         },
       ];
     }
@@ -309,6 +324,27 @@ export async function applyStructuredCommand(
     return refreshDocument(draft);
   }
 
+  if (parsed.kind === 'show' || parsed.kind === 'hide' || parsed.kind === 'focus') {
+    const targetArg = parsed.args.trim();
+    if (!targetArg) return document;
+
+    const diagramMatch = targetArg.match(/^(?:diagram|schematic|card)\s+(.+)$/i);
+    if (diagramMatch) {
+      return setCircuitDiagram(
+        document,
+        diagramMatch[1] ?? 'component',
+        parsed.kind === 'hide' ? 'hide' : parsed.kind === 'focus' ? 'focus' : 'show'
+      );
+    }
+
+    return setCircuitWindow(document, targetArg, parsed.kind);
+  }
+
+  if (parsed.kind === 'diagram') {
+    if (!parsed.args.trim()) return document;
+    return setCircuitDiagram(document, parsed.args, 'show');
+  }
+
   if (parsed.kind === 'simulate') {
     const nextDocument: CircuitDocument = {
       ...document,
@@ -319,6 +355,13 @@ export async function applyStructuredCommand(
       panels: document.panels,
       insights: document.insights,
       nextActions: document.nextActions,
+      windowState: {
+        ...document.windowState,
+        openWindows: Array.from(
+          new Set([...document.windowState.openWindows, 'graph', 'inspector', 'topology'])
+        ),
+        focusedWindow: 'graph',
+      },
     };
 
     const { simulateLedSeries } = await import('@/lib/sim/led-series');

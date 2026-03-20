@@ -1,7 +1,8 @@
-import { findCatalogMatches } from './catalog';
 import { analyzeCircuit } from './analysis';
+import { findCatalogMatches } from './catalog';
 import type {
   CircuitConnection,
+  CircuitDiagramState,
   CircuitDocument,
   CircuitEvent,
   CircuitFocusTarget,
@@ -10,6 +11,8 @@ import type {
   CircuitNode,
   CircuitNodeParameter,
   CircuitPanel,
+  CircuitWindowState,
+  CircuitWindowTarget,
 } from './types';
 
 function titleCase(value: string): string {
@@ -22,6 +25,10 @@ function titleCase(value: string): string {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function uniqueWindowTargets(values: CircuitWindowTarget[]): CircuitWindowTarget[] {
+  return Array.from(new Set(values));
 }
 
 function createNodeId(key: string, index: number): string {
@@ -124,7 +131,9 @@ function buildConnections(nodes: CircuitNode[]): CircuitConnection[] {
       id: `connection-${index + 1}`,
       from: current.id,
       to: next.id,
-      label: index === 0 ? 'command-inferred path' : 'adjacent relationship',
+      kind: 'inferred',
+      label: 'command-inferred relationship',
+      rationale: 'Detected from adjacent components in the prompt.',
     });
   }
 
@@ -135,236 +144,149 @@ function hasNode(nodes: CircuitNode[], key: string): boolean {
   return nodes.some((node) => node.key === key);
 }
 
-function buildEvents(
-  nodes: CircuitNode[],
-  connections: CircuitConnection[],
-  mode: CircuitMode
-): CircuitEvent[] {
-  const events: CircuitEvent[] = [
-    {
-      id: 'teacher-observed-intent',
-      kind: 'teaching',
-      title: 'Teacher noticed a concrete build intent',
-      detail:
-        'Windows should respond to actual detected components and relationships, not just broad conversation context.',
-    },
-  ];
+function normalizeWindowTarget(value?: string): CircuitWindowTarget | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return undefined;
 
-  if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && !hasNode(nodes, 'resistor')) {
-    events.push({
-      id: 'warning-led-resistor',
-      kind: 'warning',
-      title: 'LED protection missing',
-      detail:
-        'A battery and LED are present but no resistor was detected. The teacher should warn before simulation and suggest adding current limiting.',
-    });
+  if (
+    normalized === 'workbench' ||
+    normalized === 'bench' ||
+    normalized === 'scene' ||
+    normalized === 'canvas'
+  ) {
+    return 'workbench';
   }
 
-  if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && hasNode(nodes, 'resistor')) {
-    events.push({
-      id: 'teaching-led-path',
-      kind: 'teaching',
-      title: 'Current-limited LED path detected',
-      detail:
-        'This is a good moment to explain brightness, voltage drop, and why resistor values change current rather than simply saying the circuit is correct.',
-    });
+  if (normalized === 'teacher' || normalized === 'teach') return 'teacher';
+  if (normalized === 'inspector' || normalized === 'inspect') return 'inspector';
+  if (normalized === 'graph' || normalized === 'signal' || normalized === 'scope') return 'graph';
+  if (normalized === 'topology' || normalized === 'map' || normalized === 'connections') {
+    return 'topology';
+  }
+  if (normalized === 'diagram' || normalized === 'schematic' || normalized === 'card') {
+    return 'diagram';
   }
 
-  if (hasNode(nodes, 'capacitor')) {
-    events.push({
-      id: 'window-capacitor-graph',
-      kind: 'window-opened',
-      title: 'Time-based graph should open',
-      detail:
-        'A capacitor implies charge and discharge behaviour, so a graph window becomes materially useful.',
-    });
-  }
-
-  if (hasNode(nodes, 'transistor')) {
-    events.push({
-      id: 'teaching-transistor',
-      kind: 'teaching',
-      title: 'Switching layer introduced',
-      detail:
-        'The interface should separate the control path from the load path so the learner can see cause and effect clearly.',
-    });
-  }
-
-  const analysis = analyzeCircuit({
-    id: 'analysis',
-    prompt: 'analysis',
-    title: 'analysis',
-    mode,
-    summary: '',
-    nodes,
-    connections,
-    metrics: [],
-    events: [],
-    panels: [],
-    insights: [],
-    nextActions: [],
-  });
-
-  events.push(...analysis.derivedEvents);
-
-  if (mode === 'simulating') {
-    events.unshift({
-      id: 'simulation-active',
-      kind: 'simulation',
-      title: 'Simulation mode active',
-      detail:
-        'Signal, timing, and failure surfaces should now come forward while explanatory windows compress to what matters right now.',
-    });
-  }
-
-  return events;
+  return undefined;
 }
 
-function buildPanels(nodes: CircuitNode[], mode: CircuitMode): CircuitPanel[] {
+function normalizeFocusTarget(value?: string): CircuitFocusTarget {
+  return normalizeWindowTarget(value) ?? 'workbench';
+}
+
+function normalizeWindowState(
+  value: CircuitDocument['windowState'] | undefined,
+  focusedPanel?: CircuitFocusTarget
+): CircuitWindowState {
+  const focusedWindow = value?.focusedWindow ?? focusedPanel ?? 'workbench';
+  const requestedOpen = value?.openWindows ?? ['workbench'];
+  const openWindows = unique([...requestedOpen, focusedWindow]).filter(
+    (target): target is CircuitWindowTarget => Boolean(normalizeWindowTarget(target))
+  ) as CircuitWindowTarget[];
+
+  return {
+    openWindows: openWindows.length ? openWindows : ['workbench'],
+    focusedWindow,
+    diagram: value?.diagram,
+  };
+}
+
+function buildPanels(
+  nodes: CircuitNode[],
+  mode: CircuitMode,
+  windowState: CircuitWindowState
+): CircuitPanel[] {
+  const isOpen = (target: CircuitWindowTarget) => windowState.openWindows.includes(target);
+
   const panels: CircuitPanel[] = [
     {
       id: 'scene-panel',
-      kind: 'scene',
+      kind: 'workbench',
       title: 'Workbench',
-      description: 'The main spatial canvas for the current circuit document.',
+      description: 'Spatial circuit sketch and component staging area.',
       accent: 'cyan',
-      state: { isOpen: true, isPinned: true, order: 1 },
+      state: { isOpen: isOpen('workbench'), isPinned: true, order: 1 },
     },
     {
       id: 'teacher-panel',
       kind: 'teacher',
       title: 'Teacher',
-      description:
-        'Explains why the interface opened these windows and what the learner should notice.',
+      description: 'Short teaching notes tied to the current topology and simulation state.',
       accent: 'emerald',
-      state: { isOpen: true, isPinned: false, order: 2 },
+      state: { isOpen: isOpen('teacher'), isPinned: false, order: 2 },
     },
     {
       id: 'inspector-panel',
       kind: 'inspector',
       title: 'Inspector',
-      description: 'Shows the active nodes, inferred path, warnings, and parameter values.',
+      description: 'Checklist, blockers, parameters, and exact connection status.',
       accent: 'amber',
-      state: { isOpen: true, isPinned: true, order: 3 },
+      state: { isOpen: isOpen('inspector'), isPinned: false, order: 3 },
     },
-  ];
-
-  // Always include topology panel; it is a deterministic map of the current document.
-  panels.push({
-    id: 'topology-panel',
-    kind: 'scene',
-    title: 'Topology map',
-    description: 'A 2D graph of the active circuit document, showing explicit and inferred links.',
-    accent: 'cyan',
-    state: { isOpen: false, isPinned: false, order: 1.5 },
-  });
-
-  if (hasNode(nodes, 'capacitor') || mode === 'simulating' || hasNode(nodes, 'led')) {
-    panels.push({
+    {
+      id: 'topology-panel',
+      kind: 'topology',
+      title: 'Topology',
+      description: 'Explicit wires, inferred relationships, and missing required links.',
+      accent: 'cyan',
+      state: { isOpen: isOpen('topology'), isPinned: false, order: 4 },
+    },
+    {
       id: 'graph-panel',
       kind: 'graph',
       title: 'Signal graph',
-      description: 'Appears when behaviour over time or intensity should be visible.',
+      description:
+        mode === 'simulating'
+          ? 'Live behaviour view for the active simulation.'
+          : 'Previews what the graph can explain once the circuit is simulatable.',
       accent: 'violet',
-      state: { isOpen: mode === 'simulating', isPinned: false, order: 4 },
+      state: { isOpen: isOpen('graph'), isPinned: false, order: 5 },
+    },
+  ];
+
+  if (windowState.diagram?.isOpen) {
+    panels.push({
+      id: 'diagram-panel',
+      kind: 'diagram',
+      title: windowState.diagram.title,
+      description: 'Educational component diagram with orientation and usage notes.',
+      accent: 'emerald',
+      state: { isOpen: true, isPinned: false, order: 6 },
     });
   }
 
-  if (mode === 'simulating') {
+  if (mode === 'simulating' || hasNode(nodes, 'capacitor') || hasNode(nodes, 'led')) {
     panels.push({
       id: 'next-step-panel',
       kind: 'next-step',
-      title: 'Next move',
-      description: 'Suggests the next experiment or command instead of dumping theory.',
+      title: 'Simulation guide',
+      description: 'Checklist and next commands to move the learner forward.',
       accent: 'emerald',
-      state: { isOpen: true, isPinned: false, order: 5 },
+      state: { isOpen: true, isPinned: false, order: 7 },
     });
   }
 
   return panels;
 }
 
-function normalizeFocusTarget(value?: string): CircuitFocusTarget {
-  const normalized = value?.trim().toLowerCase() ?? 'workbench';
-
-  if (normalized.includes('inspect')) return 'inspector';
-  if (normalized.includes('graph') || normalized.includes('signal')) return 'graph';
-  if (normalized.includes('topology') || normalized.includes('map')) return 'topology';
-  if (normalized.includes('teach')) return 'teacher';
-  return 'workbench';
-}
-
-function applyFocusToPanels(
-  panels: CircuitPanel[],
-  focusedPanel: CircuitFocusTarget | undefined
-): CircuitPanel[] {
-  const focus = focusedPanel ?? 'workbench';
-
-  return panels.map((panel) => {
-    if (!panel.state) return panel;
-
-    if (focus === 'workbench') {
-      return panel.id === 'topology-panel' || panel.id === 'graph-panel'
-        ? { ...panel, state: { ...panel.state, isOpen: false } }
-        : panel;
-    }
-
-    if (focus === 'teacher' && panel.kind === 'teacher') {
-      return { ...panel, state: { ...panel.state, isOpen: true } };
-    }
-
-    if (focus === 'inspector' && panel.kind === 'inspector') {
-      return { ...panel, state: { ...panel.state, isOpen: true } };
-    }
-
-    if (focus === 'graph' && panel.kind === 'graph') {
-      return { ...panel, state: { ...panel.state, isOpen: true } };
-    }
-
-    if (focus === 'topology' && panel.id === 'topology-panel') {
-      return { ...panel, state: { ...panel.state, isOpen: true } };
-    }
-
-    return panel;
-  });
-}
-
-function buildInsights(
-  nodes: CircuitNode[],
-  mode: CircuitMode,
-  connections: CircuitConnection[]
-): string[] {
-  const insights: string[] = [
-    'The command layer should create a circuit document that windows can respond to deterministically.',
-    'Adaptive panels should open because of circuit state and events, not because the UI feels chatty.',
-  ];
-
-  if (hasNode(nodes, 'led')) {
-    insights.push(
-      'An LED is a strong teaching trigger because current limiting, polarity, brightness, and safe current all become teachable immediately.'
-    );
-  }
-
-  if (hasNode(nodes, 'capacitor')) {
-    insights.push(
-      'Capacitors justify graph windows because time is part of the concept, not an optional flourish.'
-    );
-  }
-
-  if (mode === 'simulating') {
-    insights.push(
-      'When simulation is active, the graph and inspector should outrank generic explanation panels.'
-    );
-  }
-
+function buildEvents(document: {
+  nodes: CircuitNode[];
+  connections: CircuitConnection[];
+  mode: CircuitMode;
+  simulation?: CircuitDocument['simulation'];
+  windowState: CircuitWindowState;
+}): CircuitEvent[] {
   const analysis = analyzeCircuit({
     id: 'analysis',
     prompt: 'analysis',
     title: 'analysis',
-    mode,
+    mode: document.mode,
+    focusedPanel: document.windowState.focusedWindow,
+    windowState: document.windowState,
     summary: '',
-    nodes,
-    connections,
+    nodes: document.nodes,
+    connections: document.connections,
+    simulation: document.simulation,
     metrics: [],
     events: [],
     panels: [],
@@ -372,16 +294,93 @@ function buildInsights(
     nextActions: [],
   });
 
-  insights.push(...analysis.derivedInsights);
+  const events: CircuitEvent[] = [
+    {
+      id: 'console-first-model',
+      kind: 'info',
+      title: 'Console is the control surface',
+      detail:
+        'Windows are supporting instruments. They should open because the learner asks for them or because simulation needs them.',
+    },
+  ];
+
+  if (analysis.blockers.length > 0) {
+    events.push({
+      id: 'topology-blockers',
+      kind: 'validation',
+      title: 'Circuit still has blockers',
+      detail: analysis.blockers[0] ?? 'The topology still needs more work.',
+    });
+  }
+
+  if (document.windowState.diagram?.isOpen) {
+    events.push({
+      id: `diagram-${document.windowState.diagram.componentKey}`,
+      kind: 'window-opened',
+      title: `${document.windowState.diagram.title} opened`,
+      detail:
+        'The learner asked for a component diagram, so the supporting reference window is now available.',
+    });
+  }
+
+  if (document.mode === 'simulating') {
+    events.push({
+      id: 'simulation-active',
+      kind: 'simulation',
+      title: 'Simulation mode active',
+      detail:
+        'The graph and inspector should now explain the exact path, the current estimate, and any remaining blockers.',
+    });
+  }
+
+  events.push(...analysis.derivedEvents);
+
+  return events;
+}
+
+function buildInsights(
+  nodes: CircuitNode[],
+  mode: CircuitMode,
+  connections: CircuitConnection[],
+  windowState: CircuitWindowState,
+  simulation?: CircuitDocument['simulation']
+): string[] {
+  const analysis = analyzeCircuit({
+    id: 'analysis',
+    prompt: 'analysis',
+    title: 'analysis',
+    mode,
+    focusedPanel: windowState.focusedWindow,
+    windowState,
+    summary: '',
+    nodes,
+    connections,
+    simulation,
+    metrics: [],
+    events: [],
+    panels: [],
+    insights: [],
+    nextActions: [],
+  });
+
+  const insights = [
+    'Clitronic should separate inferred intent from explicit wiring so learners know what is real and what is still assumed.',
+    'Console commands should be able to open, close, and focus supporting windows deterministically.',
+    ...analysis.derivedInsights,
+  ];
+
+  if (mode === 'simulating') {
+    insights.push(
+      'A valid simulation should shift the explanation from theory to this exact path.'
+    );
+  }
 
   return unique(insights);
 }
 
 function buildMetrics(
-  nodes: CircuitNode[],
-  connections: CircuitConnection[],
-  events: CircuitEvent[],
-  mode: CircuitMode
+  document: Pick<CircuitDocument, 'nodes' | 'connections' | 'mode' | 'windowState' | 'simulation'>,
+  events: CircuitEvent[]
 ): CircuitMetric[] {
   const validations = events.filter(
     (event) => event.kind === 'validation' || event.kind === 'warning'
@@ -391,10 +390,13 @@ function buildMetrics(
     id: 'analysis',
     prompt: 'analysis',
     title: 'analysis',
-    mode,
+    mode: document.mode,
+    focusedPanel: document.windowState.focusedWindow,
+    windowState: document.windowState,
     summary: '',
-    nodes,
-    connections,
+    nodes: document.nodes,
+    connections: document.connections,
+    simulation: document.simulation,
     metrics: [],
     events: [],
     panels: [],
@@ -403,32 +405,33 @@ function buildMetrics(
   });
 
   return [
-    { label: 'Mode', value: titleCase(mode) },
-    { label: 'Components', value: String(nodes.length) },
-    { label: 'Connections', value: String(connections.length) },
+    { label: 'Mode', value: titleCase(document.mode) },
+    { label: 'Components', value: String(document.nodes.length) },
+    { label: 'Connections', value: String(document.connections.length) },
+    { label: 'Open windows', value: String(document.windowState.openWindows.length) },
     { label: 'Validation rules', value: String(validations.length) },
-    {
-      label: 'Teaching windows',
-      value: mode === 'simulating' ? 'Event-driven + live' : 'Event-driven',
-    },
     ...analysis.derivedMetrics,
   ];
 }
 
-function buildNextActions(
-  nodes: CircuitNode[],
-  connections: CircuitConnection[],
-  mode: CircuitMode
-): string[] {
-  const next = ['simulate', 'focus inspector', 'explain what changed'];
+function buildNextActions(document: {
+  nodes: CircuitNode[];
+  connections: CircuitConnection[];
+  mode: CircuitMode;
+  windowState: CircuitWindowState;
+  simulation?: CircuitDocument['simulation'];
+}): string[] {
   const analysis = analyzeCircuit({
     id: 'analysis',
     prompt: 'analysis',
     title: 'analysis',
-    mode,
+    mode: document.mode,
+    focusedPanel: document.windowState.focusedWindow,
+    windowState: document.windowState,
     summary: '',
-    nodes,
-    connections,
+    nodes: document.nodes,
+    connections: document.connections,
+    simulation: document.simulation,
     metrics: [],
     events: [],
     panels: [],
@@ -436,43 +439,48 @@ function buildNextActions(
     nextActions: [],
   });
 
-  next.unshift(...analysis.suggestedFixes);
+  const next = [...analysis.suggestedFixes];
 
-  if (hasNode(nodes, 'battery') && hasNode(nodes, 'led') && !hasNode(nodes, 'resistor')) {
-    next.unshift('add resistor');
+  if (!document.windowState.openWindows.includes('inspector')) next.push('show inspector');
+  if (!document.windowState.openWindows.includes('topology')) next.push('show topology');
+  if (hasNode(document.nodes, 'led') && !document.windowState.diagram?.isOpen) {
+    next.push('show diagram led');
   }
+  if (document.mode !== 'simulating') next.push('simulate');
+  if (document.mode === 'simulating') next.push('focus graph');
+  next.push('explain what changed');
 
-  if (!hasNode(nodes, 'ground')) {
-    next.push('add ground');
-  }
-
-  if (hasNode(nodes, 'capacitor')) {
-    next.push('explain the charge curve');
-  }
-
-  if (mode === 'simulating') {
-    next.push('focus graph');
-  }
-
-  return unique(next).slice(0, 6);
+  return unique(next).slice(0, 8);
 }
 
 function documentSummary(prompt: string): string {
-  return `Structured circuit document derived from the command: ${prompt}. This gives Clitronic a foundation for event-driven teaching windows, validation, and later true simulation state.`;
+  return `Structured circuit document derived from the command: ${prompt}. The console is primary, and the supporting windows should explain exact components, links, and blockers.`;
 }
 
 export function syncCircuitDocument(
   document: Pick<
     CircuitDocument,
-    'id' | 'prompt' | 'title' | 'mode' | 'nodes' | 'connections' | 'simulation' | 'focusedPanel'
+    | 'id'
+    | 'prompt'
+    | 'title'
+    | 'mode'
+    | 'nodes'
+    | 'connections'
+    | 'simulation'
+    | 'focusedPanel'
+    | 'windowState'
   > &
     Partial<Pick<CircuitDocument, 'summary' | 'events'>>
 ): CircuitDocument {
   const cleanPrompt = document.prompt.trim() || 'new circuit idea';
-  const events = buildEvents(document.nodes, document.connections, document.mode);
-  const focus = normalizeFocusTarget(document.focusedPanel);
-  const panels = applyFocusToPanels(buildPanels(document.nodes, document.mode), focus);
-  const insights = buildInsights(document.nodes, document.mode, document.connections);
+  const windowState = normalizeWindowState(document.windowState, document.focusedPanel);
+  const events = buildEvents({
+    nodes: document.nodes,
+    connections: document.connections,
+    mode: document.mode,
+    simulation: document.simulation,
+    windowState,
+  });
 
   return {
     id:
@@ -486,20 +494,42 @@ export function syncCircuitDocument(
     prompt: cleanPrompt,
     title: document.title.trim() || titleCase(cleanPrompt),
     mode: document.mode,
-    focusedPanel: focus,
+    focusedPanel: windowState.focusedWindow,
+    windowState,
     summary: document.summary?.trim() || documentSummary(cleanPrompt),
     nodes: document.nodes,
     connections: document.connections,
     simulation: document.simulation,
-    metrics: buildMetrics(document.nodes, document.connections, events, document.mode),
+    metrics: buildMetrics(
+      {
+        nodes: document.nodes,
+        connections: document.connections,
+        mode: document.mode,
+        windowState,
+        simulation: document.simulation,
+      },
+      events
+    ),
     events: [...(document.events ?? []), ...events]
       .filter(
         (event, index, arr) => arr.findIndex((candidate) => candidate.id === event.id) === index
       )
-      .slice(0, 8),
-    panels,
-    insights,
-    nextActions: buildNextActions(document.nodes, document.connections, document.mode),
+      .slice(0, 10),
+    panels: buildPanels(document.nodes, document.mode, windowState),
+    insights: buildInsights(
+      document.nodes,
+      document.mode,
+      document.connections,
+      windowState,
+      document.simulation
+    ),
+    nextActions: buildNextActions({
+      nodes: document.nodes,
+      connections: document.connections,
+      mode: document.mode,
+      windowState,
+      simulation: document.simulation,
+    }),
   };
 }
 
@@ -510,6 +540,7 @@ export function createCircuitDocument(
   const cleanPrompt = prompt.trim() || 'new circuit idea';
   const nodes = buildNodes(cleanPrompt);
   const connections = buildConnections(nodes);
+
   return syncCircuitDocument({
     id: `circuit-${
       cleanPrompt
@@ -521,6 +552,10 @@ export function createCircuitDocument(
     title: titleCase(cleanPrompt),
     mode,
     focusedPanel: 'workbench',
+    windowState: {
+      openWindows: ['workbench'],
+      focusedWindow: 'workbench',
+    },
     summary: documentSummary(cleanPrompt),
     nodes,
     connections,
@@ -529,22 +564,152 @@ export function createCircuitDocument(
 }
 
 export function activateCircuitSimulation(document: CircuitDocument): CircuitDocument {
-  return createCircuitDocument(document.prompt, 'simulating');
+  return syncCircuitDocument({
+    ...document,
+    mode: 'simulating',
+    windowState: {
+      ...document.windowState,
+      openWindows: uniqueWindowTargets([...document.windowState.openWindows, 'graph', 'inspector']),
+      focusedWindow: 'graph',
+    },
+  });
 }
 
 export function focusCircuitPanel(document: CircuitDocument, panelName: string): CircuitDocument {
   const focus = normalizeFocusTarget(panelName);
-  const label = titleCase(focus === 'workbench' ? 'workbench' : focus);
+  const label = titleCase(focus);
   const focusEvent: CircuitEvent = {
-    id: `focus-${panelName.toLowerCase().replace(/\s+/g, '-') || 'inspector'}`,
+    id: `focus-${focus}`,
     kind: 'focus',
-    title: `${label} brought forward`,
-    detail: `The interface should emphasise the ${label.toLowerCase()} window while keeping enough context to avoid disorienting the learner.`,
+    title: `${label} focused`,
+    detail: `The ${focus} window is now in front of the learner.`,
   };
 
   return syncCircuitDocument({
     ...document,
     focusedPanel: focus,
+    windowState: {
+      ...document.windowState,
+      openWindows: uniqueWindowTargets([...document.windowState.openWindows, focus]),
+      focusedWindow: focus,
+    },
     events: [focusEvent, ...document.events],
+  });
+}
+
+export function setCircuitWindow(
+  document: CircuitDocument,
+  panelName: string,
+  action: 'show' | 'hide' | 'focus'
+): CircuitDocument {
+  const target = normalizeWindowTarget(panelName);
+  if (!target) return document;
+
+  const openSet = new Set(document.windowState.openWindows);
+
+  if (action === 'show' || action === 'focus') {
+    openSet.add(target);
+  }
+
+  if (action === 'hide') {
+    openSet.delete(target);
+    if (target === 'workbench' && openSet.size === 0) {
+      openSet.add('teacher');
+    }
+  }
+
+  const nextFocused =
+    action === 'hide' && document.windowState.focusedWindow === target
+      ? ((Array.from(openSet)[0] as CircuitWindowTarget | undefined) ?? 'workbench')
+      : action === 'focus'
+        ? target
+        : document.windowState.focusedWindow;
+
+  const event: CircuitEvent = {
+    id: `${action}-${target}`,
+    kind: action === 'focus' ? 'focus' : 'window-opened',
+    title: `${titleCase(target)} ${action === 'hide' ? 'hidden' : action === 'show' ? 'opened' : 'focused'}`,
+    detail:
+      action === 'hide'
+        ? `The ${target} window was closed by command.`
+        : action === 'show'
+          ? `The ${target} window is now available as a supporting instrument.`
+          : `The ${target} window is now the active supporting instrument.`,
+  };
+
+  return syncCircuitDocument({
+    ...document,
+    focusedPanel: nextFocused,
+    windowState: {
+      ...document.windowState,
+      openWindows: Array.from(openSet) as CircuitWindowTarget[],
+      focusedWindow: nextFocused,
+      diagram: target === 'diagram' && action === 'hide' ? undefined : document.windowState.diagram,
+    },
+    events: [event, ...document.events],
+  });
+}
+
+export function setCircuitDiagram(
+  document: CircuitDocument,
+  componentKey: string,
+  action: 'show' | 'hide' | 'focus' = 'show'
+): CircuitDocument {
+  const normalized = componentKey.trim().toLowerCase();
+
+  if (action === 'hide') {
+    const remainingWindows = document.windowState.openWindows.filter(
+      (window) => window !== 'diagram'
+    );
+    const nextFocused =
+      document.windowState.focusedWindow === 'diagram'
+        ? (remainingWindows[0] ?? 'workbench')
+        : document.windowState.focusedWindow;
+
+    return syncCircuitDocument({
+      ...document,
+      focusedPanel: nextFocused,
+      windowState: {
+        ...document.windowState,
+        openWindows: remainingWindows,
+        focusedWindow: nextFocused,
+        diagram: undefined,
+      },
+      events: [
+        {
+          id: 'hide-diagram',
+          kind: 'window-opened',
+          title: 'Diagram hidden',
+          detail: 'The diagram reference window was closed by command.',
+        },
+        ...document.events,
+      ],
+    });
+  }
+
+  const diagram: CircuitDiagramState = {
+    componentKey: normalized,
+    title: `${titleCase(normalized)} diagram`,
+    isOpen: true,
+  };
+
+  return syncCircuitDocument({
+    ...document,
+    focusedPanel: 'diagram',
+    windowState: {
+      ...document.windowState,
+      openWindows: uniqueWindowTargets([...document.windowState.openWindows, 'diagram']),
+      focusedWindow: action === 'focus' ? 'diagram' : document.windowState.focusedWindow,
+      diagram,
+    },
+    events: [
+      {
+        id: `show-diagram-${normalized}`,
+        kind: action === 'focus' ? 'focus' : 'window-opened',
+        title: `${diagram.title} ready`,
+        detail: 'The learner asked for a component diagram reference.',
+      },
+      ...document.events,
+    ],
   });
 }
