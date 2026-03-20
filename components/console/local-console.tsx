@@ -4,25 +4,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { LearningMonitor } from '@/components/console/learning-monitor';
+import {
+  mergeTeacherStates,
+  type TeacherState,
+  type TeacherToolInvocation,
+} from '@/lib/teacher-state';
 
 type ConsoleMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  toolInvocations?: ToolInvocation[];
-};
-
-type ToolInvocation = {
-  toolName:
-    | 'lookup_component'
-    | 'search_components'
-    | 'calculate_resistor'
-    | 'ohms_law'
-    | 'generate_circuit_plan'
-    | 'generate_debug_checklist';
-  summary: string;
-  input: Record<string, unknown>;
-  result: Record<string, unknown>;
+  toolInvocations?: TeacherToolInvocation[];
+  teacherState?: TeacherState;
 };
 
 type ModelStatus = {
@@ -54,13 +47,15 @@ const HOSTED_STARTER_PROMPTS = [
 function createMessage(
   role: ConsoleMessage['role'],
   content: string,
-  toolInvocations?: ToolInvocation[]
+  toolInvocations?: TeacherToolInvocation[],
+  teacherState?: TeacherState
 ): ConsoleMessage {
   return {
     id: `${role}-${crypto.randomUUID()}`,
     role,
     content,
     toolInvocations,
+    teacherState,
   };
 }
 
@@ -150,12 +145,26 @@ export function LocalConsole() {
         ? 'local model mode'
         : 'loading';
 
+  const latestTeacherState = [...messages]
+    .reverse()
+    .find((message) => message.role === 'assistant' && message.teacherState)?.teacherState;
+
   const submitPrompt = async (value?: string) => {
     const nextPrompt = (value ?? prompt).trim();
     if (!nextPrompt || isLoading) return;
 
-    const nextMessages = [...messages, createMessage('user', nextPrompt)];
-    setMessages(nextMessages);
+    const nextUserMessage = createMessage('user', nextPrompt);
+    const nextMessages = [...messages, nextUserMessage];
+    const assistantId = `assistant-${crypto.randomUUID()}`;
+    setMessages([
+      ...nextMessages,
+      {
+        id: assistantId,
+        role: 'assistant',
+        content: '',
+        teacherState: latestTeacherState,
+      },
+    ]);
     setPrompt('');
     setError(null);
     setIsLoading(true);
@@ -174,33 +183,99 @@ export function LocalConsole() {
         }),
       });
 
-      const payload = (await response.json()) as {
-        message?: string;
-        error?: string;
-        status?: ModelStatus;
-        toolInvocations?: ToolInvocation[];
-      };
-
-      if (!response.ok || !payload.message) {
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
         throw new Error(payload.error ?? 'Local chat failed.');
       }
 
-      setMessages((current) => [
-        ...current,
-        createMessage('assistant', payload.message ?? '', payload.toolInvocations),
-      ]);
-      if (payload.status) setStatus(payload.status);
+      if (!response.body) {
+        throw new Error('Local chat stream was unavailable.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let assistantContent = '';
+      let toolInvocations: TeacherToolInvocation[] = [];
+      let teacherState = latestTeacherState;
+
+      const updateAssistantMessage = () => {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantId
+              ? {
+                  ...message,
+                  content: assistantContent,
+                  toolInvocations: toolInvocations.length > 0 ? toolInvocations : undefined,
+                  teacherState,
+                }
+              : message
+          )
+        );
+      };
+
+      const handleEvent = (event: Record<string, unknown>) => {
+        if (event.type === 'status' && event.status) {
+          setStatus(event.status as ModelStatus);
+          return;
+        }
+
+        if (event.type === 'tool-invocations' && Array.isArray(event.toolInvocations)) {
+          toolInvocations = event.toolInvocations as TeacherToolInvocation[];
+          updateAssistantMessage();
+          return;
+        }
+
+        if (event.type === 'teacher-state' && event.teacherState) {
+          teacherState = mergeTeacherStates(latestTeacherState, event.teacherState as TeacherState);
+          updateAssistantMessage();
+          return;
+        }
+
+        if (event.type === 'text-delta') {
+          assistantContent += String(event.delta ?? '');
+          updateAssistantMessage();
+          return;
+        }
+
+        if (event.type === 'error') {
+          if (event.status) setStatus(event.status as ModelStatus);
+          throw new Error(String(event.error ?? 'Local chat failed.'));
+        }
+      };
+
+      while (true) {
+        const { done, value: chunk } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          handleEvent(JSON.parse(trimmed) as Record<string, unknown>);
+        }
+      }
+
+      if (buffer.trim()) {
+        handleEvent(JSON.parse(buffer) as Record<string, unknown>);
+      }
     } catch (submitError) {
       const nextError =
         submitError instanceof Error ? submitError.message : 'Local chat failed unexpectedly.';
       setError(nextError);
-      setMessages((current) => [
-        ...current,
-        createMessage(
-          'assistant',
-          `I couldn't complete that local response yet.\n\n**Reason:** ${nextError}`
-        ),
-      ]);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                content: `I couldn't complete that local response yet.\n\n**Reason:** ${nextError}`,
+              }
+            : message
+        )
+      );
     } finally {
       setIsLoading(false);
       textareaRef.current?.focus();
@@ -429,7 +504,7 @@ export function LocalConsole() {
                     );
                   })}
 
-                  {isLoading ? (
+                  {isLoading && messages[messages.length - 1]?.content.length === 0 ? (
                     <div className="flex justify-start">
                       <div className="max-w-[82%] rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
                         <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-amber-300/70 uppercase">
@@ -493,7 +568,7 @@ export function LocalConsole() {
           </section>
 
           <LearningMonitor
-            messages={messages}
+            teacherState={latestTeacherState}
             isLoading={isLoading}
             onQuickPrompt={(nextPrompt) => {
               setPrompt(nextPrompt);

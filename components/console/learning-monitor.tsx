@@ -7,57 +7,16 @@ import {
   type CircuitConnection,
   type CircuitDocument,
   type CircuitNode,
-  type CircuitNodeType,
 } from '@/lib/circuit';
+import type { TeacherSceneState, TeacherState } from '@/lib/teacher-state';
 import {
   ComponentDiagramPreview,
   TopologyMap,
   WorkbenchPreview,
 } from '@/components/studio/previews';
 
-type ToolInvocation = {
-  toolName:
-    | 'lookup_component'
-    | 'search_components'
-    | 'calculate_resistor'
-    | 'ohms_law'
-    | 'generate_circuit_plan'
-    | 'generate_debug_checklist';
-  summary: string;
-  input: Record<string, unknown>;
-  result: Record<string, unknown>;
-};
-
-type ConsoleMessage = {
-  role: 'user' | 'assistant';
-  content: string;
-  toolInvocations?: ToolInvocation[];
-};
-
-type MonitorScene = {
-  components: Array<{ id: string; label: string; type: CircuitNodeType }>;
-  connections: Array<{
-    id: string;
-    from: string;
-    to: string;
-    kind: 'explicit' | 'inferred';
-    label?: string;
-  }>;
-  focusComponent?: string;
-};
-
-type MonitorMetricPanel = {
-  title: string;
-  metrics: Array<{ label: string; value: string }>;
-};
-
-type MonitorDebugPanel = {
-  title: string;
-  checks: string[];
-};
-
 type LearningMonitorProps = {
-  messages: ConsoleMessage[];
+  teacherState?: TeacherState;
   isLoading: boolean;
   onQuickPrompt: (prompt: string) => void;
 };
@@ -73,7 +32,7 @@ function titleCase(value: string) {
 function createWorkspaceFromScene(
   title: string,
   prompt: string,
-  scene: MonitorScene
+  scene: TeacherSceneState
 ): CircuitDocument {
   const nodes: CircuitNode[] = scene.components.map((component) => ({
     id: component.id,
@@ -115,76 +74,38 @@ function createWorkspaceFromScene(
   });
 }
 
-export function LearningMonitor({ messages, isLoading, onQuickPrompt }: LearningMonitorProps) {
+function getSection(state: TeacherState | undefined, kind: string) {
+  return state?.sections.find((section) => section.kind === kind);
+}
+
+export function LearningMonitor({ teacherState, isLoading, onQuickPrompt }: LearningMonitorProps) {
   const [activeTab, setActiveTab] = useState<'scene' | 'guide' | 'inspect'>('scene');
 
-  const latestUserPrompt = [...messages]
-    .reverse()
-    .find((message) => message.role === 'user')?.content;
-  const latestAssistantWithTools = [...messages]
-    .reverse()
-    .find((message) => message.role === 'assistant' && message.toolInvocations?.length);
-  const toolInvocations = latestAssistantWithTools?.toolInvocations ?? [];
-
-  const circuitPlanTool = toolInvocations.find((tool) => tool.toolName === 'generate_circuit_plan');
-  const debugTool = toolInvocations.find((tool) => tool.toolName === 'generate_debug_checklist');
-  const componentTool = toolInvocations.find((tool) => tool.toolName === 'lookup_component');
-  const metricTool = toolInvocations.find(
-    (tool) => tool.toolName === 'calculate_resistor' || tool.toolName === 'ohms_law'
-  );
-
-  const scene = (circuitPlanTool?.result.monitor_scene as MonitorScene | undefined) ?? undefined;
-  const metricPanel =
-    (metricTool?.result.monitor_metrics as MonitorMetricPanel | undefined) ?? undefined;
-  const debugPanel =
-    (debugTool?.result.monitor_debug as MonitorDebugPanel | undefined) ?? undefined;
-  const diagramComponent =
-    (componentTool?.result.monitor_diagram_component as string | undefined) ??
-    scene?.focusComponent;
-
-  const workspace =
-    scene && latestUserPrompt && circuitPlanTool
-      ? createWorkspaceFromScene(
-          String(circuitPlanTool.result.title ?? 'Lesson scene'),
-          latestUserPrompt,
-          scene
-        )
-      : null;
-
+  const scene = teacherState?.scene;
+  const calculations = teacherState?.calculations;
+  const debug = teacherState?.debug;
+  const component = teacherState?.component;
+  const diagramComponent = component?.id ?? scene?.focusComponent;
+  const workspace = scene
+    ? createWorkspaceFromScene(
+        teacherState?.title ?? 'Lesson scene',
+        teacherState?.topic ?? '',
+        scene
+      )
+    : null;
   const analysis = workspace ? analyzeCircuit(workspace) : null;
 
-  const lessonTitle = String(
-    circuitPlanTool?.result.title ??
-      debugTool?.result.title ??
-      metricPanel?.title ??
-      'Learning monitor'
-  );
-
-  const parts = Array.isArray(circuitPlanTool?.result.parts)
-    ? circuitPlanTool?.result.parts.map(String)
-    : [];
-  const wiringSteps = Array.isArray(circuitPlanTool?.result.wiring_steps)
-    ? circuitPlanTool?.result.wiring_steps.map(String)
-    : [];
-  const whyItWorks = Array.isArray(circuitPlanTool?.result.why_it_works)
-    ? circuitPlanTool?.result.why_it_works.map(String)
-    : [];
-  const safetyNotes = Array.isArray(circuitPlanTool?.result.safety_notes)
-    ? circuitPlanTool?.result.safety_notes.map(String)
-    : [];
-  const code =
-    typeof circuitPlanTool?.result.code === 'string' ? circuitPlanTool.result.code : null;
-  const debugChecks = Array.isArray(debugTool?.result.checks)
-    ? debugTool?.result.checks.map(String)
-    : [];
-  const quickTest =
-    typeof debugTool?.result.quickest_test === 'string' ? debugTool.result.quickest_test : null;
+  const parts = getSection(teacherState, 'parts')?.items ?? [];
+  const wiringSteps = getSection(teacherState, 'wiring')?.items ?? [];
+  const whyItWorks = getSection(teacherState, 'concepts')?.items ?? [];
+  const safetyNotes = getSection(teacherState, 'safety')?.items ?? [];
+  const code = getSection(teacherState, 'starter-code')?.code ?? null;
 
   const tabs: Array<{ key: 'scene' | 'guide' | 'inspect'; label: string; enabled: boolean }> = [
     {
       key: 'scene',
       label: 'Scene',
-      enabled: Boolean(workspace || diagramComponent || metricPanel),
+      enabled: Boolean(workspace || diagramComponent || calculations),
     },
     {
       key: 'guide',
@@ -193,9 +114,16 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
         parts.length > 0 ||
         wiringSteps.length > 0 ||
         whyItWorks.length > 0 ||
-        debugChecks.length > 0,
+        safetyNotes.length > 0 ||
+        Boolean(code) ||
+        Boolean(component) ||
+        Boolean(debug?.checks.length),
     },
-    { key: 'inspect', label: 'Inspect', enabled: Boolean(analysis || metricPanel || debugPanel) },
+    {
+      key: 'inspect',
+      label: 'Inspect',
+      enabled: Boolean(analysis || calculations || debug || teacherState?.capabilities.length),
+    },
   ];
 
   return (
@@ -206,10 +134,12 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
             <div className="font-mono text-[11px] tracking-[0.22em] text-cyan-300/80 uppercase">
               learning monitor
             </div>
-            <h2 className="mt-2 text-lg font-semibold text-white">{lessonTitle}</h2>
+            <h2 className="mt-2 text-lg font-semibold text-white">
+              {teacherState?.title ?? 'Learning monitor'}
+            </h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              The monitor adapts to the lesson: scene, checklist, component reference, and
-              explanation move with the conversation.
+              {teacherState?.summary ??
+                'The monitor follows lesson state from the chat: scene, reference notes, calculations, and debug guidance.'}
             </p>
           </div>
           <div className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] tracking-[0.18em] text-cyan-200 uppercase">
@@ -241,14 +171,22 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
         {activeTab === 'scene' ? (
           <div className="space-y-4">
             {workspace ? (
-              <WorkbenchPreview
-                nodes={workspace.nodes}
-                connections={workspace.connections}
-                mode={workspace.mode}
-              />
-            ) : metricPanel ? (
+              <div className="space-y-3">
+                <WorkbenchPreview
+                  nodes={workspace.nodes}
+                  connections={workspace.connections}
+                  mode={workspace.mode}
+                />
+                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
+                  <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                    Scene status
+                  </div>
+                  <p className="mt-2 leading-6">{scene?.description}</p>
+                </div>
+              </div>
+            ) : calculations ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                {metricPanel.metrics.map((metric) => (
+                {calculations.metrics.map((metric) => (
                   <div
                     key={metric.label}
                     className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4"
@@ -263,7 +201,8 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
             ) : (
               <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
                 Ask Clitronic to explain or build a circuit and this monitor will open the relevant
-                scene, diagram, and teaching artefacts next to the chat.
+                scene, diagram, and teaching artefacts next to the chat. If a view is illustrative
+                rather than simulated, it will say so clearly.
               </div>
             )}
 
@@ -330,13 +269,49 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
               </section>
             ) : null}
 
-            {debugChecks.length > 0 ? (
+            {component ? (
+              <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                <div className="text-[11px] tracking-[0.18em] text-cyan-300 uppercase">
+                  Component reference
+                </div>
+                <div className="mt-3 text-sm text-cyan-50/90">
+                  <div className="font-medium text-white">{component.name}</div>
+                  {component.description ? (
+                    <p className="mt-2 leading-6 text-zinc-200">{component.description}</p>
+                  ) : null}
+                  {component.keySpecs.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {component.keySpecs.map((spec) => (
+                        <div
+                          key={spec}
+                          className="rounded-xl border border-cyan-500/10 bg-black/20 px-3 py-2"
+                        >
+                          {spec}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {component.pinout ? (
+                    <div className="mt-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-2 text-zinc-200">
+                      <span className="text-zinc-400">Pinout:</span> {component.pinout}
+                    </div>
+                  ) : null}
+                  {component.tips ? (
+                    <div className="mt-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-2 text-zinc-200">
+                      <span className="text-zinc-400">Practical tip:</span> {component.tips}
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
+            {debug?.checks.length ? (
               <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
                 <div className="text-[11px] tracking-[0.18em] text-amber-300 uppercase">
                   Debug checklist
                 </div>
                 <div className="mt-3 space-y-2 text-sm text-amber-50/90">
-                  {debugChecks.map((check, index) => (
+                  {debug.checks.map((check, index) => (
                     <div
                       key={check}
                       className="rounded-xl border border-amber-500/10 bg-black/20 px-3 py-2"
@@ -345,10 +320,10 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
                     </div>
                   ))}
                 </div>
-                {quickTest ? (
+                {debug.quickestTest ? (
                   <button
                     type="button"
-                    onClick={() => onQuickPrompt(quickTest)}
+                    onClick={() => onQuickPrompt(debug.quickestTest!)}
                     className="mt-4 rounded-full border border-amber-500/20 bg-black/20 px-3 py-2 text-xs text-amber-100 transition hover:border-amber-400/30 hover:bg-amber-500/10"
                   >
                     use fastest next test
@@ -399,13 +374,13 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
               />
             ) : null}
 
-            {metricPanel ? (
+            {calculations ? (
               <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                 <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
                   Calculation monitor
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {metricPanel.metrics.map((metric) => (
+                  {calculations.metrics.map((metric) => (
                     <div
                       key={metric.label}
                       className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-3"
@@ -420,18 +395,60 @@ export function LearningMonitor({ messages, isLoading, onQuickPrompt }: Learning
               </section>
             ) : null}
 
-            {debugPanel ? (
+            {debug ? (
               <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                 <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                  {debugPanel.title}
+                  {debug.title}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {debugPanel.checks.map((check) => (
+                  {debug.checks.map((check) => (
                     <div
                       key={check}
                       className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
                     >
                       {check}
+                    </div>
+                  ))}
+                </div>
+                {debug.likelyCauses?.length ? (
+                  <div className="mt-4 space-y-2">
+                    {debug.likelyCauses.map((cause) => (
+                      <div
+                        key={cause}
+                        className="rounded-xl border border-amber-500/10 bg-amber-500/5 px-3 py-2 text-sm text-amber-50/90"
+                      >
+                        {cause}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {teacherState?.capabilities.length ? (
+              <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                  Capability status
+                </div>
+                <div className="mt-3 space-y-3">
+                  {teacherState.capabilities.map((capability) => (
+                    <div
+                      key={capability.label}
+                      className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-medium text-white">{capability.label}</div>
+                        <div
+                          className={`rounded-full border px-2 py-1 text-[11px] uppercase ${
+                            capability.status === 'active'
+                              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                              : 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+                          }`}
+                        >
+                          {capability.status}
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-zinc-400">{capability.detail}</p>
                     </div>
                   ))}
                 </div>

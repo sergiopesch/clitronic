@@ -12,6 +12,10 @@ export interface LocalReplyOptions {
   promptContext?: string;
 }
 
+export interface LocalReplyStreamOptions extends LocalReplyOptions {
+  onTextChunk?: (text: string) => void;
+}
+
 export interface LocalModelStatus {
   status: 'idle' | 'ready' | 'resolving-model' | 'loading-model' | 'error';
   ready: boolean;
@@ -209,6 +213,13 @@ export async function generateLocalChatReply(
   messages: LocalChatMessage[],
   options?: LocalReplyOptions
 ): Promise<string> {
+  return streamLocalChatReply(messages, options);
+}
+
+export async function streamLocalChatReply(
+  messages: LocalChatMessage[],
+  options?: LocalReplyStreamOptions
+): Promise<string> {
   if (isGuidedToolMode()) {
     throw new Error(
       'The full local GGUF runtime is disabled in guided tools mode. Use the guided responder instead.'
@@ -251,6 +262,7 @@ export async function generateLocalChatReply(
     const reply = await session.prompt(prompt, {
       maxTokens: clampNumber(maxTokens, DEFAULT_MAX_TOKENS, 128, 2048),
       temperature: clampNumber(temperature, DEFAULT_TEMPERATURE, 0, 2),
+      onTextChunk: options?.onTextChunk,
     });
 
     session.dispose({ disposeSequence: false });
