@@ -838,7 +838,9 @@ export function RichTerminal() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-[10rem]">
               <div className="text-base font-semibold text-white">Clitronic</div>
-              <div className="mt-0.5 text-sm text-gray-400">Workbench-first electronics workspace</div>
+              <div className="mt-0.5 text-sm text-gray-400">
+                Workbench-first electronics workspace
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -889,7 +891,13 @@ export function RichTerminal() {
                   : 'Draft'}
             </span>
             <span className="mx-2 text-gray-600">•</span>
-            <span className={voiceSupported && voiceAvailable && canMakeApiCalls ? 'text-cyan-300' : 'text-gray-500'}>
+            <span
+              className={
+                voiceSupported && voiceAvailable && canMakeApiCalls
+                  ? 'text-cyan-300'
+                  : 'text-gray-500'
+              }
+            >
               {voiceSupported && voiceAvailable && canMakeApiCalls
                 ? 'Voice ready (hold space)'
                 : 'Voice unavailable'}
@@ -983,8 +991,9 @@ export function RichTerminal() {
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
             <span>
-              {voiceSupported && voiceAvailable && canMakeApiCalls ? 'Hold space for voice input' :
-              ''}
+              {voiceSupported && voiceAvailable && canMakeApiCalls
+                ? 'Hold space for voice input'
+                : ''}
             </span>
             <span>build • add • connect • remove • set • simulate • explain • focus</span>
           </div>
@@ -1220,109 +1229,115 @@ function AdaptiveStudio({
 
               {activeTab === 'inspector' && inspectorPanel ? (
                 <WindowCard panel={inspectorPanel}>
-              <div className="space-y-3 text-sm text-gray-300">
-                <div>
-                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                    Detected circuit nodes
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {workspace.nodes.length ? (
-                      workspace.nodes.map((node) => (
-                        <span
-                          key={node.id}
-                          className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200"
-                        >
-                          {node.label}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs text-gray-500">No nodes yet.</span>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                    Parameters
-                  </div>
-                  <div className="space-y-2">
-                    {workspace.nodes.map((node) =>
-                      node.parameters && node.parameters.length > 0 ? (
-                        <div
-                          key={`${node.id}-params`}
-                          className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
-                        >
-                          <div className="text-xs font-semibold text-amber-200">{node.label}</div>
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            {node.parameters.map((param) => (
-                              <span
-                                key={`${node.id}-${param.key}`}
-                                className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100"
-                              >
-                                {param.label}: {param.value}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                    Derived analysis
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {analysis.derivedMetrics.map((metric) => (
-                      <div
-                        key={`${metric.label}-${metric.value}`}
-                        className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
-                      >
-                        <div className="text-[11px] tracking-[0.12em] text-gray-500 uppercase">
-                          {metric.label}
-                        </div>
-                        <div className="mt-1 text-sm font-medium text-white">{metric.value}</div>
+                  <div className="space-y-3 text-sm text-gray-300">
+                    <div>
+                      <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                        Detected circuit nodes
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="flex flex-wrap gap-2">
+                        {workspace.nodes.length ? (
+                          workspace.nodes.map((node) => (
+                            <span
+                              key={node.id}
+                              className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2.5 py-1 text-xs text-amber-200"
+                            >
+                              {node.label}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500">No nodes yet.</span>
+                        )}
+                      </div>
+                    </div>
 
-                <div>
-                  <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
-                    Recommended fixes
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {analysis.suggestedFixes.length > 0 ? (
-                      analysis.suggestedFixes.map((fix) => (
-                        <button
-                          key={fix}
-                          onClick={() => onQuickCommand(fix)}
-                          className="rounded-full border border-emerald-700/30 bg-emerald-950/20 px-3 py-1.5 text-xs text-emerald-200 transition hover:border-emerald-500/50 hover:bg-emerald-900/30"
-                        >
-                          {fix}
-                        </button>
-                      ))
-                    ) : (
-                      <span className="text-xs text-gray-500">No targeted fixes suggested.</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </WindowCard>
-          ) : null}
+                    <div>
+                      <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                        Parameters
+                      </div>
+                      <div className="space-y-2">
+                        {workspace.nodes.map((node) =>
+                          node.parameters && node.parameters.length > 0 ? (
+                            <div
+                              key={`${node.id}-params`}
+                              className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                            >
+                              <div className="text-xs font-semibold text-amber-200">
+                                {node.label}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                {node.parameters.map((param) => (
+                                  <span
+                                    key={`${node.id}-${param.key}`}
+                                    className="rounded-full border border-amber-700/30 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100"
+                                  >
+                                    {param.label}: {param.value}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null
+                        )}
+                      </div>
+                    </div>
 
-          {activeTab === 'graph' && graphPanel ? (
-            <WindowCard panel={graphPanel}>
-              <GraphPreview workspace={workspace} />
-            </WindowCard>
-          ) : null}
+                    <div>
+                      <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                        Derived analysis
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {analysis.derivedMetrics.map((metric) => (
+                          <div
+                            key={`${metric.label}-${metric.value}`}
+                            className="rounded-lg border border-gray-800 bg-[#0a0f15] px-3 py-2"
+                          >
+                            <div className="text-[11px] tracking-[0.12em] text-gray-500 uppercase">
+                              {metric.label}
+                            </div>
+                            <div className="mt-1 text-sm font-medium text-white">
+                              {metric.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
-          {activeTab === 'topology' && topologyPanel ? (
-            <WindowCard panel={topologyPanel}>
-              <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
-            </WindowCard>
-          ) : null}
+                    <div>
+                      <div className="mb-2 text-[11px] tracking-[0.16em] text-gray-500 uppercase">
+                        Recommended fixes
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.suggestedFixes.length > 0 ? (
+                          analysis.suggestedFixes.map((fix) => (
+                            <button
+                              key={fix}
+                              onClick={() => onQuickCommand(fix)}
+                              className="rounded-full border border-emerald-700/30 bg-emerald-950/20 px-3 py-1.5 text-xs text-emerald-200 transition hover:border-emerald-500/50 hover:bg-emerald-900/30"
+                            >
+                              {fix}
+                            </button>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500">
+                            No targeted fixes suggested.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </WindowCard>
+              ) : null}
+
+              {activeTab === 'graph' && graphPanel ? (
+                <WindowCard panel={graphPanel}>
+                  <GraphPreview workspace={workspace} />
+                </WindowCard>
+              ) : null}
+
+              {activeTab === 'topology' && topologyPanel ? (
+                <WindowCard panel={topologyPanel}>
+                  <TopologyMap nodes={workspace.nodes} connections={workspace.connections} />
+                </WindowCard>
+              ) : null}
             </div>
           </>
         )}

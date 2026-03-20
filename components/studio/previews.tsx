@@ -98,7 +98,9 @@ export function TopologyMap({
               <div className="mt-3 text-xs text-gray-400">
                 {outgoing.length
                   ? outgoing.map((connection) => {
-                      const target = displayNodes.find((candidate) => candidate.id === connection.to);
+                      const target = displayNodes.find(
+                        (candidate) => candidate.id === connection.to
+                      );
                       return (
                         <div key={connection.id} className="mb-1 flex items-center gap-2">
                           <span className="text-cyan-500">→</span>
