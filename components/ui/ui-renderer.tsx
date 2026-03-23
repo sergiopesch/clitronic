@@ -36,6 +36,11 @@ const FALLBACK_TEXT = 'Sorry, I had trouble displaying that. Try rephrasing your
 export function UIRenderer({ response }: UIRendererProps) {
   const fallback = <TextResponse text={response.text || FALLBACK_TEXT} />;
 
+  // Debug: log the full response so issues are visible in browser console
+  if (typeof window !== 'undefined') {
+    console.log('[clitronic:ui] Response received:', JSON.stringify(response, null, 2));
+  }
+
   // If there's a text response and no UI block, show text
   if (response.text && !response.ui) {
     return <TextResponse text={response.text} />;
@@ -43,6 +48,7 @@ export function UIRenderer({ response }: UIRendererProps) {
 
   // If no UI block at all, show fallback
   if (!response.ui) {
+    console.warn('[clitronic:ui] No ui block in response');
     return fallback;
   }
 
@@ -63,9 +69,13 @@ export function UIRenderer({ response }: UIRendererProps) {
       }
     }
     resolvedData = hasFields ? extracted : null;
+    if (hasFields) {
+      console.log('[clitronic:ui] Rescued flattened data from ui level');
+    }
   }
 
   if (!resolvedData || typeof resolvedData !== 'object') {
+    console.warn('[clitronic:ui] No data for component:', component, response.ui);
     return fallback;
   }
 

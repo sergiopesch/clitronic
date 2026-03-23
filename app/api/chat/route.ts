@@ -109,6 +109,55 @@ const VALID_COMPONENTS = new Set([
   'wiringCard',
 ]);
 
+/** Map common LLM mistakes in component names to the correct name */
+const COMPONENT_ALIASES: Record<string, string> = {
+  // imageBlock confusions — LLM uses imageMode value as component
+  photo: 'imageBlock',
+  diagram: 'imageBlock',
+  image: 'imageBlock',
+  image_block: 'imageBlock',
+  imageblock: 'imageBlock',
+  // specCard variants
+  spec: 'specCard',
+  spec_card: 'specCard',
+  speccard: 'specCard',
+  specs: 'specCard',
+  // comparisonCard variants
+  comparison: 'comparisonCard',
+  comparison_card: 'comparisonCard',
+  comparisoncard: 'comparisonCard',
+  compare: 'comparisonCard',
+  // explanationCard variants
+  explanation: 'explanationCard',
+  explanation_card: 'explanationCard',
+  explanationcard: 'explanationCard',
+  explain: 'explanationCard',
+  // recommendationCard variants
+  recommendation: 'recommendationCard',
+  recommendation_card: 'recommendationCard',
+  recommendationcard: 'recommendationCard',
+  // troubleshootingCard variants
+  troubleshooting: 'troubleshootingCard',
+  troubleshooting_card: 'troubleshootingCard',
+  troubleshootingcard: 'troubleshootingCard',
+  // calculationCard variants
+  calculation: 'calculationCard',
+  calculation_card: 'calculationCard',
+  calculationcard: 'calculationCard',
+  // pinoutCard variants
+  pinout: 'pinoutCard',
+  pinout_card: 'pinoutCard',
+  pinoutcard: 'pinoutCard',
+  // chartCard variants
+  chart: 'chartCard',
+  chart_card: 'chartCard',
+  chartcard: 'chartCard',
+  // wiringCard variants
+  wiring: 'wiringCard',
+  wiring_card: 'wiringCard',
+  wiringcard: 'wiringCard',
+};
+
 const VALID_MODES = new Set(['ui', 'text']);
 
 /**
@@ -137,6 +186,14 @@ function validateResponse(raw: string): string {
   // Validate UI block if present
   if (parsed.ui && typeof parsed.ui === 'object') {
     const ui = parsed.ui as Record<string, unknown>;
+
+    // Normalize component name — fix common LLM mistakes
+    const rawComponent = (ui.component as string) ?? '';
+    const alias = COMPONENT_ALIASES[rawComponent] ?? COMPONENT_ALIASES[rawComponent.toLowerCase()];
+    if (alias) {
+      console.log(`[clitronic] Normalized component "${rawComponent}" → "${alias}"`);
+      ui.component = alias;
+    }
 
     if (!VALID_COMPONENTS.has(ui.component as string)) {
       // Unknown component — fall back to text
