@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm run validate)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:fix)",
+      "Bash(npm run format)",
+      "Bash(npm run format:check)",
+      "Bash(npm run type-check)",
+      "Bash(npx tsc*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git branch*)",
+      "Bash(git push*)",
+      "Bash(ls*)",
+      "Bash(mkdir*)",
+      "Bash(cat package.json)",
+      "Bash(npm install)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(rm -r /)*",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(cat .env*)",
+      "Bash(cat *secret*)",
+      "Bash(cat *credential*)",
+      "Bash(echo $ANTHROPIC*)",
+      "Bash(echo $OPENAI*)",
+      "Bash(env | grep KEY*)",
+      "Bash(env | grep TOKEN*)",
+      "Bash(env | grep SECRET*)",
+      "Bash(curl*)",
+      "Bash(wget*)"
+    ]
+  }
+}

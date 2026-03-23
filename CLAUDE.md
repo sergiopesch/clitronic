@@ -1,193 +1,130 @@
 # Clitronic - Development Guide
 
-## Project Overview
+## Purpose
 
-Clitronic is an AI-powered terminal companion for electronics enthusiasts. It features a keyboard-driven terminal interface with consistent cyan/blue branding, powered by Claude + OpenAI.
+Clitronic is an AI-powered electronics companion that generates **structured UI responses** from natural language queries. Every AI response follows a defined schema so the frontend can render rich, interactive components — cards, diagrams, calculations, charts — instead of raw text.
+
+The goal: an electronics enthusiast asks a question and gets a smooth, visual, useful answer.
+
+## Tech Stack
+
+- **Frontend**: Next.js 16 (App Router) + React 19 + Tailwind CSS 4
+- **Backend**: Next.js API routes (`app/api/`)
+- **AI**: Anthropic Claude via `@ai-sdk/anthropic` + Vercel AI SDK v5
+- **Styling**: Dark-only design tokens defined in `globals.css`
+- **Deployment**: Vercel
 
 ## Architecture
 
 ```
 clitronic/
-├── app/                    # Next.js 16 App Router
-│   ├── api/
-│   │   ├── chat/          # Streaming chat API endpoint
-│   │   ├── auth/providers/ # Auth provider availability endpoint
-│   │   ├── check-key/     # Backward-compatible auth status endpoint
-│   │   ├── claude-code-auth/ # Claude Code credentials
-│   │   └── speech-to-text/   # Voice transcription (Whisper)
-│   └── page.tsx           # Terminal interface entry point
-├── cli/                    # Self-contained CLI package
-│   ├── bin/               # CLI entry point
-│   ├── src/commands/      # Command implementations
-│   └── src/data/          # Local copy of component data
+├── app/
+│   ├── api/chat/route.ts       # Streaming chat API — AI + tool-calling
+│   ├── layout.tsx              # Root layout (dark mode, design tokens)
+│   ├── globals.css             # Design token system
+│   └── page.tsx                # Entry point → LocalConsole
 ├── components/
-│   ├── api-key/           # Auth provider selection state + modal
-│   ├── terminal/          # Rich terminal interface
-│   └── voice/             # Voice mode indicator
-├── hooks/                  # Custom React hooks
-│   ├── useLongPress.ts    # Spacebar long-press detection
-│   └── useVoiceRecording.ts # Browser audio capture
-└── lib/
-    ├── ai/                # System prompt & tool definitions
-    ├── auth/              # Claude Code credentials reader
-    ├── data/              # Component knowledge base (16 components)
-    └── utils/             # Audio utilities
+│   ├── console/
+│   │   ├── local-console.tsx   # Main chat UI + header + input
+│   │   └── learning-monitor.tsx # Side panel: scene, guide, inspect tabs
+│   └── studio/
+│       └── previews.tsx        # Circuit diagrams, topology, workbench
+├── lib/
+│   ├── ai/
+│   │   ├── system-prompt.ts    # Electronics companion persona
+│   │   └── tools.ts            # AI tool definitions (Zod + Vercel AI SDK)
+│   ├── data/
+│   │   ├── components.ts       # 16 electronics components knowledge base
+│   │   ├── search.ts           # Component lookup + search functions
+│   │   └── types.ts            # ElectronicsComponent type definitions
+│   ├── circuit/                # Circuit document model + analysis
+│   ├── local-llm/              # Local model runtime (guided tools, tooling)
+│   └── teacher-state.ts        # Teacher state propagation for monitor
+└── cli/                        # Standalone CLI package
 ```
 
-### Key Design Decisions
+## Structured UI Responses
 
-- **Web app**: Next.js 16 (App Router) + React 19 + Tailwind CSS
-- **Terminal UI**: Keyboard-driven with electronics-themed ASCII art
-- **Branding**: Consistent cyan/blue color scheme throughout
-- **Authentication**: Provider-based auth (`claude-code` or `openai-codex`), no user API key entry
-- **CLI**: Standalone package using `@anthropic-ai/sdk` directly
+All AI responses MUST produce structured output that the frontend can render as rich UI. The response schema:
 
-## Key Files
+```typescript
+{
+  intent: string;       // What the user is trying to do (e.g. "calculate_resistor", "lookup_component", "build_circuit")
+  ui_type: string;      // How to render it (e.g. "card", "diagram", "calculation", "chart", "parts_list")
+  behavior: string;     // Interaction model (e.g. "static", "expandable", "interactive", "animated")
+  data: object;         // The actual content for rendering
+}
+```
 
-### Web App
+### UI Type Priority
 
-- `app/page.tsx` - Renders the RichTerminal component
-- `app/api/chat/route.ts` - Streaming chat API (uses `x-auth-provider` header)
-- `components/terminal/rich-terminal.tsx` - **Main UI**: multimodal terminal with voice, camera, upload
-- `components/api-key/` - Authentication provider state, modal, and context
-- `lib/ai/system-prompt.ts` - Electronics companion persona
-- `lib/ai/tools.ts` - Claude tool definitions (lookup, search, calculate)
-- `lib/data/components.ts` - Component knowledge base (16 components)
+1. **Cards** over raw text — component info, specs, tips
+2. **Calculations** over paragraphs — resistor values, Ohm's law, power
+3. **Diagrams** over descriptions — circuit layouts, pinouts, wiring
+4. **Charts** over tables — voltage/current relationships, power curves
+5. **Parts lists** over bullet points — structured, actionable shopping lists
+6. **Text** only as a last resort for conversational responses
 
-### CLI Package
+### Animation & Feel
 
-- `cli/bin/clitronic.ts` - Entry point with Commander.js
-- `cli/src/client.ts` - Anthropic SDK wrapper with streaming
-- `cli/src/data/index.ts` - Self-contained component data + search
-- `cli/src/commands/` - Command implementations (chat, ask, identify, info, list)
+- All UI transitions must be smooth (fade-in, slide-up)
+- Cards should appear with subtle entrance animations
+- Calculation results should animate their values
+- The interface should feel responsive and futuristic, not static
+
+## Design Tokens
+
+Defined in `app/globals.css`. Always use token classes, never hardcode colors:
+
+- Surfaces: `surface-0` through `surface-4`
+- Text: `text-primary`, `text-secondary`, `text-muted`
+- Accent: `accent`, `accent-dim`, `accent-muted`
+- Semantic: `success`, `warning`, `error`
+- Borders: `border`, `border-accent`
+
+## AI Integration
+
+### Tool-Calling Architecture
+
+The AI (Claude) decides when to use tools. Tools are defined in `lib/ai/tools.ts`:
+
+- `lookup_component` — Component specs, pinout, datasheet info
+- `search_components` — Search by category or keyword
+- `calculate_resistor` — LED limiting, voltage divider, pull-up
+- `ohms_law` — V/I/R/P calculations
+
+The AI receives tool results and generates structured UI responses. The frontend renders the appropriate component based on `ui_type`.
+
+### Server-Side Only
+
+- API key is set server-side (`ANTHROPIC_API_KEY` env var)
+- Users never provide or see API keys
+- Rate limiting protects against abuse
 
 ## Commands
 
 ```bash
-# Web app (from root)
 npm run dev          # Start dev server
 npm run build        # Production build
 npm run validate     # Type check + lint + format check
-
-# CLI (from cli/ directory)
-cd cli && npm install
-npm run start -- chat              # Interactive chat
-npm run start -- ask "question"    # One-shot question
-npm run start -- identify img.jpg  # Identify component from image
-npm run start -- info resistor     # Component info
-npm run start -- list              # List all components
-npm run start -- list active       # Filter by category
+npm run lint:fix     # Auto-fix lint issues
+npm run format       # Format with Prettier
 ```
 
-## Environment Variables
+## Conventions
 
-- `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` - Optional server fallback for Claude provider
-- `OPENAI_API_KEY` / `OPENAI_ACCESS_TOKEN` - Optional server fallback for OpenAI provider + voice
-
-## Authentication
-
-Users authenticate with the `auth` command in the terminal and choose:
-
-1. `Claude Code` (local Claude credentials or server Anthropic env fallback)
-2. `OpenAI Codex` (local Codex credentials or server OpenAI env fallback)
-
-If no provider is selected and one is available, the client auto-selects the first available provider.
-
-The browser stores only the selected provider id, not raw tokens.
-
-## AI Integration
-
-### Web (Vercel AI SDK v5)
-
-- Uses `@ai-sdk/anthropic` with `streamText()`
-- Provider selected via `x-auth-provider` header from client
-- Tools defined with `zodSchema()` wrapper
-- Response streaming via plain text stream
-- Model: `claude-sonnet-4-20250514`
-
-### CLI (Direct Anthropic SDK)
-
-- Uses `@anthropic-ai/sdk` with `messages.stream()`
-- Lazy client initialization (credentials checked on first use)
-- Streaming text output with chalk coloring
-- Model: `claude-sonnet-4-20250514`
-
-## Terminal Features
-
-### Commands
-
-- `help` - Show available commands with ASCII box
-- `auth` - Connect Claude Code or OpenAI Codex
-- `list [category]` - List components (passive, active, input, output)
-- `info <component>` - Component details
-- `identify` - Upload image for component identification
-- `clear` - Clear terminal
-
-### Image Upload
-
-Multiple ways to upload images:
-
-- **Drag & drop** - Drop image directly into terminal
-- **Paste** - Cmd/Ctrl+V to paste from clipboard
-- **Upload** - Type `identify` to open file picker
-
-Features:
-
-- Images auto-resized before upload (max 1024px width)
-- Sent as base64 data URLs to API
-- Claude identifies components, decodes markings and color codes
-
-### Voice Mode
-
-**Activation**: Hold spacebar to record, release to send
-
-**Requirements**:
-
-- Browser with MediaRecorder support (Chrome, Firefox, Safari)
-- Microphone permission
-- OpenAI Codex auth or OpenAI server credentials (for Whisper transcription)
-
-**Features**:
-
-- Visual indicator shows recording (pulsing red) and transcribing (spinner)
-- Audio chimes for start/end feedback
-- Auto-populates input with transcribed text
-
-**Implementation**:
-
-- `useLongPress` hook detects spacebar hold (200ms threshold)
-- `useVoiceRecording` hook captures audio via MediaRecorder
-- Audio sent to `/api/speech-to-text` (OpenAI Whisper)
-- Chimes generated programmatically with Web Audio API
-
-### UI Elements
-
-- Circuit-themed ASCII art header
-- Classic retro terminal layout with modern spacing and contrast
-- Header status chips showing connection state and voice mode availability
-- Centered authentication modal with provider status and refresh action
-- Safe-area-aware footer and touch-friendly controls on mobile
-- Command history with ↑↓ navigation
-- Consistent cyan/blue color scheme
-- Copy buttons on code blocks
-- Full text selection support
-- Markdown rendering with syntax highlighting
+- Use `font-mono` for technical values (resistance, voltage, pin names)
+- Use semantic color tokens for status (success/warning/error)
+- Keep components small and focused
+- Prefer composition over configuration
+- All new UI components should support the structured response schema
+- Test with `npm run validate` before committing
 
 ## Component Database
 
-16 electronic components with detailed information:
+16 electronics components with full specs in `lib/data/components.ts`:
 
 **Passive**: Resistor, Capacitor, Diode
 **Active**: Transistor, Relay
 **Input**: Push Button, Potentiometer, Photoresistor, Temperature Sensor, Ultrasonic Sensor
 **Output**: LED, RGB LED, Piezo Speaker, Servo Motor, DC Motor, LCD Display
-
-Each component includes:
-
-- Description and specs
-- Circuit example
-- Pinout diagram
-- Maximum ratings
-- Characteristics table
-- Common part numbers
-- Tips and warnings
