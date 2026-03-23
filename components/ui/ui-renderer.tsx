@@ -8,6 +8,9 @@ import { ExplanationCard } from './explanation-card';
 import { RecommendationCard } from './recommendation-card';
 import { TroubleshootingCard } from './troubleshooting-card';
 import { CalculationCard } from './calculation-card';
+import { PinoutCard } from './pinout-card';
+import { ChartCard } from './chart-card';
+import { WiringCard } from './wiring-card';
 import { TextResponse } from './text-response';
 import type {
   SpecCardData,
@@ -16,6 +19,9 @@ import type {
   RecommendationCardData,
   TroubleshootingCardData,
   CalculationCardData,
+  PinoutCardData,
+  ChartCardData,
+  WiringCardData,
 } from '@/lib/ai/response-schema';
 
 interface UIRendererProps {
@@ -44,6 +50,9 @@ export function UIRenderer({ response }: UIRendererProps) {
       {component === 'recommendationCard' && <RecommendationCard data={data as RecommendationCardData} />}
       {component === 'troubleshootingCard' && <TroubleshootingCard data={data as TroubleshootingCardData} />}
       {component === 'calculationCard' && <CalculationCard data={data as CalculationCardData} />}
+      {component === 'pinoutCard' && <PinoutCard data={data as PinoutCardData} />}
+      {component === 'chartCard' && <ChartCard data={data as ChartCardData} />}
+      {component === 'wiringCard' && <WiringCard data={data as WiringCardData} />}
     </AnimateIn>
   );
 }

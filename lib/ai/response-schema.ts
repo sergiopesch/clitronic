@@ -9,7 +9,10 @@ export type ComponentName =
   | 'explanationCard'
   | 'recommendationCard'
   | 'troubleshootingCard'
-  | 'calculationCard';
+  | 'calculationCard'
+  | 'pinoutCard'
+  | 'chartCard'
+  | 'wiringCard';
 
 export type UIType = 'card' | 'chart' | 'text';
 
@@ -50,13 +53,35 @@ export interface CalculationCardData {
   result: { label: string; value: string; note?: string };
 }
 
+export interface PinoutCardData {
+  component: string;
+  description?: string;
+  pins: { number: number; label: string; type: 'power' | 'ground' | 'digital' | 'analog' | 'other' }[];
+}
+
+export interface ChartCardData {
+  title: string;
+  subtitle?: string;
+  bars: { label: string; value: number; unit?: string; color?: 'accent' | 'success' | 'warning' | 'error' }[];
+}
+
+export interface WiringCardData {
+  title: string;
+  description?: string;
+  steps: { from: string; to: string; wire?: string; note?: string }[];
+  warnings?: string[];
+}
+
 export type CardData =
   | SpecCardData
   | ComparisonCardData
   | ExplanationCardData
   | RecommendationCardData
   | TroubleshootingCardData
-  | CalculationCardData;
+  | CalculationCardData
+  | PinoutCardData
+  | ChartCardData
+  | WiringCardData;
 
 export interface UIBlock {
   type: UIType;
