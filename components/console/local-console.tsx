@@ -71,14 +71,14 @@ function formatToolResultValue(value: unknown): string {
   return String(value);
 }
 
-function statusClasses(status: ModelStatus['status']) {
-  if (status === 'ready') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
-  if (status === 'error') return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
-  if (status === 'loading-model' || status === 'resolving-model') {
-    return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
-  }
-
-  return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200';
+function StatusDot({ status }: { status: ModelStatus['status'] }) {
+  if (status === 'ready')
+    return <span className="inline-block h-2 w-2 rounded-full bg-success" />;
+  if (status === 'error')
+    return <span className="inline-block h-2 w-2 rounded-full bg-error" />;
+  if (status === 'loading-model' || status === 'resolving-model')
+    return <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-warning" />;
+  return <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />;
 }
 
 export function LocalConsole() {
@@ -88,6 +88,7 @@ export function LocalConsole() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+  const [showModelInfo, setShowModelInfo] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -135,14 +136,14 @@ export function LocalConsole() {
 
   const engineLabel =
     status?.runtimeMode === 'guided-tools'
-      ? 'Clitronic guided engine'
-      : (status?.modelRef ?? 'Loading…');
+      ? 'guided engine'
+      : (status?.modelRef ?? 'loading');
 
   const modeLabel =
     status?.runtimeMode === 'guided-tools'
-      ? 'guided mode'
+      ? 'guided'
       : status?.runtimeMode === 'local-model'
-        ? 'local model mode'
+        ? 'local'
         : 'loading';
 
   const latestTeacherState = [...messages]
@@ -283,300 +284,263 @@ export function LocalConsole() {
   };
 
   return (
-    <main className="min-h-screen bg-[#05070a] text-zinc-100">
-      <div className="mx-auto flex min-h-screen max-w-[96rem] flex-col px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 grid gap-4 lg:grid-cols-[1.5fr_0.9fr]">
-          <section className="rounded-3xl border border-cyan-500/20 bg-[radial-gradient(circle_at_top,#0f1722,transparent_45%),linear-gradient(180deg,#081018,#06090d)] p-6 shadow-2xl shadow-cyan-950/20">
-            <div className="flex flex-wrap items-center gap-3 text-xs tracking-[0.22em] text-cyan-300/80 uppercase">
-              <span>Clitronic</span>
-              <span className="text-zinc-600">•</span>
-              <span>Console-first local MVP</span>
-            </div>
-            <h1 className="mt-4 max-w-3xl font-mono text-3xl font-semibold text-white sm:text-4xl">
-              {status?.runtimeMode === 'guided-tools'
-                ? 'Electronics guidance that can plan, calculate, and debug.'
-                : 'Local electronics chat, stripped back to the real loop.'}
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
-              {status?.runtimeMode === 'guided-tools'
-                ? 'Clitronic can already do useful work here: pick resistor values, explain components, generate starter plans, and help debug simple learner circuits without hiding behind vague chat.'
-                : 'This pass removes provider auth and the workbench from the main path. What remains is the core thing to validate: can a local open-source model hold a useful electronics conversation inside a console-first interface.'}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-400">
-              <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
-                chat-led learning
-              </span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
-                no provider auth
-              </span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
-                no remote vendor calls
-              </span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
-                guided tools live
-              </span>
-            </div>
-          </section>
-
-          <aside className="rounded-3xl border border-zinc-800 bg-[#090d12] p-5">
-            <div className="text-xs tracking-[0.2em] text-zinc-500 uppercase">Model state</div>
-            <div
-              className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${statusClasses(status?.status ?? 'idle')}`}
-            >
-              <div className="font-medium">
-                {isCheckingStatus ? 'Checking local runtime…' : subtitle}
-              </div>
-              <p className="mt-2 text-xs leading-6 text-inherit/85">{status?.note}</p>
-            </div>
-            <dl className="mt-4 space-y-3 text-sm text-zinc-300">
-              <div>
-                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">Active engine</dt>
-                <dd className="mt-1 font-mono text-xs break-all text-zinc-300">{engineLabel}</dd>
-              </div>
-              <div>
-                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">
-                  Interaction mode
-                </dt>
-                <dd className="mt-1">{modeLabel}</dd>
-              </div>
-              <div>
-                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">
-                  Cached locally
-                </dt>
-                <dd className="mt-1">{status?.localModelPresent ? 'yes' : 'not yet'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs tracking-[0.18em] text-zinc-500 uppercase">
-                  Current MVP limits
-                </dt>
-                <dd className="mt-1 text-zinc-400">
-                  The current monitor supports guided visuals for calculations, component lookup,
-                  circuit planning, and LED debugging. Voice input and richer open-ended simulation
-                  flows are the next expansion points.
-                </dd>
-              </div>
-            </dl>
-          </aside>
+    <main className="flex min-h-screen flex-col bg-surface-0">
+      {/* ── Slim header ── */}
+      <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
+        <div className="flex items-center gap-3">
+          <h1 className="font-mono text-sm font-semibold text-accent">clitronic</h1>
+          <span className="hidden text-xs text-text-muted sm:inline">/</span>
+          <span className="hidden text-xs text-text-muted sm:inline">{subtitle}</span>
         </div>
 
-        <div className="grid min-h-[60vh] flex-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]">
-          <section className="flex min-h-[60vh] flex-1 flex-col overflow-hidden rounded-3xl border border-zinc-800 bg-[#080b10] shadow-2xl shadow-black/20">
-            <div className="border-b border-zinc-800 px-4 py-3 sm:px-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-mono text-sm text-zinc-200">/console</div>
-                  <div className="mt-1 text-xs text-zinc-500">{subtitle}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMessages([]);
-                    setError(null);
-                    textareaRef.current?.focus();
-                  }}
-                  className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-cyan-500/40 hover:text-white"
-                >
-                  reset
-                </button>
-              </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowModelInfo(!showModelInfo)}
+            className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-secondary transition hover:border-border-accent hover:text-text-primary"
+          >
+            <StatusDot status={status?.status ?? 'idle'} />
+            <span className="hidden sm:inline">{modeLabel}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMessages([]);
+              setError(null);
+              textareaRef.current?.focus();
+            }}
+            className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-secondary transition hover:border-border-accent hover:text-text-primary"
+          >
+            reset
+          </button>
+        </div>
+      </header>
+
+      {/* ── Collapsible model info ── */}
+      {showModelInfo && (
+        <div className="border-b border-border bg-surface-1 px-4 py-3 sm:px-6">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-text-secondary">
+            <div>
+              <span className="text-text-muted">Engine:</span>{' '}
+              <span className="font-mono">{engineLabel}</span>
             </div>
+            <div>
+              <span className="text-text-muted">Mode:</span> {modeLabel}
+            </div>
+            <div>
+              <span className="text-text-muted">Cached:</span>{' '}
+              {status?.localModelPresent ? 'yes' : 'not yet'}
+            </div>
+            {status?.note && (
+              <div className="basis-full text-text-muted">{status.note}</div>
+            )}
+          </div>
+        </div>
+      )}
 
-            <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
-              {messages.length === 0 ? (
-                <div className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center">
-                  <div className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300 uppercase">
-                    ready for conversation
-                  </div>
-                  <h2 className="mt-5 font-mono text-2xl text-white sm:text-3xl">
-                    Start with a real electronics question.
-                  </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
-                    {status?.runtimeMode === 'guided-tools'
-                      ? 'Guided mode is now good for concrete learner help: parts lists, wiring plans, resistor picks, and first-pass debug guidance.'
-                      : 'The point of this MVP is simple: test whether the local chat loop feels sharp enough before layering tools and workbench behaviour back in.'}
-                  </p>
-                  <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
-                    {starterPrompts.map((starter) => (
-                      <button
-                        key={starter}
-                        type="button"
-                        onClick={() => {
-                          setPrompt(starter);
-                          textareaRef.current?.focus();
-                        }}
-                        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-left text-sm text-zinc-300 transition hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-white"
-                      >
-                        {starter}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-                  {messages.map((message) => {
-                    const isUser = message.role === 'user';
+      {/* ── Main content ── */}
+      <div className="mx-auto flex w-full max-w-[96rem] flex-1 gap-4 overflow-hidden px-4 py-4 sm:px-6">
+        {/* Chat column */}
+        <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface-1">
+          <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+            {messages.length === 0 ? (
+              <EmptyState
+                starterPrompts={starterPrompts}
+                runtimeMode={status?.runtimeMode}
+                isCheckingStatus={isCheckingStatus}
+                onSelectPrompt={(starter) => void submitPrompt(starter)}
+              />
+            ) : (
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+                {messages.map((message) => (
+                  <MessageRow key={message.id} message={message} />
+                ))}
 
-                    return (
-                      <div
-                        key={message.id}
-                        className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[90%] rounded-2xl border px-4 py-3 sm:max-w-[82%] ${
-                            isUser
-                              ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-50'
-                              : 'border-zinc-800 bg-zinc-950/80 text-zinc-100'
-                          }`}
-                        >
-                          <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-zinc-500 uppercase">
-                            {isUser ? 'user' : 'clitronic'}
-                          </div>
-                          <div
-                            className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'dark:prose-invert'}`}
-                          >
-                            {!isUser &&
-                            message.toolInvocations &&
-                            message.toolInvocations.length > 0 ? (
-                              <div className="not-prose mb-4 space-y-2">
-                                {message.toolInvocations.map((toolInvocation, index) => (
-                                  <div
-                                    key={`${message.id}-tool-${index}`}
-                                    className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3"
-                                  >
-                                    <div className="font-mono text-[11px] tracking-[0.18em] text-cyan-300 uppercase">
-                                      tool · {toolInvocation.toolName}
-                                    </div>
-                                    <p className="mt-2 text-sm text-zinc-200">
-                                      {toolInvocation.summary}
-                                    </p>
-                                    <dl className="mt-3 space-y-2 text-xs text-zinc-400">
-                                      {Object.entries(toolInvocation.result).map(([key, value]) => {
-                                        if (
-                                          key === 'component_context' ||
-                                          key.startsWith('monitor_')
-                                        ) {
-                                          return null;
-                                        }
-
-                                        return (
-                                          <div key={key}>
-                                            <dt className="font-mono tracking-[0.16em] text-zinc-500 uppercase">
-                                              {key.replaceAll('_', ' ')}
-                                            </dt>
-                                            <dd className="mt-1 break-words whitespace-pre-wrap text-zinc-300">
-                                              {formatToolResultValue(value)}
-                                            </dd>
-                                          </div>
-                                        );
-                                      })}
-                                    </dl>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                pre: ({ children }) => (
-                                  <pre className="overflow-x-auto rounded-xl bg-black/40 p-3 text-sm text-zinc-100">
-                                    {children}
-                                  </pre>
-                                ),
-                                code: ({ children, className }) => {
-                                  if (!className) {
-                                    return (
-                                      <code className="rounded bg-white/10 px-1 py-0.5 text-[0.92em]">
-                                        {children}
-                                      </code>
-                                    );
-                                  }
-
-                                  return <code className={className}>{children}</code>;
-                                },
-                              }}
-                            >
-                              {message.content}
-                            </ReactMarkdown>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {isLoading && messages[messages.length - 1]?.content.length === 0 ? (
-                    <div className="flex justify-start">
-                      <div className="max-w-[82%] rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
-                        <div className="mb-2 font-mono text-[11px] tracking-[0.22em] text-amber-300/70 uppercase">
-                          clitronic
-                        </div>
-                        {status?.runtimeMode === 'guided-tools'
-                          ? 'Working through the guided tool layer…'
-                          : 'Thinking locally… first run can take longer if the model still needs to download.'}
-                      </div>
+                {isLoading && messages[messages.length - 1]?.content.length === 0 && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[82%] rounded-xl border border-warning/20 bg-warning/5 px-4 py-3 text-sm text-warning/90">
+                      {status?.runtimeMode === 'guided-tools'
+                        ? 'Working through the guided tool layer...'
+                        : 'Thinking locally... first run can take longer if the model still needs to download.'}
                     </div>
-                  ) : null}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Chat input ── */}
+          <div className="border-t border-border bg-surface-2 px-4 py-3 sm:px-5">
+            <div className="mx-auto max-w-3xl">
+              {error && (
+                <div className="mb-3 rounded-lg border border-error/20 bg-error/5 px-3 py-2 text-sm text-error">
+                  {error}
                 </div>
               )}
-            </div>
 
-            <div className="border-t border-zinc-800 bg-[#090d12] px-4 py-4 sm:px-5">
-              <div className="mx-auto max-w-3xl">
-                {error ? (
-                  <div className="mb-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                    {error}
-                  </div>
-                ) : null}
-
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void submitPrompt();
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitPrompt();
+                }}
+                className="flex items-end gap-2"
+              >
+                <textarea
+                  ref={textareaRef}
+                  value={prompt}
+                  onChange={(event) => {
+                    setPrompt(event.target.value);
+                    // Auto-grow
+                    const el = event.target;
+                    el.style.height = 'auto';
+                    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
                   }}
-                  className="rounded-3xl border border-zinc-700 bg-black/30 p-3"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void submitPrompt();
+                    }
+                  }}
+                  rows={1}
+                  placeholder="Ask about a circuit, a component, or an electronics concept..."
+                  className="min-h-[40px] flex-1 resize-none rounded-lg border border-border bg-surface-1 px-3 py-2.5 font-mono text-sm text-text-primary caret-accent outline-none transition placeholder:text-text-muted focus:border-border-accent"
+                />
+                <button
+                  type="submit"
+                  disabled={isLoading || prompt.trim().length === 0}
+                  className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-surface-0 transition hover:bg-accent-dim disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-text-muted"
                 >
-                  <textarea
-                    ref={textareaRef}
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        void submitPrompt();
-                      }
-                    }}
-                    rows={4}
-                    placeholder="Ask about a circuit, a component choice, or the shape of the product itself…"
-                    className="min-h-[108px] w-full resize-none bg-transparent font-mono text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
-                  />
-
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-3">
-                    <div className="text-xs text-zinc-500">
-                      Chat-led learning surface. Shift+Enter for a new line.
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={isLoading || prompt.trim().length === 0}
-                      className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
-                    >
-                      {isLoading ? 'running locally…' : 'send'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+                  {isLoading ? 'running...' : 'send'}
+                </button>
+              </form>
             </div>
-          </section>
+          </div>
+        </section>
 
+        {/* Learning monitor column */}
+        <div className="hidden w-[380px] shrink-0 xl:block 2xl:w-[440px]">
           <LearningMonitor
             teacherState={latestTeacherState}
             isLoading={isLoading}
-            onQuickPrompt={(nextPrompt) => {
-              setPrompt(nextPrompt);
-              textareaRef.current?.focus();
-            }}
+            onQuickPrompt={(nextPrompt) => void submitPrompt(nextPrompt)}
           />
         </div>
       </div>
     </main>
+  );
+}
+
+function EmptyState({
+  starterPrompts,
+  runtimeMode,
+  isCheckingStatus,
+  onSelectPrompt,
+}: {
+  starterPrompts: string[];
+  runtimeMode?: string;
+  isCheckingStatus: boolean;
+  onSelectPrompt: (prompt: string) => void;
+}) {
+  return (
+    <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center px-4 text-center">
+      <div className="font-mono text-2xl text-accent">&#9889;</div>
+      <h2 className="mt-3 font-mono text-lg font-semibold text-text-primary">
+        {isCheckingStatus
+          ? 'Starting up...'
+          : runtimeMode === 'guided-tools'
+            ? 'Ready to help with electronics.'
+            : 'Start with a real question.'}
+      </h2>
+      <p className="mt-2 max-w-lg text-sm leading-relaxed text-text-secondary">
+        {runtimeMode === 'guided-tools'
+          ? 'Guided mode can help with parts lists, wiring plans, resistor calculations, and debug checklists.'
+          : 'Ask about circuits, components, or breadboard projects. The monitor panel will follow along with diagrams and reference material.'}
+      </p>
+
+      <div className="mt-6 grid w-full gap-2 sm:grid-cols-2">
+        {starterPrompts.map((starter) => (
+          <button
+            key={starter}
+            type="button"
+            onClick={() => onSelectPrompt(starter)}
+            className="rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-left text-sm text-text-secondary transition hover:border-border-accent hover:text-text-primary"
+          >
+            {starter}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MessageRow({ message }: { message: ConsoleMessage }) {
+  const isUser = message.role === 'user';
+
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[85%] rounded-xl px-4 py-3 ${
+          isUser
+            ? 'border border-accent/20 bg-accent/8 text-text-primary'
+            : 'border border-border bg-surface-2 text-text-primary'
+        }`}
+      >
+        {!isUser && message.toolInvocations && message.toolInvocations.length > 0 && (
+          <div className="not-prose mb-3 space-y-2">
+            {message.toolInvocations.map((toolInvocation, index) => (
+              <div
+                key={`${message.id}-tool-${index}`}
+                className="rounded-lg border border-accent/15 bg-accent/5 p-3"
+              >
+                <div className="font-mono text-[11px] tracking-widest text-accent/80 uppercase">
+                  {toolInvocation.toolName}
+                </div>
+                <p className="mt-1.5 text-sm text-text-secondary">{toolInvocation.summary}</p>
+                <dl className="mt-2 space-y-1.5 text-xs text-text-muted">
+                  {Object.entries(toolInvocation.result).map(([key, value]) => {
+                    if (key === 'component_context' || key.startsWith('monitor_')) return null;
+                    return (
+                      <div key={key}>
+                        <dt className="font-mono tracking-wider text-text-muted uppercase">
+                          {key.replaceAll('_', ' ')}
+                        </dt>
+                        <dd className="mt-0.5 break-words whitespace-pre-wrap text-text-secondary">
+                          {formatToolResultValue(value)}
+                        </dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'dark:prose-invert'}`}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              pre: ({ children }) => (
+                <pre className="overflow-x-auto rounded-lg bg-surface-0/60 p-3 text-sm text-text-primary">
+                  {children}
+                </pre>
+              ),
+              code: ({ children, className }) => {
+                if (!className) {
+                  return (
+                    <code className="rounded bg-white/10 px-1 py-0.5 text-[0.92em]">
+                      {children}
+                    </code>
+                  );
+                }
+                return <code className={className}>{children}</code>;
+              },
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
+        </div>
+      </div>
+    </div>
   );
 }

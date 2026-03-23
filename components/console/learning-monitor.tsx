@@ -127,27 +127,27 @@ export function LearningMonitor({ teacherState, isLoading, onQuickPrompt }: Lear
   ];
 
   return (
-    <aside className="flex h-full min-h-[38rem] flex-col rounded-3xl border border-zinc-800 bg-[#090d12] shadow-2xl shadow-black/20">
-      <div className="border-b border-zinc-800 px-4 py-4 sm:px-5">
+    <aside className="flex h-full min-h-[38rem] flex-col rounded-xl border border-border bg-surface-1">
+      <div className="border-b border-border px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="font-mono text-[11px] tracking-[0.22em] text-cyan-300/80 uppercase">
+            <div className="font-mono text-[11px] tracking-widest text-accent/80 uppercase">
               learning monitor
             </div>
-            <h2 className="mt-2 text-lg font-semibold text-white">
+            <h2 className="mt-2 text-sm font-semibold text-text-primary">
               {teacherState?.title ?? 'Learning monitor'}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
+            <p className="mt-1 text-xs leading-relaxed text-text-muted">
               {teacherState?.summary ??
                 'The monitor follows lesson state from the chat: scene, reference notes, calculations, and debug guidance.'}
             </p>
           </div>
-          <div className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] tracking-[0.18em] text-cyan-200 uppercase">
+          <div className="rounded-full border border-accent/20 bg-accent/8 px-2.5 py-1 text-[11px] tracking-wider text-accent uppercase">
             {isLoading ? 'updating' : 'live'}
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {tabs
             .filter((tab) => tab.enabled)
             .map((tab) => (
@@ -155,10 +155,10 @@ export function LearningMonitor({ teacherState, isLoading, onQuickPrompt }: Lear
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                className={`rounded-lg border px-2.5 py-1 text-xs transition ${
                   activeTab === tab.key
-                    ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-100'
-                    : 'border-zinc-700 text-zinc-400 hover:border-cyan-500/20 hover:text-zinc-200'
+                    ? 'border-accent/30 bg-accent/8 text-accent'
+                    : 'border-border text-text-muted hover:border-border-accent hover:text-text-secondary'
                 }`}
               >
                 {tab.label}
@@ -167,9 +167,9 @@ export function LearningMonitor({ teacherState, isLoading, onQuickPrompt }: Lear
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-        {activeTab === 'scene' ? (
-          <div className="space-y-4">
+      <div className="flex-1 overflow-y-auto p-4">
+        {activeTab === 'scene' && (
+          <div className="space-y-3">
             {workspace ? (
               <div className="space-y-3">
                 <WorkbenchPreview
@@ -177,286 +177,237 @@ export function LearningMonitor({ teacherState, isLoading, onQuickPrompt }: Lear
                   connections={workspace.connections}
                   mode={workspace.mode}
                 />
-                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
-                  <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                <div className="rounded-lg border border-border bg-surface-0/40 p-3 text-sm text-text-secondary">
+                  <div className="text-[11px] tracking-wider text-text-muted uppercase">
                     Scene status
                   </div>
-                  <p className="mt-2 leading-6">{scene?.description}</p>
+                  <p className="mt-1.5 leading-relaxed">{scene?.description}</p>
                 </div>
               </div>
             ) : calculations ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {calculations.metrics.map((metric) => (
                   <div
                     key={metric.label}
-                    className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4"
+                    className="rounded-lg border border-accent/15 bg-accent/5 p-3"
                   >
-                    <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                    <div className="text-[11px] tracking-wider text-text-muted uppercase">
                       {metric.label}
                     </div>
-                    <div className="mt-2 text-xl font-semibold text-white">{metric.value}</div>
+                    <div className="mt-1.5 text-lg font-semibold text-text-primary">
+                      {metric.value}
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
+              <div className="rounded-lg border border-border bg-surface-0/40 p-3 text-sm text-text-muted">
                 Ask Clitronic to explain or build a circuit and this monitor will open the relevant
-                scene, diagram, and teaching artefacts next to the chat. If a view is illustrative
-                rather than simulated, it will say so clearly.
+                scene, diagram, and teaching artefacts next to the chat.
               </div>
             )}
 
-            {diagramComponent ? <ComponentDiagramPreview componentKey={diagramComponent} /> : null}
+            {diagramComponent && <ComponentDiagramPreview componentKey={diagramComponent} />}
           </div>
-        ) : null}
+        )}
 
-        {activeTab === 'guide' ? (
-          <div className="space-y-4">
-            {parts.length > 0 ? (
-              <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                  Parts list
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-zinc-200">
-                  {parts.map((part) => (
-                    <div
-                      key={part}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
-                    >
-                      {part}
+        {activeTab === 'guide' && (
+          <div className="space-y-3">
+            {parts.length > 0 && (
+              <MonitorSection title="Parts list">
+                {parts.map((part) => (
+                  <div key={part} className="rounded-lg border border-border bg-surface-0/40 px-3 py-2 text-sm text-text-secondary">
+                    {part}
+                  </div>
+                ))}
+              </MonitorSection>
+            )}
+
+            {wiringSteps.length > 0 && (
+              <MonitorSection title="Wiring plan">
+                {wiringSteps.map((step, index) => (
+                  <div key={step} className="rounded-lg border border-border bg-surface-0/40 px-3 py-2.5">
+                    <div className="text-[11px] tracking-wider text-accent uppercase">
+                      Step {index + 1}
                     </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                    <div className="mt-1 text-sm leading-relaxed text-text-secondary">{step}</div>
+                  </div>
+                ))}
+              </MonitorSection>
+            )}
 
-            {wiringSteps.length > 0 ? (
-              <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                  Wiring plan
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-zinc-200">
-                  {wiringSteps.map((step, index) => (
-                    <div
-                      key={step}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-3"
-                    >
-                      <div className="text-[11px] tracking-[0.18em] text-cyan-300 uppercase">
-                        Step {index + 1}
-                      </div>
-                      <div className="mt-2 leading-6">{step}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            {whyItWorks.length > 0 && (
+              <MonitorSection title="Why this works" accent="success">
+                {whyItWorks.map((point) => (
+                  <div key={point} className="rounded-lg border border-success/15 bg-success/5 px-3 py-2 text-sm text-success/90">
+                    {point}
+                  </div>
+                ))}
+              </MonitorSection>
+            )}
 
-            {whyItWorks.length > 0 ? (
-              <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-emerald-300 uppercase">
-                  Why this works
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-emerald-50/90">
-                  {whyItWorks.map((point) => (
-                    <div
-                      key={point}
-                      className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2"
-                    >
-                      {point}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {component ? (
-              <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-cyan-300 uppercase">
-                  Component reference
-                </div>
-                <div className="mt-3 text-sm text-cyan-50/90">
-                  <div className="font-medium text-white">{component.name}</div>
-                  {component.description ? (
-                    <p className="mt-2 leading-6 text-zinc-200">{component.description}</p>
-                  ) : null}
-                  {component.keySpecs.length > 0 ? (
-                    <div className="mt-3 space-y-2">
+            {component && (
+              <MonitorSection title="Component reference" accent="accent">
+                <div className="text-sm">
+                  <div className="font-medium text-text-primary">{component.name}</div>
+                  {component.description && (
+                    <p className="mt-1.5 leading-relaxed text-text-secondary">{component.description}</p>
+                  )}
+                  {component.keySpecs.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
                       {component.keySpecs.map((spec) => (
-                        <div
-                          key={spec}
-                          className="rounded-xl border border-cyan-500/10 bg-black/20 px-3 py-2"
-                        >
+                        <div key={spec} className="rounded-lg border border-accent/10 bg-surface-0/40 px-3 py-2 text-text-secondary">
                           {spec}
                         </div>
                       ))}
                     </div>
-                  ) : null}
-                  {component.pinout ? (
-                    <div className="mt-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-2 text-zinc-200">
-                      <span className="text-zinc-400">Pinout:</span> {component.pinout}
+                  )}
+                  {component.pinout && (
+                    <div className="mt-2 rounded-lg border border-border bg-surface-0/40 px-3 py-2 text-text-secondary">
+                      <span className="text-text-muted">Pinout:</span> {component.pinout}
                     </div>
-                  ) : null}
-                  {component.tips ? (
-                    <div className="mt-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-2 text-zinc-200">
-                      <span className="text-zinc-400">Practical tip:</span> {component.tips}
+                  )}
+                  {component.tips && (
+                    <div className="mt-2 rounded-lg border border-border bg-surface-0/40 px-3 py-2 text-text-secondary">
+                      <span className="text-text-muted">Tip:</span> {component.tips}
                     </div>
-                  ) : null}
+                  )}
                 </div>
-              </section>
-            ) : null}
+              </MonitorSection>
+            )}
 
             {debug?.checks.length ? (
-              <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-amber-300 uppercase">
-                  Debug checklist
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-amber-50/90">
-                  {debug.checks.map((check, index) => (
-                    <div
-                      key={check}
-                      className="rounded-xl border border-amber-500/10 bg-black/20 px-3 py-2"
-                    >
-                      {index + 1}. {check}
-                    </div>
-                  ))}
-                </div>
-                {debug.quickestTest ? (
+              <MonitorSection title="Debug checklist" accent="warning">
+                {debug.checks.map((check, index) => (
+                  <div key={check} className="rounded-lg border border-warning/15 bg-warning/5 px-3 py-2 text-sm text-warning/90">
+                    {index + 1}. {check}
+                  </div>
+                ))}
+                {debug.quickestTest && (
                   <button
                     type="button"
                     onClick={() => onQuickPrompt(debug.quickestTest!)}
-                    className="mt-4 rounded-full border border-amber-500/20 bg-black/20 px-3 py-2 text-xs text-amber-100 transition hover:border-amber-400/30 hover:bg-amber-500/10"
+                    className="mt-2 rounded-lg border border-warning/20 bg-surface-0/40 px-3 py-2 text-xs text-warning transition hover:border-warning/40"
                   >
                     use fastest next test
                   </button>
-                ) : null}
-              </section>
+                )}
+              </MonitorSection>
             ) : null}
 
-            {safetyNotes.length > 0 ? (
-              <section className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-rose-300 uppercase">
-                  Safety notes
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-rose-50/90">
-                  {safetyNotes.map((note) => (
-                    <div
-                      key={note}
-                      className="rounded-xl border border-rose-500/10 bg-black/20 px-3 py-2"
-                    >
-                      {note}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            {safetyNotes.length > 0 && (
+              <MonitorSection title="Safety notes" accent="error">
+                {safetyNotes.map((note) => (
+                  <div key={note} className="rounded-lg border border-error/15 bg-error/5 px-3 py-2 text-sm text-error/90">
+                    {note}
+                  </div>
+                ))}
+              </MonitorSection>
+            )}
 
-            {code ? (
-              <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                  Starter code
-                </div>
-                <pre className="mt-3 overflow-x-auto rounded-xl bg-black/40 p-3 text-sm text-zinc-100">
+            {code && (
+              <MonitorSection title="Starter code">
+                <pre className="overflow-x-auto rounded-lg bg-surface-0/60 p-3 text-sm text-text-primary">
                   {code}
                 </pre>
-              </section>
-            ) : null}
+              </MonitorSection>
+            )}
           </div>
-        ) : null}
+        )}
 
-        {activeTab === 'inspect' ? (
-          <div className="space-y-4">
-            {analysis && workspace ? (
+        {activeTab === 'inspect' && (
+          <div className="space-y-3">
+            {analysis && workspace && (
               <TopologyMap
                 nodes={workspace.nodes}
                 connections={workspace.connections}
                 analysis={analysis}
                 onQuickCommand={onQuickPrompt}
               />
-            ) : null}
+            )}
 
-            {calculations ? (
-              <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                  Calculation monitor
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {calculations && (
+              <MonitorSection title="Calculation monitor">
+                <div className="grid gap-2 sm:grid-cols-2">
                   {calculations.metrics.map((metric) => (
-                    <div
-                      key={metric.label}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-3"
-                    >
-                      <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                        {metric.label}
-                      </div>
-                      <div className="mt-2 text-lg font-semibold text-white">{metric.value}</div>
+                    <div key={metric.label} className="rounded-lg border border-border bg-surface-0/40 px-3 py-2.5">
+                      <div className="text-[11px] tracking-wider text-text-muted uppercase">{metric.label}</div>
+                      <div className="mt-1 text-lg font-semibold text-text-primary">{metric.value}</div>
                     </div>
                   ))}
                 </div>
-              </section>
-            ) : null}
+              </MonitorSection>
+            )}
 
-            {debug ? (
-              <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                  {debug.title}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+            {debug && (
+              <MonitorSection title={debug.title}>
+                <div className="flex flex-wrap gap-1.5">
                   {debug.checks.map((check) => (
-                    <div
-                      key={check}
-                      className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
-                    >
+                    <div key={check} className="rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary">
                       {check}
                     </div>
                   ))}
                 </div>
                 {debug.likelyCauses?.length ? (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-3 space-y-1.5">
                     {debug.likelyCauses.map((cause) => (
-                      <div
-                        key={cause}
-                        className="rounded-xl border border-amber-500/10 bg-amber-500/5 px-3 py-2 text-sm text-amber-50/90"
-                      >
+                      <div key={cause} className="rounded-lg border border-warning/10 bg-warning/5 px-3 py-2 text-sm text-warning/90">
                         {cause}
                       </div>
                     ))}
                   </div>
                 ) : null}
-              </section>
-            ) : null}
+              </MonitorSection>
+            )}
 
             {teacherState?.capabilities.length ? (
-              <section className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                  Capability status
-                </div>
-                <div className="mt-3 space-y-3">
-                  {teacherState.capabilities.map((capability) => (
-                    <div
-                      key={capability.label}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-medium text-white">{capability.label}</div>
-                        <div
-                          className={`rounded-full border px-2 py-1 text-[11px] uppercase ${
-                            capability.status === 'active'
-                              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
-                              : 'border-amber-500/20 bg-amber-500/10 text-amber-200'
-                          }`}
-                        >
-                          {capability.status}
-                        </div>
+              <MonitorSection title="Capability status">
+                {teacherState.capabilities.map((capability) => (
+                  <div key={capability.label} className="rounded-lg border border-border bg-surface-0/40 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-text-primary">{capability.label}</div>
+                      <div
+                        className={`rounded-full border px-2 py-0.5 text-[11px] uppercase ${
+                          capability.status === 'active'
+                            ? 'border-success/20 bg-success/8 text-success'
+                            : 'border-warning/20 bg-warning/8 text-warning'
+                        }`}
+                      >
+                        {capability.status}
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-zinc-400">{capability.detail}</p>
                     </div>
-                  ))}
-                </div>
-              </section>
+                    <p className="mt-1.5 text-xs leading-relaxed text-text-muted">{capability.detail}</p>
+                  </div>
+                ))}
+              </MonitorSection>
             ) : null}
           </div>
-        ) : null}
+        )}
       </div>
     </aside>
+  );
+}
+
+function MonitorSection({
+  title,
+  accent,
+  children,
+}: {
+  title: string;
+  accent?: 'accent' | 'success' | 'warning' | 'error';
+  children: React.ReactNode;
+}) {
+  const borderClass = accent
+    ? `border-${accent}/15`
+    : 'border-border';
+  const bgClass = accent
+    ? `bg-${accent}/5`
+    : 'bg-surface-0/20';
+
+  return (
+    <section className={`rounded-lg border ${borderClass} ${bgClass} p-3`}>
+      <div className="mb-2 text-[11px] tracking-wider text-text-muted uppercase">{title}</div>
+      <div className="space-y-1.5">{children}</div>
+    </section>
   );
 }
