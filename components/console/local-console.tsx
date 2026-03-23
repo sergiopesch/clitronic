@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { UIRenderer } from '@/components/ui/ui-renderer';
+import { Logo } from '@/components/ui/logo';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 
 type ConversationEntry = {
@@ -115,12 +116,8 @@ export function LocalConsole() {
             : 'pointer-events-none -translate-y-4 opacity-0'
         }`}
       >
-        <button
-          type="button"
-          onClick={reset}
-          className="text-accent hover:text-accent-dim font-mono text-sm font-semibold transition"
-        >
-          clitronic
+        <button type="button" onClick={reset} className="transition hover:opacity-80">
+          <Logo scale={0.8} />
         </button>
         <button
           type="button"
@@ -136,9 +133,7 @@ export function LocalConsole() {
         {/* Idle state — centered input with starters */}
         {!hasResponse && !isLoading && !error && (
           <div className="animate-fade-in-up flex w-full max-w-2xl flex-col items-center">
-            <h1 className="text-text-primary font-mono text-2xl font-bold tracking-tight sm:text-3xl">
-              clitron<span className="text-accent">ic</span>
-            </h1>
+            <Logo scale={1.6} />
             <p className="text-text-muted mt-2 text-center text-sm">
               Your electronics companion. Ask anything.
             </p>
