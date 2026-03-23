@@ -29,6 +29,45 @@ const HINTS = [
   'Compare power consumption: ESP32 vs ESP8266 vs Arduino Nano',
 ];
 
+/**
+ * Summarize an assistant response for conversation history.
+ * Instead of sending the full JSON blob (which confuses the LLM about context),
+ * send a compact human-readable summary so the model understands what was discussed.
+ */
+function summarizeAssistantResponse(structured: StructuredResponse): string {
+  const component = structured.ui?.component;
+  const data = structured.ui?.data as Record<string, unknown> | undefined;
+
+  if (structured.mode === 'text' || !component) {
+    return structured.text || '(responded with text)';
+  }
+
+  const parts: string[] = [`[Showed ${component}]`];
+
+  // Add key identifying info so the LLM knows what topic was covered
+  if (data) {
+    const title = data.title || data.component || data.issue;
+    if (typeof title === 'string') parts.push(title);
+
+    if (data.items && Array.isArray(data.items)) {
+      const itemNames = data.items
+        .map((item: unknown) =>
+          typeof item === 'string' ? item : (item as Record<string, unknown>)?.name
+        )
+        .filter(Boolean);
+      if (itemNames.length > 0) parts.push(`Items: ${itemNames.join(', ')}`);
+    }
+
+    if (data.caption && typeof data.caption === 'string') parts.push(data.caption);
+    if (data.searchQuery && typeof data.searchQuery === 'string')
+      parts.push(`(searched: ${data.searchQuery})`);
+  }
+
+  if (structured.text) parts.push(structured.text);
+
+  return parts.join(' — ');
+}
+
 export function LocalConsole() {
   const [history, setHistory] = useState<ConversationEntry[]>([]);
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
@@ -66,7 +105,9 @@ export function LocalConsole() {
         ...history.map((e) => ({
           role: e.role,
           content:
-            e.role === 'assistant' && e.structured ? JSON.stringify(e.structured) : e.content,
+            e.role === 'assistant' && e.structured
+              ? summarizeAssistantResponse(e.structured)
+              : e.content,
         })),
         { role: 'user', content: text },
       ];
