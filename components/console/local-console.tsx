@@ -71,6 +71,10 @@ export function LocalConsole() {
 
         const structured = (await res.json()) as StructuredResponse;
 
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[clitronic] API response:', JSON.stringify(structured, null, 2));
+        }
+
         setCurrentResponse(structured);
         setResponseKey((k) => k + 1);
         setHistory((prev) => [

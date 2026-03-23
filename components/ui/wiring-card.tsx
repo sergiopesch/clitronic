@@ -25,6 +25,8 @@ function getWireColor(wire?: string): string {
 
 /** Derive a pin type color from the pin name for the node badges */
 function getNodeAccent(name: string): { bg: string; border: string; text: string } {
+  if (!name)
+    return { bg: 'rgba(34,211,238,0.08)', border: 'rgba(34,211,238,0.15)', text: '#22d3ee' };
   const lower = name.toLowerCase();
   if (
     lower.includes('vcc') ||

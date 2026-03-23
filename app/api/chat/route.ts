@@ -299,13 +299,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No response from model.' }, { status: 502 });
     }
 
-    // If model hit token limit, JSON may be truncated — log it
+    // Log model output for debugging
     if (choice.finish_reason === 'length') {
-      console.warn('Model response truncated (finish_reason=length)');
+      console.warn('[clitronic] Response truncated (finish_reason=length)');
     }
+    console.log('[clitronic] Raw model output:', content.substring(0, 500));
 
     // Validate and sanitize the response
     const validated = validateResponse(content);
+    console.log('[clitronic] Validated output:', validated.substring(0, 500));
 
     return new Response(validated, {
       headers: { 'Content-Type': 'application/json' },

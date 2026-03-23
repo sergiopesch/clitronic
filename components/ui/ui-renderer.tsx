@@ -36,18 +36,19 @@ const FALLBACK_TEXT = 'Sorry, I had trouble displaying that. Try rephrasing your
 export function UIRenderer({ response }: UIRendererProps) {
   const fallback = <TextResponse text={response.text || FALLBACK_TEXT} />;
 
-  if (response.mode === 'text' || !response.ui) {
+  // If there's a text response and no UI block, show text
+  if (response.text && !response.ui) {
+    return <TextResponse text={response.text} />;
+  }
+
+  // If no UI block at all, show fallback
+  if (!response.ui || !response.ui.data || typeof response.ui.data !== 'object') {
     return fallback;
   }
 
   const animation = response.behavior?.animation;
   const component = response.ui.component;
   const data = response.ui.data;
-
-  // Guard against missing data
-  if (!data || typeof data !== 'object') {
-    return fallback;
-  }
 
   const renderComponent = () => {
     switch (component) {
@@ -72,13 +73,18 @@ export function UIRenderer({ response }: UIRendererProps) {
       case 'imageBlock':
         return <ImageBlock data={data as ImageBlockData} />;
       default:
-        return fallback;
+        return null;
     }
   };
 
+  const rendered = renderComponent();
+
+  // If switch didn't match, fall back to text
+  if (!rendered) return fallback;
+
   return (
     <CardErrorBoundary fallback={fallback}>
-      <AnimateIn animation={animation}>{renderComponent()}</AnimateIn>
+      <AnimateIn animation={animation}>{rendered}</AnimateIn>
     </CardErrorBoundary>
   );
 }
