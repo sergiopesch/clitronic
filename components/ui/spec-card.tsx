@@ -8,26 +8,20 @@ export function SpecCard({ data }: { data: SpecCardData }) {
   const hasDetails = data.optionalDetails && data.optionalDetails.length > 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm">
-      <div className="border-b border-border px-5 py-4">
-        <h3 className="text-base font-semibold text-accent sm:text-lg">{data.title}</h3>
-        {data.subtitle && (
-          <p className="mt-1 text-sm text-text-muted">{data.subtitle}</p>
-        )}
+    <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
+      <div className="border-border border-b px-5 py-4">
+        <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
+        {data.subtitle && <p className="text-text-muted mt-1 text-sm">{data.subtitle}</p>}
       </div>
 
-      <div className="grid gap-px bg-border sm:grid-cols-2">
+      <div className="bg-border grid gap-px sm:grid-cols-2">
         {data.keySpecs.map((spec, i) => (
           <div
             key={spec.label}
-            className={`bg-surface-1/80 px-5 py-3 animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}
+            className={`bg-surface-1/80 animate-fade-in-up px-5 py-3 stagger-${Math.min(i + 1, 6)}`}
           >
-            <div className="text-[11px] tracking-wider text-text-muted uppercase">
-              {spec.label}
-            </div>
-            <div className="mt-1 font-mono text-sm font-medium text-text-primary">
-              {spec.value}
-            </div>
+            <div className="text-text-muted text-[11px] tracking-wider uppercase">{spec.label}</div>
+            <div className="text-text-primary mt-1 font-mono text-sm font-medium">{spec.value}</div>
           </div>
         ))}
       </div>
@@ -36,7 +30,7 @@ export function SpecCard({ data }: { data: SpecCardData }) {
         <>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="flex w-full items-center justify-center gap-1 border-t border-border px-5 py-2.5 text-xs text-accent transition hover:bg-surface-2/50"
+            className="border-border text-accent hover:bg-surface-2/50 flex w-full items-center justify-center gap-1 border-t px-5 py-2.5 text-xs transition"
           >
             {expanded ? 'Hide details' : 'Show details'}
             <svg
@@ -52,13 +46,13 @@ export function SpecCard({ data }: { data: SpecCardData }) {
             </svg>
           </button>
           {expanded && (
-            <div className="grid gap-px bg-border border-t border-border sm:grid-cols-2 animate-card-expand">
+            <div className="bg-border border-border animate-card-expand grid gap-px border-t sm:grid-cols-2">
               {data.optionalDetails!.map((detail) => (
                 <div key={detail.label} className="bg-surface-2/60 px-5 py-3">
-                  <div className="text-[11px] tracking-wider text-text-muted uppercase">
+                  <div className="text-text-muted text-[11px] tracking-wider uppercase">
                     {detail.label}
                   </div>
-                  <div className="mt-1 text-sm text-text-secondary">{detail.value}</div>
+                  <div className="text-text-secondary mt-1 text-sm">{detail.value}</div>
                 </div>
               ))}
             </div>

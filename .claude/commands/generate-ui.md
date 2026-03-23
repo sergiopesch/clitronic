@@ -32,6 +32,7 @@ Generate a structured UI response schema from a user query. Returns valid JSON m
 ## Examples
 
 ### Component lookup
+
 Query: "Tell me about resistors"
 
 ```json
@@ -57,6 +58,7 @@ Query: "Tell me about resistors"
 ```
 
 ### Calculation
+
 Query: "What resistor for a red LED on 5V?"
 
 ```json
@@ -82,6 +84,7 @@ Query: "What resistor for a red LED on 5V?"
 ```
 
 ### Debug checklist
+
 Query: "My Arduino LED won't turn on"
 
 ```json

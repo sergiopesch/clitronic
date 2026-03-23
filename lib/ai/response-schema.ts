@@ -58,13 +58,22 @@ export interface CalculationCardData {
 export interface PinoutCardData {
   component: string;
   description?: string;
-  pins: { number: number; label: string; type: 'power' | 'ground' | 'digital' | 'analog' | 'other' }[];
+  pins: {
+    number: number;
+    label: string;
+    type: 'power' | 'ground' | 'digital' | 'analog' | 'other';
+  }[];
 }
 
 export interface ChartCardData {
   title: string;
   subtitle?: string;
-  bars: { label: string; value: number; unit?: string; color?: 'accent' | 'success' | 'warning' | 'error' }[];
+  bars: {
+    label: string;
+    value: number;
+    unit?: string;
+    color?: 'accent' | 'success' | 'warning' | 'error';
+  }[];
 }
 
 export interface WiringCardData {

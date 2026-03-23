@@ -14,20 +14,20 @@ User query → 3-step intent detection → Mode decision → Structured JSON →
 
 ## Intent → Component Mapping
 
-| Signal | Component | Animation | Default State |
-|--------|-----------|-----------|---------------|
-| Specs/features of a thing | `specCard` | slideUp | collapsed |
-| Two+ things side by side | `comparisonCard` | slideUp | open |
-| How something works / concepts | `explanationCard` | fadeIn | open |
-| Visual/diagram/schematic/waveform | `imageBlock` (diagram) | fadeIn | open |
-| Show me a real component/board | `imageBlock` (photo) | fadeIn | open |
-| What should I use/buy/build | `recommendationCard` | slideUp | collapsed |
-| Not working / broken / debug | `troubleshootingCard` | expand | open |
-| Numeric answer with formula | `calculationCard` | slideUp | open |
-| Pin layout of a chip/board | `pinoutCard` | slideUp | open |
-| Numeric values to compare visually | `chartCard` | slideUp | open |
-| How to wire/connect/assemble | `wiringCard` | expand | open |
-| Greeting or trivial one-liner | (text mode) | none | n/a |
+| Signal                             | Component              | Animation | Default State |
+| ---------------------------------- | ---------------------- | --------- | ------------- |
+| Specs/features of a thing          | `specCard`             | slideUp   | collapsed     |
+| Two+ things side by side           | `comparisonCard`       | slideUp   | open          |
+| How something works / concepts     | `explanationCard`      | fadeIn    | open          |
+| Visual/diagram/schematic/waveform  | `imageBlock` (diagram) | fadeIn    | open          |
+| Show me a real component/board     | `imageBlock` (photo)   | fadeIn    | open          |
+| What should I use/buy/build        | `recommendationCard`   | slideUp   | collapsed     |
+| Not working / broken / debug       | `troubleshootingCard`  | expand    | open          |
+| Numeric answer with formula        | `calculationCard`      | slideUp   | open          |
+| Pin layout of a chip/board         | `pinoutCard`           | slideUp   | open          |
+| Numeric values to compare visually | `chartCard`            | slideUp   | open          |
+| How to wire/connect/assemble       | `wiringCard`           | expand    | open          |
+| Greeting or trivial one-liner      | (text mode)            | none      | n/a           |
 
 ## Mode Decision (CRITICAL)
 
@@ -38,56 +38,104 @@ User query → 3-step intent detection → Mode decision → Structured JSON →
 ## Component Data Shapes
 
 ### specCard
+
 ```json
-{ "title": "str", "subtitle?": "str", "keySpecs": [{"label":"str","value":"str"}], "optionalDetails?": [{"label":"str","value":"str"}] }
+{
+  "title": "str",
+  "subtitle?": "str",
+  "keySpecs": [{ "label": "str", "value": "str" }],
+  "optionalDetails?": [{ "label": "str", "value": "str" }]
+}
 ```
 
 ### comparisonCard
+
 ```json
-{ "items": ["str","str"], "attributes": [{"name":"str","values":["str","str"]}], "keyDifferences": ["str"], "useCases?": [{"item":"str","useCase":"str"}] }
+{
+  "items": ["str", "str"],
+  "attributes": [{ "name": "str", "values": ["str", "str"] }],
+  "keyDifferences": ["str"],
+  "useCases?": [{ "item": "str", "useCase": "str" }]
+}
 ```
 
 ### explanationCard
+
 ```json
 { "title": "str", "summary": "str", "keyPoints": ["str"] }
 ```
 
 ### imageBlock
+
 ```json
-{ "imageMode": "diagram|photo", "diagramType?": "str", "labels?": {"k":"v"}, "searchQuery?": "str", "caption": "str", "description?": "str", "notes?": ["str"] }
+{
+  "imageMode": "diagram|photo",
+  "diagramType?": "str",
+  "labels?": { "k": "v" },
+  "searchQuery?": "str",
+  "caption": "str",
+  "description?": "str",
+  "notes?": ["str"]
+}
 ```
+
 - **diagram mode**: diagramType = breadboard | voltage-divider | led-circuit | pull-up | pull-down | pwm | capacitor-charge
 - **photo mode**: searchQuery = descriptive term for real product/component image search
 
 ### recommendationCard
+
 ```json
-{ "items": [{"name":"str","reason":"str"}], "highlights": ["str"] }
+{ "items": [{ "name": "str", "reason": "str" }], "highlights": ["str"] }
 ```
 
 ### troubleshootingCard
+
 ```json
-{ "issue": "str", "steps": [{"label":"str","detail":"str"}], "tips": ["str"] }
+{ "issue": "str", "steps": [{ "label": "str", "detail": "str" }], "tips": ["str"] }
 ```
 
 ### calculationCard
+
 ```json
-{ "title": "str", "formula": "str", "inputs": [{"label":"str","value":"str"}], "result": {"label":"str","value":"str","note?":"str"} }
+{
+  "title": "str",
+  "formula": "str",
+  "inputs": [{ "label": "str", "value": "str" }],
+  "result": { "label": "str", "value": "str", "note?": "str" }
+}
 ```
 
 ### pinoutCard
+
 ```json
-{ "component": "str", "description?": "str", "pins": [{"number":1,"label":"str","type":"power|ground|digital|analog|other"}] }
+{
+  "component": "str",
+  "description?": "str",
+  "pins": [{ "number": 1, "label": "str", "type": "power|ground|digital|analog|other" }]
+}
 ```
+
 Pins in physical order. First half = left side, second half = right side (reversed).
 
 ### chartCard
+
 ```json
-{ "title": "str", "subtitle?": "str", "bars": [{"label":"str","value":0,"unit?":"str","color?":"accent|success|warning|error"}] }
+{
+  "title": "str",
+  "subtitle?": "str",
+  "bars": [{ "label": "str", "value": 0, "unit?": "str", "color?": "accent|success|warning|error" }]
+}
 ```
 
 ### wiringCard
+
 ```json
-{ "title": "str", "description?": "str", "steps": [{"from":"str","to":"str","wire?":"str","note?":"str"}], "warnings?": ["str"] }
+{
+  "title": "str",
+  "description?": "str",
+  "steps": [{ "from": "str", "to": "str", "wire?": "str", "note?": "str" }],
+  "warnings?": ["str"]
+}
 ```
 
 ## Animation Standards
@@ -109,6 +157,7 @@ Pins in physical order. First half = left side, second half = right side (revers
 ## Image Search Pipeline
 
 When `imageBlock` with `imageMode: "photo"` is rendered:
+
 1. Component shows shimmer loading placeholder
 2. Fetches `/api/image-search?q={searchQuery}`
 3. API tries Brave Search first (if `BRAVE_API_KEY` set), then Wikimedia Commons

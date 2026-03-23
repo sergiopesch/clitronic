@@ -19,10 +19,7 @@ interface ChatMessage {
 function isValidMessage(value: unknown): value is ChatMessage {
   if (!value || typeof value !== 'object') return false;
   const msg = value as Record<string, unknown>;
-  return (
-    (msg.role === 'user' || msg.role === 'assistant') &&
-    typeof msg.content === 'string'
-  );
+  return (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string';
 }
 
 export async function POST(req: Request) {

@@ -13,12 +13,10 @@ export function ChartCard({ data }: { data: ChartCardData }) {
   const maxValue = Math.max(...data.bars.map((b) => b.value), 1);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm">
-      <div className="border-b border-border px-5 py-4">
-        <h3 className="text-base font-semibold text-accent sm:text-lg">{data.title}</h3>
-        {data.subtitle && (
-          <p className="mt-1 text-sm text-text-muted">{data.subtitle}</p>
-        )}
+    <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
+      <div className="border-border border-b px-5 py-4">
+        <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
+        {data.subtitle && <p className="text-text-muted mt-1 text-sm">{data.subtitle}</p>}
       </div>
 
       <div className="space-y-3 px-5 py-5">
@@ -27,16 +25,13 @@ export function ChartCard({ data }: { data: ChartCardData }) {
           const palette = BAR_COLORS[bar.color ?? 'accent'] ?? BAR_COLORS.accent;
 
           return (
-            <div
-              key={bar.label}
-              className={`animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}
-            >
+            <div key={bar.label} className={`animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}>
               <div className="mb-1.5 flex items-baseline justify-between">
-                <span className="text-sm text-text-primary">{bar.label}</span>
+                <span className="text-text-primary text-sm">{bar.label}</span>
                 <span className="font-mono text-sm font-semibold" style={{ color: palette.bar }}>
                   {bar.value}
                   {bar.unit && (
-                    <span className="ml-0.5 text-xs font-normal text-text-muted">{bar.unit}</span>
+                    <span className="text-text-muted ml-0.5 text-xs font-normal">{bar.unit}</span>
                   )}
                 </span>
               </div>
@@ -64,11 +59,15 @@ export function ChartCard({ data }: { data: ChartCardData }) {
 
       {/* Inline keyframes for bar growth */}
       <style>{`
-        ${data.bars.map((_, i) => `
+        ${data.bars
+          .map(
+            (_, i) => `
           @keyframes bar-grow-${i} {
             from { width: 0%; }
           }
-        `).join('')}
+        `
+          )
+          .join('')}
       `}</style>
     </div>
   );

@@ -71,54 +71,65 @@ The LLM uses signal words and question shape — not hardcoded examples:
 
 ### Intent → Component Mapping
 
-| Signal | Component | Animation | Default State |
-|--------|-----------|-----------|---------------|
-| Specs/features of a thing | `specCard` | slideUp | collapsed |
-| Two+ things side by side | `comparisonCard` | slideUp | open |
-| How something works | `explanationCard` | fadeIn | open |
-| Visual/diagram/schematic | `imageBlock` | fadeIn | open |
-| What should I use/buy | `recommendationCard` | slideUp | collapsed |
-| Not working/debug | `troubleshootingCard` | expand | open |
-| Numeric answer + formula | `calculationCard` | slideUp | open |
-| Pin layout of chip/board | `pinoutCard` | slideUp | open |
-| Numeric values to compare | `chartCard` | slideUp | open |
-| How to wire/connect | `wiringCard` | expand | open |
-| Greeting / one-liner | text mode | none | n/a |
+| Signal                    | Component             | Animation | Default State |
+| ------------------------- | --------------------- | --------- | ------------- |
+| Specs/features of a thing | `specCard`            | slideUp   | collapsed     |
+| Two+ things side by side  | `comparisonCard`      | slideUp   | open          |
+| How something works       | `explanationCard`     | fadeIn    | open          |
+| Visual/diagram/schematic  | `imageBlock`          | fadeIn    | open          |
+| What should I use/buy     | `recommendationCard`  | slideUp   | collapsed     |
+| Not working/debug         | `troubleshootingCard` | expand    | open          |
+| Numeric answer + formula  | `calculationCard`     | slideUp   | open          |
+| Pin layout of chip/board  | `pinoutCard`          | slideUp   | open          |
+| Numeric values to compare | `chartCard`           | slideUp   | open          |
+| How to wire/connect       | `wiringCard`          | expand    | open          |
+| Greeting / one-liner      | text mode             | none      | n/a           |
 
 **Default bias: UI mode.**
 
 ## UI Components (10 total)
 
 ### Spec Card
+
 `component: "specCard"` — title, subtitle?, keySpecs[], optionalDetails[]
 
 ### Comparison Card
+
 `component: "comparisonCard"` — items[], attributes[], keyDifferences[], useCases?[]
 
 ### Explanation Card
+
 `component: "explanationCard"` — title, summary, keyPoints[]
 
 ### Image Block (dual-mode)
+
 `component: "imageBlock"` — imageMode: "diagram" | "photo"
+
 - **diagram**: built-in SVG (breadboard, voltage-divider, led-circuit, pull-up/down, pwm, capacitor-charge)
 - **photo**: fetches real images via `/api/image-search` (Brave → Wikimedia fallback)
 
 ### Recommendation Card
+
 `component: "recommendationCard"` — items[], highlights[]
 
 ### Troubleshooting Card
+
 `component: "troubleshootingCard"` — issue, steps[], tips[]
 
 ### Calculation Card
+
 `component: "calculationCard"` — title, formula, inputs[], result{}
 
 ### Pinout Card
+
 `component: "pinoutCard"` — component, description?, pins[] (SVG IC layout with color-coded pin types)
 
 ### Chart Card
+
 `component: "chartCard"` — title, subtitle?, bars[] (horizontal bar chart with animated fills)
 
 ### Wiring Card
+
 `component: "wiringCard"` — title, description?, steps[], warnings?[]
 
 ## Image Search Pipeline

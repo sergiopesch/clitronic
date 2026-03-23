@@ -27,16 +27,14 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
   const chipHeight = Math.max(halfCount * 36, 120);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm">
-      <div className="border-b border-border px-5 py-4">
-        <h3 className="text-base font-semibold text-accent sm:text-lg">{data.component}</h3>
-        {data.description && (
-          <p className="mt-1 text-sm text-text-muted">{data.description}</p>
-        )}
+    <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
+      <div className="border-border border-b px-5 py-4">
+        <h3 className="text-accent text-base font-semibold sm:text-lg">{data.component}</h3>
+        {data.description && <p className="text-text-muted mt-1 text-sm">{data.description}</p>}
       </div>
 
       {/* SVG Pinout Diagram */}
-      <div className="flex justify-center px-5 py-6 overflow-x-auto">
+      <div className="flex justify-center overflow-x-auto px-5 py-6">
         <svg
           viewBox={`0 0 400 ${chipHeight + 40}`}
           className="w-full max-w-[400px]"
@@ -54,7 +52,14 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
             strokeWidth="1.5"
           />
           {/* Notch */}
-          <circle cx="200" cy="20" r="6" fill="#090d12" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+          <circle
+            cx="200"
+            cy="20"
+            r="6"
+            fill="#090d12"
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth="1"
+          />
           {/* Chip label */}
           <text
             x="200"
@@ -73,17 +78,46 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
             const color = PIN_COLORS[pin.type] ?? PIN_COLORS.other;
             const bg = PIN_BG[pin.type] ?? PIN_BG.other;
             return (
-              <g key={`l-${pin.number}`} className="animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
+              <g
+                key={`l-${pin.number}`}
+                className="animate-fade-in-up"
+                style={{ animationDelay: `${i * 40}ms` }}
+              >
                 {/* Pin line */}
-                <line x1="90" y1={y} x2="120" y2={y} stroke={color} strokeWidth="2" strokeLinecap="round" />
+                <line
+                  x1="90"
+                  y1={y}
+                  x2="120"
+                  y2={y}
+                  stroke={color}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
                 {/* Pin dot */}
                 <circle cx="120" cy={y} r="3" fill={color} />
                 {/* Pin number */}
-                <text x="115" y={y + 4} textAnchor="end" fill={color} fontSize="9" fontFamily="monospace">{pin.number}</text>
+                <text
+                  x="115"
+                  y={y + 4}
+                  textAnchor="end"
+                  fill={color}
+                  fontSize="9"
+                  fontFamily="monospace"
+                >
+                  {pin.number}
+                </text>
                 {/* Pin label bg */}
                 <rect x="4" y={y - 10} width={80} height="20" rx="4" fill={bg} />
                 {/* Pin label */}
-                <text x="44" y={y + 4} textAnchor="middle" fill={color} fontSize="9" fontFamily="monospace" fontWeight="600">
+                <text
+                  x="44"
+                  y={y + 4}
+                  textAnchor="middle"
+                  fill={color}
+                  fontSize="9"
+                  fontFamily="monospace"
+                  fontWeight="600"
+                >
                   {pin.label}
                 </text>
               </g>
@@ -96,17 +130,46 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
             const color = PIN_COLORS[pin.type] ?? PIN_COLORS.other;
             const bg = PIN_BG[pin.type] ?? PIN_BG.other;
             return (
-              <g key={`r-${pin.number}`} className="animate-fade-in-up" style={{ animationDelay: `${(i + halfCount) * 40}ms` }}>
+              <g
+                key={`r-${pin.number}`}
+                className="animate-fade-in-up"
+                style={{ animationDelay: `${(i + halfCount) * 40}ms` }}
+              >
                 {/* Pin line */}
-                <line x1="280" y1={y} x2="310" y2={y} stroke={color} strokeWidth="2" strokeLinecap="round" />
+                <line
+                  x1="280"
+                  y1={y}
+                  x2="310"
+                  y2={y}
+                  stroke={color}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
                 {/* Pin dot */}
                 <circle cx="280" cy={y} r="3" fill={color} />
                 {/* Pin number */}
-                <text x="285" y={y + 4} textAnchor="start" fill={color} fontSize="9" fontFamily="monospace">{pin.number}</text>
+                <text
+                  x="285"
+                  y={y + 4}
+                  textAnchor="start"
+                  fill={color}
+                  fontSize="9"
+                  fontFamily="monospace"
+                >
+                  {pin.number}
+                </text>
                 {/* Pin label bg */}
                 <rect x="316" y={y - 10} width={80} height="20" rx="4" fill={bg} />
                 {/* Pin label */}
-                <text x="356" y={y + 4} textAnchor="middle" fill={color} fontSize="9" fontFamily="monospace" fontWeight="600">
+                <text
+                  x="356"
+                  y={y + 4}
+                  textAnchor="middle"
+                  fill={color}
+                  fontSize="9"
+                  fontFamily="monospace"
+                  fontWeight="600"
+                >
                   {pin.label}
                 </text>
               </g>
@@ -116,14 +179,11 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
       </div>
 
       {/* Pin type legend */}
-      <div className="flex flex-wrap gap-3 border-t border-border px-5 py-3">
+      <div className="border-border flex flex-wrap gap-3 border-t px-5 py-3">
         {(['power', 'ground', 'digital', 'analog'] as const).map((type) => (
           <div key={type} className="flex items-center gap-1.5">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: PIN_COLORS[type] }}
-            />
-            <span className="text-[10px] uppercase tracking-wider text-text-muted">{type}</span>
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIN_COLORS[type] }} />
+            <span className="text-text-muted text-[10px] tracking-wider uppercase">{type}</span>
           </div>
         ))}
       </div>

@@ -46,16 +46,26 @@ export function UIRenderer({ response }: UIRendererProps) {
 
   const renderComponent = () => {
     switch (component) {
-      case 'specCard': return <SpecCard data={data as SpecCardData} />;
-      case 'comparisonCard': return <ComparisonCard data={data as ComparisonCardData} />;
-      case 'explanationCard': return <ExplanationCard data={data as ExplanationCardData} />;
-      case 'recommendationCard': return <RecommendationCard data={data as RecommendationCardData} />;
-      case 'troubleshootingCard': return <TroubleshootingCard data={data as TroubleshootingCardData} />;
-      case 'calculationCard': return <CalculationCard data={data as CalculationCardData} />;
-      case 'pinoutCard': return <PinoutCard data={data as PinoutCardData} />;
-      case 'chartCard': return <ChartCard data={data as ChartCardData} />;
-      case 'wiringCard': return <WiringCard data={data as WiringCardData} />;
-      case 'imageBlock': return <ImageBlock data={data as ImageBlockData} />;
+      case 'specCard':
+        return <SpecCard data={data as SpecCardData} />;
+      case 'comparisonCard':
+        return <ComparisonCard data={data as ComparisonCardData} />;
+      case 'explanationCard':
+        return <ExplanationCard data={data as ExplanationCardData} />;
+      case 'recommendationCard':
+        return <RecommendationCard data={data as RecommendationCardData} />;
+      case 'troubleshootingCard':
+        return <TroubleshootingCard data={data as TroubleshootingCardData} />;
+      case 'calculationCard':
+        return <CalculationCard data={data as CalculationCardData} />;
+      case 'pinoutCard':
+        return <PinoutCard data={data as PinoutCardData} />;
+      case 'chartCard':
+        return <ChartCard data={data as ChartCardData} />;
+      case 'wiringCard':
+        return <WiringCard data={data as WiringCardData} />;
+      case 'imageBlock':
+        return <ImageBlock data={data as ImageBlockData} />;
       default:
         // Unknown component — fall back to text if available
         if (response.text) return <TextResponse text={response.text} />;

@@ -22,11 +22,11 @@ export function TextResponse({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <div className="rounded-2xl border border-border bg-surface-1/80 px-5 py-4 backdrop-blur-sm">
-      <p className="text-sm leading-relaxed text-text-primary sm:text-base">
+    <div className="border-border bg-surface-1/80 rounded-2xl border px-5 py-4 backdrop-blur-sm">
+      <p className="text-text-primary text-sm leading-relaxed sm:text-base">
         {displayed}
         {!done && (
-          <span className="ml-0.5 inline-block h-4 w-[2px] bg-accent animate-cursor-blink" />
+          <span className="bg-accent animate-cursor-blink ml-0.5 inline-block h-4 w-[2px]" />
         )}
       </p>
     </div>

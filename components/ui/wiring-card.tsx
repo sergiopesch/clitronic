@@ -23,36 +23,32 @@ function getWireColor(wire?: string): string {
 
 export function WiringCard({ data }: { data: WiringCardData }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm">
-      <div className="border-b border-border px-5 py-4">
-        <div className="text-[11px] tracking-wider text-accent/70 uppercase">Wiring Guide</div>
-        <h3 className="mt-1 text-base font-semibold text-text-primary sm:text-lg">
-          {data.title}
-        </h3>
-        {data.description && (
-          <p className="mt-1.5 text-sm text-text-muted">{data.description}</p>
-        )}
+    <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
+      <div className="border-border border-b px-5 py-4">
+        <div className="text-accent/70 text-[11px] tracking-wider uppercase">Wiring Guide</div>
+        <h3 className="text-text-primary mt-1 text-base font-semibold sm:text-lg">{data.title}</h3>
+        {data.description && <p className="text-text-muted mt-1.5 text-sm">{data.description}</p>}
       </div>
 
       {/* Wiring steps */}
-      <div className="divide-y divide-border">
+      <div className="divide-border divide-y">
         {data.steps.map((step, i) => {
           const wireColor = getWireColor(step.wire);
           return (
             <div
               key={i}
-              className={`flex items-center gap-4 px-5 py-3.5 animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}
+              className={`animate-fade-in-up flex items-center gap-4 px-5 py-3.5 stagger-${Math.min(i + 1, 6)}`}
             >
               {/* Step number */}
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-3 font-mono text-xs font-semibold text-text-secondary">
+              <span className="bg-surface-3 text-text-secondary flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-semibold">
                 {i + 1}
               </span>
 
               {/* Connection visual */}
-              <div className="flex flex-1 items-center gap-2 min-w-0">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 {/* From node */}
-                <div className="shrink-0 rounded-lg border border-border bg-surface-2/60 px-2.5 py-1.5">
-                  <span className="font-mono text-xs font-medium text-text-primary">
+                <div className="border-border bg-surface-2/60 shrink-0 rounded-lg border px-2.5 py-1.5">
+                  <span className="text-text-primary font-mono text-xs font-medium">
                     {step.from}
                   </span>
                 </div>
@@ -76,7 +72,7 @@ export function WiringCard({ data }: { data: WiringCardData }) {
                   {/* Wire label */}
                   {step.wire && (
                     <span
-                      className="absolute left-1/2 -translate-x-1/2 -translate-y-full rounded px-1 text-[9px] font-mono font-medium"
+                      className="absolute left-1/2 -translate-x-1/2 -translate-y-full rounded px-1 font-mono text-[9px] font-medium"
                       style={{ color: wireColor }}
                     >
                       {step.wire}
@@ -85,18 +81,14 @@ export function WiringCard({ data }: { data: WiringCardData }) {
                 </div>
 
                 {/* To node */}
-                <div className="shrink-0 rounded-lg border border-border bg-surface-2/60 px-2.5 py-1.5">
-                  <span className="font-mono text-xs font-medium text-text-primary">
-                    {step.to}
-                  </span>
+                <div className="border-border bg-surface-2/60 shrink-0 rounded-lg border px-2.5 py-1.5">
+                  <span className="text-text-primary font-mono text-xs font-medium">{step.to}</span>
                 </div>
               </div>
 
               {/* Note */}
               {step.note && (
-                <span className="hidden text-xs text-text-muted sm:block">
-                  {step.note}
-                </span>
+                <span className="text-text-muted hidden text-xs sm:block">{step.note}</span>
               )}
             </div>
           );
@@ -105,13 +97,11 @@ export function WiringCard({ data }: { data: WiringCardData }) {
 
       {/* Warnings */}
       {data.warnings && data.warnings.length > 0 && (
-        <div className="border-t border-warning/20 bg-warning/[0.04] px-5 py-3.5">
-          <div className="mb-2 text-[11px] tracking-wider text-warning/70 uppercase">
-            Warnings
-          </div>
+        <div className="border-warning/20 bg-warning/[0.04] border-t px-5 py-3.5">
+          <div className="text-warning/70 mb-2 text-[11px] tracking-wider uppercase">Warnings</div>
           <ul className="space-y-1.5">
             {data.warnings.map((w, i) => (
-              <li key={i} className="flex gap-2 text-xs text-warning/90">
+              <li key={i} className="text-warning/90 flex gap-2 text-xs">
                 <span className="mt-0.5 shrink-0">!</span>
                 <span>{w}</span>
               </li>

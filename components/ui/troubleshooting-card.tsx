@@ -15,19 +15,15 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
     });
   };
 
-  const progress = data.steps.length > 0
-    ? Math.round((checked.size / data.steps.length) * 100)
-    : 0;
+  const progress = data.steps.length > 0 ? Math.round((checked.size / data.steps.length) * 100) : 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm">
-      <div className="border-b border-border px-5 py-4">
+    <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
+      <div className="border-border border-b px-5 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[11px] tracking-wider text-warning uppercase">
-              Troubleshooting
-            </div>
-            <h3 className="mt-1 text-base font-semibold text-text-primary sm:text-lg">
+            <div className="text-warning text-[11px] tracking-wider uppercase">Troubleshooting</div>
+            <h3 className="text-text-primary mt-1 text-base font-semibold sm:text-lg">
               {data.issue}
             </h3>
           </div>
@@ -56,25 +52,25 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
                 transform="rotate(-90 18 18)"
               />
             </svg>
-            <span className="absolute font-mono text-[10px] text-text-muted">
+            <span className="text-text-muted absolute font-mono text-[10px]">
               {checked.size}/{data.steps.length}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="divide-y divide-border">
+      <div className="divide-border divide-y">
         {data.steps.map((step, i) => (
           <button
             key={i}
             onClick={() => toggle(i)}
-            className={`flex w-full items-start gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-surface-2/40 animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}
+            className={`hover:bg-surface-2/40 animate-fade-in-up flex w-full items-start gap-3.5 px-5 py-3.5 text-left transition-colors stagger-${Math.min(i + 1, 6)}`}
           >
             <span
               className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
                 checked.has(i)
                   ? 'border-success bg-success/20 text-success scale-110'
-                  : 'border-border text-transparent hover:border-text-muted'
+                  : 'border-border hover:border-text-muted text-transparent'
               }`}
             >
               <svg
@@ -91,29 +87,23 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
             <div className="flex-1">
               <div
                 className={`text-sm font-medium transition-all ${
-                  checked.has(i)
-                    ? 'text-text-muted line-through'
-                    : 'text-text-primary'
+                  checked.has(i) ? 'text-text-muted line-through' : 'text-text-primary'
                 }`}
               >
                 {step.label}
               </div>
-              <p className="mt-0.5 text-xs leading-relaxed text-text-muted">
-                {step.detail}
-              </p>
+              <p className="text-text-muted mt-0.5 text-xs leading-relaxed">{step.detail}</p>
             </div>
           </button>
         ))}
       </div>
 
       {data.tips.length > 0 && (
-        <div className="border-t border-border bg-accent/[0.03] px-5 py-4">
-          <div className="mb-2.5 text-[11px] tracking-wider text-accent/70 uppercase">
-            Tips
-          </div>
+        <div className="border-border bg-accent/[0.03] border-t px-5 py-4">
+          <div className="text-accent/70 mb-2.5 text-[11px] tracking-wider uppercase">Tips</div>
           <ul className="space-y-1.5">
             {data.tips.map((tip, i) => (
-              <li key={i} className="text-xs leading-relaxed text-text-secondary">
+              <li key={i} className="text-text-secondary text-xs leading-relaxed">
                 {tip}
               </li>
             ))}

@@ -20,10 +20,7 @@ export function AnimateIn({ animation, delay = 0, children }: AnimateInProps) {
         : 'animate-fade-in-up';
 
   return (
-    <div
-      className={className}
-      style={{ animationDelay: `${delay}ms` }}
-    >
+    <div className={className} style={{ animationDelay: `${delay}ms` }}>
       {children}
     </div>
   );
