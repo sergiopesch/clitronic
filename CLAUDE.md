@@ -147,7 +147,7 @@ User asks to see a component → LLM returns imageBlock with imageMode: "photo"
 
 - Model: `gpt-4o-mini`
 - Temperature: 0.4
-- Max tokens: 800
+- Max tokens: 1200
 - Context window: last 10 messages, 2000 chars each
 - Response format: `json_object`
 

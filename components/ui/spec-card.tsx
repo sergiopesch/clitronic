@@ -15,7 +15,7 @@ export function SpecCard({ data }: { data: SpecCardData }) {
       </div>
 
       <div className="bg-border grid gap-px sm:grid-cols-2">
-        {data.keySpecs.map((spec, i) => (
+        {(data.keySpecs ?? []).map((spec, i) => (
           <div
             key={spec.label}
             className={`bg-surface-1/80 animate-fade-in-up px-5 py-3 stagger-${Math.min(i + 1, 6)}`}

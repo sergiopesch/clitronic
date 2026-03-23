@@ -15,7 +15,9 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
     });
   };
 
-  const progress = data.steps.length > 0 ? Math.round((checked.size / data.steps.length) * 100) : 0;
+  const steps = data.steps ?? [];
+  const tips = data.tips ?? [];
+  const progress = steps.length > 0 ? Math.round((checked.size / steps.length) * 100) : 0;
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
@@ -53,14 +55,14 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
               />
             </svg>
             <span className="text-text-muted absolute font-mono text-[10px]">
-              {checked.size}/{data.steps.length}
+              {checked.size}/{steps.length}
             </span>
           </div>
         </div>
       </div>
 
       <div className="divide-border divide-y">
-        {data.steps.map((step, i) => (
+        {steps.map((step, i) => (
           <button
             key={i}
             onClick={() => toggle(i)}
@@ -98,11 +100,11 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
         ))}
       </div>
 
-      {data.tips.length > 0 && (
+      {tips.length > 0 && (
         <div className="border-border bg-accent/[0.03] border-t px-5 py-4">
           <div className="text-accent/70 mb-2.5 text-[11px] tracking-wider uppercase">Tips</div>
           <ul className="space-y-1.5">
-            {data.tips.map((tip, i) => (
+            {tips.map((tip, i) => (
               <li key={i} className="text-text-secondary text-xs leading-relaxed">
                 {tip}
               </li>

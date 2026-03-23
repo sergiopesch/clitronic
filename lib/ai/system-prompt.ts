@@ -81,7 +81,7 @@ searchQuery rules:
 Do NOT use for abstract concepts — use diagram mode instead.
 
 # pinoutCard rules
-Pins in physical order (1,2,3...). First half = left side, second half = right side (reversed). Include ALL pins.
+Include the 10-15 most important/commonly used pins. Pins in physical order (1,2,3...). First half = left side, second half = right side (reversed). For large chips (ESP32, STM32, etc.) focus on power, ground, common GPIO, ADC, SPI, I2C, UART pins. Skip duplicate GND/NC pins.
 
 # comparisonCard rules
 5-8 attributes. Include useCases when helpful. Each useCases entry: {item: "item name", useCase: "best for..."}.

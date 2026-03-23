@@ -16,12 +16,12 @@ const HINTS = [
   'Compare Arduino Uno vs Raspberry Pi Pico',
   'Explain how transistors work',
   'My LED circuit is not blinking — help',
-  'Calculate a voltage divider for 3.3V from 5V',
   'Best components for a beginner starter kit',
   'Show me an ESP32 pinout',
-  'How does PWM work?',
   'Wire a servo to Arduino',
-  'NPN vs PNP transistor',
+  'What are the specs of the ATmega328P?',
+  'Show me what a breadboard looks like',
+  'Compare power consumption: ESP32 vs ESP8266 vs Arduino Nano',
 ];
 
 export function LocalConsole() {

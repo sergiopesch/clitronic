@@ -2,6 +2,7 @@
 
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 import { AnimateIn } from './animations';
+import { CardErrorBoundary } from './card-error-boundary';
 import { SpecCard } from './spec-card';
 import { ComparisonCard } from './comparison-card';
 import { ExplanationCard } from './explanation-card';
@@ -30,19 +31,23 @@ interface UIRendererProps {
   response: StructuredResponse;
 }
 
-export function UIRenderer({ response }: UIRendererProps) {
-  if (response.mode === 'text' && response.text) {
-    return <TextResponse text={response.text} />;
-  }
+const FALLBACK_TEXT = 'Sorry, I had trouble displaying that. Try rephrasing your question.';
 
-  if (!response.ui) {
-    if (response.text) return <TextResponse text={response.text} />;
-    return null;
+export function UIRenderer({ response }: UIRendererProps) {
+  const fallback = <TextResponse text={response.text || FALLBACK_TEXT} />;
+
+  if (response.mode === 'text' || !response.ui) {
+    return fallback;
   }
 
   const animation = response.behavior?.animation;
   const component = response.ui.component;
   const data = response.ui.data;
+
+  // Guard against missing data
+  if (!data || typeof data !== 'object') {
+    return fallback;
+  }
 
   const renderComponent = () => {
     switch (component) {
@@ -67,11 +72,13 @@ export function UIRenderer({ response }: UIRendererProps) {
       case 'imageBlock':
         return <ImageBlock data={data as ImageBlockData} />;
       default:
-        // Unknown component — fall back to text if available
-        if (response.text) return <TextResponse text={response.text} />;
-        return null;
+        return fallback;
     }
   };
 
-  return <AnimateIn animation={animation}>{renderComponent()}</AnimateIn>;
+  return (
+    <CardErrorBoundary fallback={fallback}>
+      <AnimateIn animation={animation}>{renderComponent()}</AnimateIn>
+    </CardErrorBoundary>
+  );
 }

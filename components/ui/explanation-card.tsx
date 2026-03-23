@@ -11,7 +11,7 @@ export function ExplanationCard({ data }: { data: ExplanationCardData }) {
       </div>
 
       <div className="divide-border space-y-0 divide-y">
-        {data.keyPoints.map((point, i) => (
+        {(data.keyPoints ?? []).map((point, i) => (
           <div
             key={i}
             className={`animate-fade-in-up flex gap-3.5 px-5 py-3.5 stagger-${Math.min(i + 1, 6)}`}

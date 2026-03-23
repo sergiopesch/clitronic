@@ -13,7 +13,7 @@ export function CalculationCard({ data }: { data: CalculationCardData }) {
       </div>
 
       <div className="bg-border grid gap-px sm:grid-cols-2">
-        {data.inputs.map((input, i) => (
+        {(data.inputs ?? []).map((input, i) => (
           <div
             key={input.label}
             className={`bg-surface-1/80 animate-fade-in-up px-5 py-3 stagger-${Math.min(i + 1, 6)}`}

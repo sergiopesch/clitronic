@@ -137,8 +137,8 @@ function validateResponse(raw: string): string {
   // Validate UI block if present
   if (parsed.ui && typeof parsed.ui === 'object') {
     const ui = parsed.ui as Record<string, unknown>;
-    if (!VALID_COMPONENTS.has(ui.component as string)) {
-      // Unknown component — fall back to text
+    if (!VALID_COMPONENTS.has(ui.component as string) || !ui.data || typeof ui.data !== 'object') {
+      // Unknown component or missing data — fall back to text
       parsed.mode = 'text';
       parsed.ui = null;
       if (!parsed.text) {
@@ -290,12 +290,18 @@ export async function POST(req: Request) {
         })),
       ],
       temperature: 0.4,
-      max_tokens: 800,
+      max_tokens: 1200,
     });
 
-    const content = completion.choices[0]?.message?.content;
+    const choice = completion.choices[0];
+    const content = choice?.message?.content;
     if (!content) {
       return NextResponse.json({ error: 'No response from model.' }, { status: 502 });
+    }
+
+    // If model hit token limit, JSON may be truncated — log it
+    if (choice.finish_reason === 'length') {
+      console.warn('Model response truncated (finish_reason=length)');
     }
 
     // Validate and sanitize the response

@@ -10,7 +10,8 @@ const BAR_COLORS: Record<string, { bar: string; bg: string }> = {
 };
 
 export function ChartCard({ data }: { data: ChartCardData }) {
-  const maxValue = Math.max(...data.bars.map((b) => b.value), 1);
+  const bars = data.bars ?? [];
+  const maxValue = Math.max(...bars.map((b) => b.value), 1);
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
@@ -20,7 +21,7 @@ export function ChartCard({ data }: { data: ChartCardData }) {
       </div>
 
       <div className="space-y-3 px-5 py-5">
-        {data.bars.map((bar, i) => {
+        {bars.map((bar, i) => {
           const pct = (bar.value / maxValue) * 100;
           const palette = BAR_COLORS[bar.color ?? 'accent'] ?? BAR_COLORS.accent;
 
@@ -59,7 +60,7 @@ export function ChartCard({ data }: { data: ChartCardData }) {
 
       {/* Inline keyframes for bar growth */}
       <style>{`
-        ${data.bars
+        ${bars
           .map(
             (_, i) => `
           @keyframes bar-grow-${i} {
