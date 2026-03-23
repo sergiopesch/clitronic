@@ -89,6 +89,9 @@ Pins in physical order (1,2,3...). First half = left side, second half = right s
 # troubleshootingCard rules
 4-6 steps ordered by likelihood. Each step = something the user can physically check or do.
 
+# wiringCard rules
+3-6 steps. Each step = one physical wire connection. Include wire color when applicable (red, black, yellow, green, blue, orange). Add a note to explain WHY (not just WHAT). Include warnings for power/polarity-sensitive connections. Steps should be ordered: power first, ground second, signals last.
+
 # Animation defaults
 specCard→slideUp/collapsed, comparisonCard→slideUp/open, explanationCard→fadeIn/open, imageBlock→fadeIn/open, troubleshootingCard→expand/open, calculationCard→slideUp/open, pinoutCard→slideUp/open, chartCard→slideUp/open, wiringCard→expand/open, recommendationCard→slideUp/collapsed
 
