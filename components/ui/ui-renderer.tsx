@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 import { AnimateIn } from './animations';
 import { CardErrorBoundary } from './card-error-boundary';
@@ -36,10 +37,15 @@ const FALLBACK_TEXT = 'Sorry, I had trouble displaying that. Try rephrasing your
 export function UIRenderer({ response }: UIRendererProps) {
   const fallback = <TextResponse text={response.text || FALLBACK_TEXT} />;
 
-  // Debug: log the full response so issues are visible in browser console
-  if (typeof window !== 'undefined') {
-    console.log('[clitronic:ui] Response received:', JSON.stringify(response, null, 2));
-  }
+  // Debug: log once per unique response
+  const lastLogRef = useRef<string>('');
+  useEffect(() => {
+    const key = JSON.stringify(response);
+    if (key !== lastLogRef.current) {
+      lastLogRef.current = key;
+      console.log('[clitronic:ui] Response:', JSON.stringify(response, null, 2));
+    }
+  }, [response]);
 
   // If there's a text response and no UI block, show text
   if (response.text && !response.ui) {

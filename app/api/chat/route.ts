@@ -170,6 +170,27 @@ function resolveComponent(name: unknown): string | null {
 }
 
 /**
+ * Last-resort: detect the component from the data shape when name resolution fails.
+ * Checks for signature fields unique to each component.
+ */
+function detectComponentFromData(data: Record<string, unknown>): string | null {
+  if ('imageMode' in data || 'searchQuery' in data || 'diagramType' in data) return 'imageBlock';
+  if ('keySpecs' in data) return 'specCard';
+  if ('attributes' in data && 'items' in data) return 'comparisonCard';
+  if ('keyPoints' in data) return 'explanationCard';
+  if ('bars' in data) return 'chartCard';
+  if ('pins' in data) return 'pinoutCard';
+  if ('issue' in data && 'steps' in data) return 'troubleshootingCard';
+  if ('formula' in data && 'result' in data) return 'calculationCard';
+  if ('steps' in data && Array.isArray(data.steps) && data.steps.length > 0) {
+    const first = data.steps[0] as Record<string, unknown> | undefined;
+    if (first && ('from' in first || 'wire' in first)) return 'wiringCard';
+  }
+  if ('highlights' in data) return 'recommendationCard';
+  return null;
+}
+
+/**
  * Extract card data fields from an object, ignoring structural keys.
  */
 function extractDataFields(
@@ -210,26 +231,20 @@ function validateResponse(raw: string): string {
   }
 
   // ── Shape 3: Completely flat — no ui wrapper at all ──
-  // Detect by checking if intent or component resolves to a valid component name
-  // AND there's no ui block already
   if (!parsed.ui || typeof parsed.ui !== 'object') {
-    const componentFromIntent = resolveComponent(parsed.intent);
-    const componentFromField = resolveComponent(parsed.component);
-    const component = componentFromIntent ?? componentFromField;
+    const ignore = new Set(['intent', 'mode', 'text', 'behavior', 'component', 'type', 'ui']);
+    const data = extractDataFields(parsed, ignore);
 
-    if (component) {
-      // Reconstruct the full structure from flat fields
-      const ignore = new Set(['intent', 'mode', 'text', 'behavior', 'component', 'type']);
-      const data = extractDataFields(parsed, ignore);
+    // Try resolving component name first, then detect from data shape
+    const componentFromName = resolveComponent(parsed.intent) ?? resolveComponent(parsed.component);
+    const component = componentFromName ?? (data ? detectComponentFromData(data) : null);
 
-      if (data) {
-        console.log(`[clitronic] Reconstructed flat response → component "${component}"`);
-        parsed.ui = { type: 'card', component, data };
-        parsed.mode = 'ui';
-        // Clean up root-level data fields
-        for (const key of Object.keys(data)) {
-          delete parsed[key];
-        }
+    if (component && data) {
+      console.log(`[clitronic] Reconstructed flat response → component "${component}"`);
+      parsed.ui = { type: 'card', component, data };
+      parsed.mode = 'ui';
+      for (const key of Object.keys(data)) {
+        delete parsed[key];
       }
     }
   }
@@ -248,12 +263,33 @@ function validateResponse(raw: string): string {
     }
 
     if (!resolved) {
-      // Unknown component — fall back to text
-      console.warn(`[clitronic] Unknown component: "${String(ui.component)}"`);
-      parsed.mode = 'text';
-      parsed.ui = null;
-      if (!parsed.text) {
-        parsed.text = 'Sorry, I had trouble rendering that. Could you rephrase?';
+      // Try detecting component from data shape
+      const dataObj = (ui.data && typeof ui.data === 'object' ? ui.data : ui) as Record<
+        string,
+        unknown
+      >;
+      const detected = detectComponentFromData(dataObj);
+      if (detected) {
+        console.log(
+          `[clitronic] Detected component from data shape: "${String(ui.component)}" → "${detected}"`
+        );
+        ui.component = detected;
+        // If data was at ui level, rescue it
+        if (!ui.data || typeof ui.data !== 'object') {
+          const ignore = new Set(['type', 'component', 'data']);
+          const data = extractDataFields(ui, ignore);
+          if (data) {
+            ui.data = data;
+            for (const key of Object.keys(data)) delete ui[key];
+          }
+        }
+      } else {
+        console.warn(`[clitronic] Unknown component: "${String(ui.component)}"`);
+        parsed.mode = 'text';
+        parsed.ui = null;
+        if (!parsed.text) {
+          parsed.text = 'Sorry, I had trouble rendering that. Could you rephrase?';
+        }
       }
     } else if (!ui.data || typeof ui.data !== 'object') {
       // Shape 2: data fields at ui level — rescue them
