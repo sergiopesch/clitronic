@@ -408,11 +408,23 @@ export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const rateCheck = checkRateLimit(ip);
   if (rateCheck.limited) {
-    const message =
-      rateCheck.reason === 'daily'
-        ? "You've reached the daily limit. Come back tomorrow to keep exploring!"
-        : 'Too many requests. Please wait a moment.';
-    return NextResponse.json({ error: message }, { status: 429 });
+    if (rateCheck.reason === 'daily') {
+      // Return a structured response so the UI renders it nicely
+      const dailyLimitResponse = JSON.stringify({
+        intent: 'rate_limit',
+        mode: 'text',
+        ui: null,
+        text: "Thanks for testing Clitronic! You've hit the daily limit, but you can come back tomorrow for more. If you're interested in collaborating, reach out on X @sergiopesch — would love to hear from you. Cheers!",
+        behavior: null,
+      });
+      return new Response(dailyLimitResponse, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a moment.' },
+      { status: 429 }
+    );
   }
 
   let body: { messages?: unknown };

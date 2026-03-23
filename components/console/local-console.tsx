@@ -68,6 +68,32 @@ function summarizeAssistantResponse(structured: StructuredResponse): string {
   return parts.join(' — ');
 }
 
+const DAILY_LIMIT = 20;
+const RATE_LIMIT_KEY = 'clitronic_daily';
+
+function getDailyUsage(): { count: number; date: string } {
+  try {
+    const raw = localStorage.getItem(RATE_LIMIT_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { count: number; date: string };
+      if (parsed.date === new Date().toDateString()) return parsed;
+    }
+  } catch {}
+  return { count: 0, date: new Date().toDateString() };
+}
+
+function incrementDailyUsage(): number {
+  const usage = getDailyUsage();
+  usage.count++;
+  try {
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(usage));
+  } catch {}
+  return usage.count;
+}
+
+const DAILY_LIMIT_MESSAGE =
+  "Thanks for testing Clitronic! You've hit the daily limit, but you can come back tomorrow for more. If you're interested in collaborating, reach out on X @sergiopesch — would love to hear from you. Cheers!";
+
 export function LocalConsole() {
   const [history, setHistory] = useState<ConversationEntry[]>([]);
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
@@ -93,6 +119,22 @@ export function LocalConsole() {
     async (value?: string) => {
       const text = (value ?? prompt).trim();
       if (!text || isLoading) return;
+
+      // Client-side daily limit check (backup for serverless cold starts)
+      const usage = getDailyUsage();
+      if (usage.count >= DAILY_LIMIT) {
+        setPrompt('');
+        setCurrentQuery(text);
+        setCurrentResponse({
+          intent: 'rate_limit',
+          mode: 'text',
+          ui: null,
+          text: DAILY_LIMIT_MESSAGE,
+          behavior: null,
+        } as StructuredResponse);
+        setResponseKey((k) => k + 1);
+        return;
+      }
 
       setPrompt('');
       setError(null);
@@ -130,6 +172,7 @@ export function LocalConsole() {
           console.log('[clitronic] API response:', JSON.stringify(structured, null, 2));
         }
 
+        incrementDailyUsage();
         setCurrentResponse(structured);
         setResponseKey((k) => k + 1);
         setTurns((prev) => [...prev, { query: text, response: structured }]);
