@@ -12,8 +12,8 @@ interface ImageResult {
 
 /**
  * Multi-provider image search: Brave (primary) → Wikimedia (fallback).
- * Brave delivers better product images; Wikimedia is free and always available.
- * Returns the best match or null.
+ * Uses the query as-is — the LLM is responsible for providing a
+ * precise, descriptive search term. No generic suffixes.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -42,8 +42,8 @@ export async function GET(req: Request) {
 async function searchBrave(query: string, apiKey: string): Promise<ImageResult | null> {
   try {
     const url = new URL('https://api.search.brave.com/res/v1/images/search');
-    url.searchParams.set('q', `${query} electronics component`);
-    url.searchParams.set('count', '5');
+    url.searchParams.set('q', query);
+    url.searchParams.set('count', '8');
     url.searchParams.set('safesearch', 'strict');
 
     const res = await fetch(url.toString(), {
@@ -59,27 +59,45 @@ async function searchBrave(query: string, apiKey: string): Promise<ImageResult |
 
     const data = (await res.json()) as BraveImageResponse;
     const results = data.results;
-
     if (!results?.length) return null;
 
-    // Pick the best result — prefer ones with thumbnails and reasonable dimensions
+    // Score results by relevance to the query
+    const queryWords = query.toLowerCase().split(/\s+/);
+    let bestResult: (typeof results)[0] | null = null;
+    let bestScore = -1;
+
     for (const img of results) {
       const imageUrl = img.thumbnail?.src ?? img.properties?.url;
       if (!imageUrl) continue;
-
-      // Skip tiny images and SVGs
       if (imageUrl.endsWith('.svg')) continue;
-      if (img.properties?.width && img.properties.width < 100) continue;
 
-      return {
-        url: img.properties?.url ?? imageUrl,
-        thumbnail: img.thumbnail?.src,
-        attribution: img.source ?? 'Brave Search',
-        source: 'brave',
-      };
+      const w = img.properties?.width ?? 0;
+      const h = img.properties?.height ?? 0;
+      if (w > 0 && w < 150) continue;
+
+      // Score: how many query words appear in the title
+      const title = (img.title ?? '').toLowerCase();
+      let score = queryWords.filter((word) => title.includes(word)).length;
+
+      // Bonus for reasonable image dimensions (not tiny, not banners)
+      if (w >= 300 && h >= 200) score += 1;
+      const ratio = w && h ? w / h : 1;
+      if (ratio > 0.5 && ratio < 2.5) score += 1; // Not too wide/tall
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestResult = img;
+      }
     }
 
-    return null;
+    if (!bestResult) return null;
+
+    return {
+      url: bestResult.properties?.url ?? bestResult.thumbnail?.src ?? '',
+      thumbnail: bestResult.thumbnail?.src,
+      attribution: bestResult.source ?? 'Brave Search',
+      source: 'brave',
+    };
   } catch {
     return null;
   }
@@ -93,10 +111,10 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
     url.searchParams.set('action', 'query');
     url.searchParams.set('generator', 'search');
     url.searchParams.set('gsrnamespace', '6');
-    url.searchParams.set('gsrsearch', `${query} electronics`);
-    url.searchParams.set('gsrlimit', '5');
+    url.searchParams.set('gsrsearch', query);
+    url.searchParams.set('gsrlimit', '8');
     url.searchParams.set('prop', 'imageinfo');
-    url.searchParams.set('iiprop', 'url|extmetadata');
+    url.searchParams.set('iiprop', 'url|extmetadata|size');
     url.searchParams.set('iiurlwidth', '600');
     url.searchParams.set('format', 'json');
     url.searchParams.set('origin', '*');
@@ -109,8 +127,12 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
 
     const data = (await res.json()) as WikimediaResponse;
     const pages = data.query?.pages;
-
     if (!pages) return null;
+
+    // Score results by relevance
+    const queryWords = query.toLowerCase().split(/\s+/);
+    let bestPage: WikimediaPage | null = null;
+    let bestScore = -1;
 
     for (const page of Object.values(pages)) {
       const info = page.imageinfo?.[0];
@@ -118,20 +140,34 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
 
       const imageUrl = info.thumburl ?? info.url;
       if (!imageUrl) continue;
-
-      // Skip SVGs and tiny files
       if (imageUrl.endsWith('.svg') || imageUrl.endsWith('.SVG')) continue;
 
-      return {
-        url: imageUrl,
-        attribution: info.extmetadata?.Artist?.value
-          ? stripHtml(info.extmetadata.Artist.value)
-          : 'Wikimedia Commons',
-        source: 'wikimedia',
-      };
+      // Skip tiny images
+      if (info.width && info.width < 150) continue;
+
+      // Score based on title match
+      const title = (page.title ?? '').toLowerCase().replace('file:', '');
+      let score = queryWords.filter((word) => title.includes(word)).length;
+
+      // Prefer photos over diagrams/icons (larger files tend to be photos)
+      if (info.width && info.width >= 400) score += 1;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestPage = page;
+      }
     }
 
-    return null;
+    if (!bestPage) return null;
+
+    const info = bestPage.imageinfo![0];
+    return {
+      url: info.thumburl ?? info.url!,
+      attribution: info.extmetadata?.Artist?.value
+        ? stripHtml(info.extmetadata.Artist.value)
+        : 'Wikimedia Commons',
+      source: 'wikimedia',
+    };
   } catch {
     return null;
   }
@@ -145,6 +181,7 @@ function stripHtml(html: string): string {
 
 interface BraveImageResponse {
   results?: {
+    title?: string;
     thumbnail?: { src: string };
     properties?: { url?: string; width?: number; height?: number };
     source?: string;
@@ -158,9 +195,11 @@ interface WikimediaResponse {
 }
 
 interface WikimediaPage {
+  title?: string;
   imageinfo?: {
     url?: string;
     thumburl?: string;
+    width?: number;
     extmetadata?: {
       Artist?: { value: string };
     };

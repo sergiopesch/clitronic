@@ -111,10 +111,10 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
 
   if (state === 'loading') {
     return (
-      <div className="bg-surface-2/60 relative h-48 w-full max-w-[400px] overflow-hidden rounded-lg">
+      <div className="bg-surface-2/60 relative aspect-[4/3] w-full overflow-hidden rounded-xl">
         <div className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent" />
         <div className="flex h-full items-center justify-center">
-          <div className="text-text-muted text-xs">Loading image...</div>
+          <div className="text-text-muted text-xs">Searching for image...</div>
         </div>
       </div>
     );
@@ -122,7 +122,7 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
 
   if (state === 'error' || !imageUrl) {
     return (
-      <div className="border-border bg-surface-2/40 flex h-32 w-full max-w-[400px] items-center justify-center rounded-lg border">
+      <div className="border-border bg-surface-2/40 flex aspect-[4/3] w-full items-center justify-center rounded-xl border">
         <div className="text-text-muted text-center text-sm">
           <span className="block text-lg opacity-40">{'\ud83d\udcf7'}</span>
           No image found
@@ -132,12 +132,12 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
   }
 
   return (
-    <div className="relative w-full max-w-[400px]">
+    <div className="relative w-full">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={imageUrl}
         alt={caption}
-        className="w-full rounded-lg object-contain opacity-0 transition-opacity duration-500"
+        className="max-h-[400px] w-full rounded-xl object-contain opacity-0 transition-opacity duration-500"
         onLoad={(e) => {
           (e.target as HTMLImageElement).classList.replace('opacity-0', 'opacity-100');
         }}

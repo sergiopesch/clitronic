@@ -45,7 +45,13 @@ Use for abstract electronics concepts (circuits, waveforms, layouts).
 diagramType options: "breadboard" (labels: {power?, ground?}), "voltage-divider" (labels: {vin, vout, r1, r2}), "led-circuit" (labels: {voltage, resistor}), "pull-up"/"pull-down" (labels: {type, resistor}), "pwm" (labels: {duty}), "capacitor-charge" (labels: {voltage})
 
 ## imageMode: "photo" — real product/component images
-Use when the user asks to SEE a real component, board, module, or product. Set searchQuery to a specific, descriptive search term (e.g. "Arduino Uno R3 board", "ESP32-CAM module", "OV7670 camera module"). Do NOT use for abstract concepts — use diagram mode instead.
+Use when the user asks to SEE a real component, board, module, or product.
+searchQuery rules:
+- Use the EXACT common product name. "breadboard" not "breadboard electronics starter kit"
+- Be specific but not verbose. "Arduino Uno R3" not "Arduino Uno R3 microcontroller development board"
+- For generic items use the single canonical name: "soldering iron", "breadboard", "multimeter"
+- For specific products include model: "ESP32-CAM", "Raspberry Pi Pico W", "ATmega328P"
+Do NOT use for abstract concepts — use diagram mode instead.
 
 # pinoutCard rules
 Pins in physical order (1,2,3...). First half = left side, second half = right side (reversed). Include ALL pins.
