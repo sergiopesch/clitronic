@@ -11,6 +11,11 @@ type ConversationEntry = {
   structured?: StructuredResponse;
 };
 
+type ConversationTurn = {
+  query: string;
+  response: StructuredResponse;
+};
+
 const HINTS = [
   'What resistor for a red LED on 5V?',
   'Compare Arduino Uno vs Raspberry Pi Pico',
@@ -26,15 +31,24 @@ const HINTS = [
 
 export function LocalConsole() {
   const [history, setHistory] = useState<ConversationEntry[]>([]);
+  const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const [currentResponse, setCurrentResponse] = useState<StructuredResponse | null>(null);
   const [currentQuery, setCurrentQuery] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [responseKey, setResponseKey] = useState(0);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const hasResponse = currentResponse !== null;
+  const isViewingHistory = viewingIndex !== null;
+
+  // What's actually displayed — historical or current
+  const displayedQuery = isViewingHistory ? turns[viewingIndex]?.query : currentQuery;
+  const displayedResponse = isViewingHistory
+    ? (turns[viewingIndex]?.response ?? null)
+    : currentResponse;
 
   const submit = useCallback(
     async (value?: string) => {
@@ -45,9 +59,9 @@ export function LocalConsole() {
       setError(null);
       setCurrentQuery(text);
       setCurrentResponse(null);
+      setViewingIndex(null);
       setIsLoading(true);
 
-      // Build conversation for context
       const messages = [
         ...history.map((e) => ({
           role: e.role,
@@ -77,6 +91,7 @@ export function LocalConsole() {
 
         setCurrentResponse(structured);
         setResponseKey((k) => k + 1);
+        setTurns((prev) => [...prev, { query: text, response: structured }]);
         setHistory((prev) => [
           ...prev,
           { role: 'user', content: text },
@@ -93,14 +108,19 @@ export function LocalConsole() {
 
   const reset = () => {
     setHistory([]);
+    setTurns([]);
     setCurrentResponse(null);
     setCurrentQuery(null);
     setError(null);
     setPrompt('');
+    setViewingIndex(null);
     inputRef.current?.focus();
   };
 
-  // Auto-focus input
+  const goToLatest = () => {
+    setViewingIndex(null);
+  };
+
   useEffect(() => {
     if (!isLoading) inputRef.current?.focus();
   }, [isLoading]);
@@ -112,7 +132,22 @@ export function LocalConsole() {
         <div className="bg-accent/[0.03] absolute top-1/3 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
       </div>
 
-      {/* Top bar — minimal, only visible when there's a response */}
+      {/* Timeline — left edge */}
+      {turns.length > 1 && !isLoading && (
+        <Timeline
+          turns={turns}
+          activeIndex={viewingIndex ?? turns.length - 1}
+          onSelect={(i) => {
+            if (i === turns.length - 1) {
+              goToLatest();
+            } else {
+              setViewingIndex(i);
+            }
+          }}
+        />
+      )}
+
+      {/* Top bar */}
       <header
         className={`relative z-10 flex items-center justify-between px-4 py-3 transition-all duration-500 sm:px-6 ${
           hasResponse || isLoading
@@ -123,26 +158,35 @@ export function LocalConsole() {
         <button type="button" onClick={reset} className="transition hover:opacity-80">
           <Logo scale={0.8} />
         </button>
-        <button
-          type="button"
-          onClick={reset}
-          className="border-border text-text-muted hover:border-border-accent hover:text-text-primary rounded-full border px-3 py-1 text-xs transition"
-        >
-          new question
-        </button>
+        <div className="flex items-center gap-2">
+          {isViewingHistory && (
+            <button
+              type="button"
+              onClick={goToLatest}
+              className="border-accent/30 text-accent hover:bg-accent/10 rounded-full border px-3 py-1 text-xs transition"
+            >
+              back to latest
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={reset}
+            className="border-border text-text-muted hover:border-border-accent hover:text-text-primary rounded-full border px-3 py-1 text-xs transition"
+          >
+            new question
+          </button>
+        </div>
       </header>
 
       {/* Main area */}
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 sm:px-6">
-        {/* Idle state — centered input with starters */}
+        {/* Idle state */}
         {!hasResponse && !isLoading && !error && (
           <div className="animate-fade-in-up flex w-full max-w-2xl flex-col items-center">
             <Logo scale={1.6} />
             <p className="text-text-muted mt-2 text-center text-sm">
               Your electronics companion. Ask anything.
             </p>
-
-            {/* Input */}
             <div className="mt-8 w-full">
               <InputBar
                 ref={inputRef}
@@ -153,8 +197,6 @@ export function LocalConsole() {
                 size="large"
               />
             </div>
-
-            {/* Floating hint pills — ambient, cycling */}
             <FloatingHints hints={HINTS} onSelect={(h) => void submit(h)} />
           </div>
         )}
@@ -185,25 +227,30 @@ export function LocalConsole() {
           </div>
         )}
 
-        {/* Response — the star of the show */}
-        {hasResponse && !isLoading && (
+        {/* Response */}
+        {(hasResponse || isViewingHistory) && !isLoading && displayedResponse && (
           <div className="flex w-full max-w-2xl flex-col items-center gap-3 py-2">
-            {/* Query echo */}
-            {currentQuery && (
+            {displayedQuery && (
               <div className="text-text-muted animate-fade-in-up mb-2 text-center text-sm">
-                {currentQuery}
+                {isViewingHistory && (
+                  <span className="text-accent/50 mr-1.5 font-mono text-[10px]">
+                    {(viewingIndex ?? 0) + 1}/{turns.length}
+                  </span>
+                )}
+                {displayedQuery}
               </div>
             )}
-
-            {/* The card/response */}
-            <div key={responseKey} className="animate-card-enter w-full">
-              <UIRenderer response={currentResponse} />
+            <div
+              key={isViewingHistory ? `hist-${viewingIndex}` : responseKey}
+              className="animate-card-enter w-full"
+            >
+              <UIRenderer response={displayedResponse} />
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom input — visible when response is showing */}
+      {/* Bottom input */}
       {(hasResponse || error) && !isLoading && (
         <div className="border-border/50 bg-surface-0/80 animate-fade-in-up relative z-10 border-t px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="mx-auto max-w-2xl">
@@ -219,6 +266,66 @@ export function LocalConsole() {
         </div>
       )}
     </main>
+  );
+}
+
+/* ── Timeline ── */
+
+interface TimelineProps {
+  turns: ConversationTurn[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
+}
+
+function Timeline({ turns, activeIndex, onSelect }: TimelineProps) {
+  return (
+    <div className="animate-fade-in-up fixed top-1/2 left-3 z-20 hidden -translate-y-1/2 sm:left-4 sm:flex md:left-5">
+      <div className="relative flex flex-col items-center">
+        {/* The line */}
+        <div
+          className="bg-border absolute w-px"
+          style={{
+            top: 4,
+            bottom: 4,
+            left: '50%',
+            transform: 'translateX(-50%)',
+          }}
+        />
+
+        {/* Dots */}
+        {turns.map((turn, i) => {
+          const isActive = i === activeIndex;
+          const isLatest = i === turns.length - 1;
+          return (
+            <div key={i} className="group relative flex items-center" style={{ padding: '6px 0' }}>
+              <button
+                type="button"
+                onClick={() => onSelect(i)}
+                className="relative z-10 transition-all duration-200"
+                aria-label={`Go to: ${turn.query}`}
+              >
+                <div
+                  className={`rounded-full transition-all duration-200 ${
+                    isActive
+                      ? 'bg-accent h-2.5 w-2.5 shadow-[0_0_8px_rgba(34,211,238,0.4)]'
+                      : isLatest
+                        ? 'bg-accent/40 hover:bg-accent/70 h-2 w-2'
+                        : 'bg-text-muted/30 hover:bg-text-muted/60 h-1.5 w-1.5'
+                  }`}
+                />
+              </button>
+
+              {/* Tooltip — appears on hover */}
+              <div className="pointer-events-none absolute left-6 flex items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                <div className="border-border bg-surface-2/95 text-text-secondary max-w-[200px] truncate rounded-lg border px-2.5 py-1 text-[11px] whitespace-nowrap backdrop-blur-md">
+                  {turn.query}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -281,7 +388,6 @@ const InputBar = ({ ref, ...props }: InputBarProps & { ref: React.Ref<HTMLTextAr
 /* ── Floating Hints ── */
 
 function FloatingHints({ hints, onSelect }: { hints: string[]; onSelect: (h: string) => void }) {
-  // Use a ref to track the previous index and avoid same hint repeating
   const prevRef = useRef(-1);
   const [hint, setHint] = useState<{ text: string; key: number } | null>(null);
 
@@ -297,7 +403,6 @@ function FloatingHints({ hints, onSelect }: { hints: string[]; onSelect: (h: str
       setHint({ text: hints[next], key });
     };
 
-    // Initial pick after mount
     const init = setTimeout(pick, 50);
     const timer = setInterval(pick, 4000);
     return () => {
@@ -327,9 +432,7 @@ function ThinkingIndicator() {
   return (
     <div className="flex flex-col items-center gap-4">
       <div className="relative flex items-center justify-center">
-        {/* Outer glow ring */}
         <div className="animate-thinking-glow absolute h-20 w-20 rounded-full" />
-        {/* Inner pulsing dot */}
         <div className="border-accent/20 bg-surface-1 relative flex h-12 w-12 items-center justify-center rounded-full border">
           <div className="flex gap-1">
             <span
