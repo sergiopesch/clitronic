@@ -161,8 +161,39 @@ const COMPONENT_ALIASES: Record<string, string> = {
 const VALID_MODES = new Set(['ui', 'text']);
 
 /**
+ * Resolve a component name from raw string (exact match, alias, or null).
+ */
+function resolveComponent(name: unknown): string | null {
+  if (typeof name !== 'string' || !name) return null;
+  if (VALID_COMPONENTS.has(name)) return name;
+  return COMPONENT_ALIASES[name] ?? COMPONENT_ALIASES[name.toLowerCase()] ?? null;
+}
+
+/**
+ * Extract card data fields from an object, ignoring structural keys.
+ */
+function extractDataFields(
+  obj: Record<string, unknown>,
+  ignore: Set<string>
+): Record<string, unknown> | null {
+  const extracted: Record<string, unknown> = {};
+  let hasFields = false;
+  for (const [key, value] of Object.entries(obj)) {
+    if (!ignore.has(key)) {
+      extracted[key] = value;
+      hasFields = true;
+    }
+  }
+  return hasFields ? extracted : null;
+}
+
+/**
  * Validate and sanitize the model's JSON response.
- * Ensures it matches our schema and doesn't leak system info.
+ *
+ * Handles 3 LLM response shapes:
+ *   1. Correct:  { ui: { component, data: {...} } }
+ *   2. Flat-ui:  { ui: { component, title, keySpecs, ... } }  (data at ui level)
+ *   3. Flat-root: { intent: "specCard", title, keySpecs, ... } (no ui wrapper at all)
  */
 function validateResponse(raw: string): string {
   let parsed: Record<string, unknown>;
@@ -178,54 +209,64 @@ function validateResponse(raw: string): string {
     });
   }
 
-  // Ensure mode is valid
-  if (!VALID_MODES.has(parsed.mode as string)) {
-    parsed.mode = parsed.ui ? 'ui' : 'text';
+  // ── Shape 3: Completely flat — no ui wrapper at all ──
+  // Detect by checking if intent or component resolves to a valid component name
+  // AND there's no ui block already
+  if (!parsed.ui || typeof parsed.ui !== 'object') {
+    const componentFromIntent = resolveComponent(parsed.intent);
+    const componentFromField = resolveComponent(parsed.component);
+    const component = componentFromIntent ?? componentFromField;
+
+    if (component) {
+      // Reconstruct the full structure from flat fields
+      const ignore = new Set(['intent', 'mode', 'text', 'behavior', 'component', 'type']);
+      const data = extractDataFields(parsed, ignore);
+
+      if (data) {
+        console.log(`[clitronic] Reconstructed flat response → component "${component}"`);
+        parsed.ui = { type: 'card', component, data };
+        parsed.mode = 'ui';
+        // Clean up root-level data fields
+        for (const key of Object.keys(data)) {
+          delete parsed[key];
+        }
+      }
+    }
   }
 
-  // Validate UI block if present
+  // ── Shape 1 & 2: ui block exists ──
   if (parsed.ui && typeof parsed.ui === 'object') {
     const ui = parsed.ui as Record<string, unknown>;
 
-    // Normalize component name — fix common LLM mistakes
-    const rawComponent = (ui.component as string) ?? '';
-    const alias = COMPONENT_ALIASES[rawComponent] ?? COMPONENT_ALIASES[rawComponent.toLowerCase()];
-    if (alias) {
-      console.log(`[clitronic] Normalized component "${rawComponent}" → "${alias}"`);
-      ui.component = alias;
+    // Normalize component name
+    const resolved = resolveComponent(ui.component);
+    if (resolved) {
+      if (resolved !== ui.component) {
+        console.log(`[clitronic] Normalized component "${String(ui.component)}" → "${resolved}"`);
+      }
+      ui.component = resolved;
     }
 
-    if (!VALID_COMPONENTS.has(ui.component as string)) {
+    if (!resolved) {
       // Unknown component — fall back to text
+      console.warn(`[clitronic] Unknown component: "${String(ui.component)}"`);
       parsed.mode = 'text';
       parsed.ui = null;
       if (!parsed.text) {
         parsed.text = 'Sorry, I had trouble rendering that. Could you rephrase?';
       }
     } else if (!ui.data || typeof ui.data !== 'object') {
-      // LLM likely flattened the structure — rescue data fields from ui level
-      const reserved = new Set(['type', 'component', 'data']);
-      const extracted: Record<string, unknown> = {};
-      let hasFields = false;
-      for (const [key, value] of Object.entries(ui)) {
-        if (!reserved.has(key)) {
-          extracted[key] = value;
-          hasFields = true;
-        }
-      }
-      if (hasFields) {
-        // Reconstruct the correct shape
-        ui.data = extracted;
-        // Clean up flattened fields from ui level
-        for (const key of Object.keys(extracted)) {
+      // Shape 2: data fields at ui level — rescue them
+      const ignore = new Set(['type', 'component', 'data']);
+      const data = extractDataFields(ui, ignore);
+
+      if (data) {
+        ui.data = data;
+        for (const key of Object.keys(data)) {
           delete ui[key];
         }
-        console.log(
-          '[clitronic] Rescued flattened ui.data:',
-          JSON.stringify(extracted).substring(0, 300)
-        );
+        console.log('[clitronic] Rescued flattened ui.data');
       } else {
-        // Truly empty — fall back to text
         parsed.mode = 'text';
         parsed.ui = null;
         if (!parsed.text) {
@@ -233,6 +274,11 @@ function validateResponse(raw: string): string {
         }
       }
     }
+  }
+
+  // Ensure mode is valid
+  if (!VALID_MODES.has(parsed.mode as string)) {
+    parsed.mode = parsed.ui ? 'ui' : 'text';
   }
 
   // Strip any system prompt leakage from text fields
