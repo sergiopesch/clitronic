@@ -1,92 +1,105 @@
-# UI Generation Rules for Clitronic
+# UI Generation Rules
 
-## Core Principle
+## The Pipeline
 
-Every AI response must be renderable as a structured UI component. Never return raw unstructured text when a visual component would serve better.
+```
+User query → Intent detection → Mode decision → Structured JSON → UI Renderer → Animated Component
+```
 
-## Intent Detection → UI Type Mapping
+## Intent → Component Mapping
 
-### Component Questions → Card UI
+| Intent | Component | Animation | Default State |
+|--------|-----------|-----------|---------------|
+| `spec_card` | `specCard` | slideUp | collapsed |
+| `comparison_card` | `comparisonCard` | slideUp | open |
+| `explanation_card` | `explanationCard` | fadeIn | open |
+| `hybrid_card` | `explanationCard` | fadeIn | open |
+| `recommendation_card` | `recommendationCard` | slideUp | collapsed |
+| `troubleshooting_card` | `troubleshootingCard` | expand | open |
+| `calculation_card` | `calculationCard` | slideUp | open |
+| `quick_answer` | (text mode) | none | n/a |
 
-When the user asks about a specific component (resistor, LED, capacitor, etc.):
+## Mode Decision (CRITICAL)
 
-- Render as a **component card** with specs, pinout, and tips
-- Include expandable datasheet section
-- Behavior: `expandable` with smooth height animation
-- Transition: fade-in with 200ms ease-out
+Ask these questions in order:
 
-### Calculations → Calculation Card UI
+1. Is the response multi-attribute? → UI
+2. Is it comparative? → UI
+3. Is it structured data? → UI
+4. Is it visual by nature? → UI
+5. Is it one sentence or conversational? → Text
+6. Uncertain? → **UI** (default bias)
 
-When the user asks to calculate something (resistor value, Ohm's law, power):
+## Component Data Shapes
 
-- Render as a **calculation card** with formula, inputs, and result
-- Highlight the recommended/standard value
-- Show the formula visually, not just as text
-- Behavior: `animated` — values should count up to their final number
-- Transition: slide-up with staggered delays per field (50ms between each)
+### specCard
+```json
+{
+  "title": "string",
+  "subtitle": "string | null",
+  "keySpecs": [{ "label": "string", "value": "string" }],
+  "optionalDetails": [{ "label": "string", "value": "string" }]
+}
+```
 
-### Circuit Building → Diagram + Parts List UI
+### comparisonCard
+```json
+{
+  "items": ["string", "string"],
+  "attributes": [{ "name": "string", "values": ["string", "string"] }],
+  "keyDifferences": ["string"]
+}
+```
 
-When the user wants to build or wire something:
+### explanationCard
+```json
+{
+  "title": "string",
+  "summary": "string",
+  "keyPoints": ["string"]
+}
+```
 
-- Render a **parts list card** (structured, with quantities)
-- Render a **wiring diagram** (SVG-based, color-coded)
-- Render **step-by-step wiring instructions** as numbered cards
-- Behavior: `interactive` — steps highlight corresponding diagram elements
-- Transition: cards cascade in with 100ms stagger
+### recommendationCard
+```json
+{
+  "items": [{ "name": "string", "reason": "string" }],
+  "highlights": ["string"]
+}
+```
 
-### Comparisons → Chart UI
+### troubleshootingCard
+```json
+{
+  "issue": "string",
+  "steps": [{ "label": "string", "detail": "string" }],
+  "tips": ["string"]
+}
+```
 
-When the user compares components, values, or approaches:
-
-- Render as a **comparison chart** or **data table**
-- Use bar charts for numeric comparisons
-- Use side-by-side cards for feature comparisons
-- Behavior: `static` with hover highlights
-- Transition: bars animate from 0 to value over 400ms
-
-### Debugging → Checklist UI
-
-When the user reports a problem or asks for troubleshooting:
-
-- Render as an **interactive checklist**
-- Group by likelihood (most common causes first)
-- Include a "quick test" action button
-- Behavior: `interactive` — checkboxes track progress
-- Transition: slide-in from left, 80ms stagger
-
-### General Questions → Text Card UI
-
-When no specific UI type fits:
-
-- Still wrap in a **text card** with proper heading and structure
-- Use markdown rendering inside the card
-- Never return a bare string
-- Behavior: `static`
-- Transition: fade-in 150ms
+### calculationCard
+```json
+{
+  "title": "string",
+  "formula": "string",
+  "inputs": [{ "label": "string", "value": "string" }],
+  "result": { "label": "string", "value": "string", "note": "string | null" }
+}
+```
 
 ## Animation Standards
 
-All animations use CSS transitions or Tailwind's `transition-*` utilities:
+- All UI responses animate in. Text responses do not.
+- Duration: 200ms
+- Easing: ease-out
+- Stagger between siblings: 80ms
+- Enter pattern: opacity 0→1, translateY 8px→0
+- Respect `prefers-reduced-motion`
 
-- **Default duration**: 200ms
-- **Default easing**: `ease-out`
-- **Stagger pattern**: 50-100ms between sibling elements
-- **Enter animation**: `opacity-0 → opacity-100` + `translate-y-2 → translate-y-0`
-- **No animation on user messages** — only AI responses animate in
-- **Reduce motion**: respect `prefers-reduced-motion` media query
+## Color Usage in Cards
 
-## Color Semantics in UI
-
-- **Cyan/accent**: primary actions, active states, brand elements
-- **Emerald/success**: safe values, completed checks, working circuits
-- **Amber/warning**: inferred values, things to verify, cautions
-- **Rose/error**: missing connections, dangerous values, failures
-- **Violet**: simulation and graph-related content
-
-## Responsive Behavior
-
-- Cards stack vertically on mobile, grid on desktop
-- Diagrams scale with container width
-- Charts use responsive aspect ratios
-- Learning monitor panel hides below `xl` breakpoint
+- **Cyan/accent**: titles, active elements, primary values
+- **Emerald/success**: safe values, recommended choices, completed steps
+- **Amber/warning**: cautions, inferred values, things to verify
+- **Rose/error**: dangers, missing info, failures
+- Text hierarchy: `text-primary` for values, `text-secondary` for labels, `text-muted` for hints

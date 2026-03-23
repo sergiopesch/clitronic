@@ -1,40 +1,28 @@
 import { NextResponse } from 'next/server';
-import {
-  getLocalModelStatus,
-  type LocalChatMessage,
-  streamLocalChatReply,
-} from '@/lib/local-llm/runtime';
-import { runLocalTools } from '@/lib/local-llm/tooling';
-import { createGuidedToolReply } from '@/lib/local-llm/guided-tools';
-import { buildTeacherState } from '@/lib/teacher-state';
+import OpenAI from 'openai';
+import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
 
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return String(error);
+let _openai: OpenAI | null = null;
+function getClient() {
+  if (!_openai) _openai = new OpenAI();
+  return _openai;
 }
 
-function isValidMessage(value: unknown): value is LocalChatMessage {
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+function isValidMessage(value: unknown): value is ChatMessage {
   if (!value || typeof value !== 'object') return false;
-
-  const maybeMessage = value as Record<string, unknown>;
+  const msg = value as Record<string, unknown>;
   return (
-    (maybeMessage.role === 'user' || maybeMessage.role === 'assistant') &&
-    typeof maybeMessage.content === 'string'
+    (msg.role === 'user' || msg.role === 'assistant') &&
+    typeof msg.content === 'string'
   );
-}
-
-function chunkText(value: string) {
-  const chunks = value.match(/.{1,48}(\s|$)/g);
-  return chunks && chunks.length > 0 ? chunks : [value];
-}
-
-export async function GET() {
-  const status = await getLocalModelStatus();
-  return NextResponse.json(status);
 }
 
 export async function POST(req: Request) {
@@ -47,90 +35,56 @@ export async function POST(req: Request) {
   }
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
-    return NextResponse.json({ error: 'No chat messages were provided.' }, { status: 400 });
+    return NextResponse.json({ error: 'No messages provided.' }, { status: 400 });
   }
 
   const messages = body.messages.filter(isValidMessage);
-  if (messages.length !== body.messages.length) {
-    return NextResponse.json({ error: 'One or more messages were malformed.' }, { status: 400 });
+  if (messages.length === 0) {
+    return NextResponse.json({ error: 'No valid messages.' }, { status: 400 });
   }
 
   try {
-    const toolPass = runLocalTools(messages[messages.length - 1]?.content ?? '');
-    const status = await getLocalModelStatus();
-    const userMessage = messages[messages.length - 1]?.content ?? '';
-    const encoder = new TextEncoder();
-
-    const stream = new ReadableStream({
-      async start(controller) {
-        const send = (payload: Record<string, unknown>) => {
-          controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
-        };
-
-        let assistantMessage = '';
-
-        try {
-          send({ type: 'status', status });
-          send({ type: 'tool-invocations', toolInvocations: toolPass.invocations });
-          send({
-            type: 'teacher-state',
-            teacherState: buildTeacherState({
-              mode: status.runtimeMode,
-              userMessage,
-              toolInvocations: toolPass.invocations,
-            }),
-          });
-
-          if (status.runtimeMode === 'guided-tools') {
-            assistantMessage = createGuidedToolReply(userMessage, toolPass.invocations);
-
-            for (const chunk of chunkText(assistantMessage)) {
-              send({ type: 'text-delta', delta: chunk });
-            }
-          } else {
-            assistantMessage = await streamLocalChatReply(messages, {
-              promptContext: toolPass.promptContext,
-              onTextChunk: (chunk) => send({ type: 'text-delta', delta: chunk }),
-            });
-          }
-
-          send({
-            type: 'teacher-state',
-            teacherState: buildTeacherState({
-              mode: status.runtimeMode,
-              userMessage,
-              assistantMessage,
-              toolInvocations: toolPass.invocations,
-            }),
-          });
-          send({ type: 'done' });
-          controller.close();
-        } catch (error) {
-          send({
-            type: 'error',
-            error: errorMessage(error),
-            status: await getLocalModelStatus(),
-          });
-          controller.close();
-        }
-      },
+    const completion = await getClient().chat.completions.create({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...messages.map((msg) => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        })),
+      ],
+      temperature: 0.7,
+      max_tokens: 1024,
     });
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'application/x-ndjson; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-      },
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return NextResponse.json({ error: 'No response from model.' }, { status: 502 });
+    }
+
+    // Validate it's parseable JSON
+    try {
+      JSON.parse(content);
+    } catch {
+      // Model returned non-JSON despite json_object mode — wrap it
+      const fallback = JSON.stringify({
+        intent: 'quick_answer',
+        mode: 'text',
+        ui: null,
+        text: content,
+        behavior: null,
+      });
+      return new Response(fallback, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(content, {
+      headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    const status = await getLocalModelStatus();
-
-    return NextResponse.json(
-      {
-        error: errorMessage(error),
-        status,
-      },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

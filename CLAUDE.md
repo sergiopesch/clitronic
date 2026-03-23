@@ -1,130 +1,167 @@
-# Clitronic - Development Guide
+# Clitronic
 
-## Purpose
+## What This Is
 
-Clitronic is an AI-powered electronics companion that generates **structured UI responses** from natural language queries. Every AI response follows a defined schema so the frontend can render rich, interactive components — cards, diagrams, calculations, charts — instead of raw text.
+A dynamic UI engine for electronics enthusiasts. NOT a traditional chat app.
 
-The goal: an electronics enthusiast asks a question and gets a smooth, visual, useful answer.
+```
+User input → LLM → Structured JSON → UI Renderer → Animated Components
+```
 
-## Tech Stack
+## Stack
 
 - **Frontend**: Next.js 16 (App Router) + React 19 + Tailwind CSS 4
-- **Backend**: Next.js API routes (`app/api/`)
-- **AI**: Anthropic Claude via `@ai-sdk/anthropic` + Vercel AI SDK v5
-- **Styling**: Dark-only design tokens defined in `globals.css`
-- **Deployment**: Vercel
+- **Backend**: Next.js API routes
+- **LLM**: OpenAI (`gpt-4o-mini` for speed)
+- **No database. No authentication. No persistence.**
 
-## Architecture
+## MVP Constraints
 
-```
-clitronic/
-├── app/
-│   ├── api/chat/route.ts       # Streaming chat API — AI + tool-calling
-│   ├── layout.tsx              # Root layout (dark mode, design tokens)
-│   ├── globals.css             # Design token system
-│   └── page.tsx                # Entry point → LocalConsole
-├── components/
-│   ├── console/
-│   │   ├── local-console.tsx   # Main chat UI + header + input
-│   │   └── learning-monitor.tsx # Side panel: scene, guide, inspect tabs
-│   └── studio/
-│       └── previews.tsx        # Circuit diagrams, topology, workbench
-├── lib/
-│   ├── ai/
-│   │   ├── system-prompt.ts    # Electronics companion persona
-│   │   └── tools.ts            # AI tool definitions (Zod + Vercel AI SDK)
-│   ├── data/
-│   │   ├── components.ts       # 16 electronics components knowledge base
-│   │   ├── search.ts           # Component lookup + search functions
-│   │   └── types.ts            # ElectronicsComponent type definitions
-│   ├── circuit/                # Circuit document model + analysis
-│   ├── local-llm/              # Local model runtime (guided tools, tooling)
-│   └── teacher-state.ts        # Teacher state propagation for monitor
-└── cli/                        # Standalone CLI package
-```
+- Keep everything simple, fast, and stateless
+- No external component libraries
+- No heavy dependencies
+- Optimise for speed and clarity
 
-## Structured UI Responses
+## Critical Rule: Structured Output ALWAYS
 
-All AI responses MUST produce structured output that the frontend can render as rich UI. The response schema:
+Every LLM response MUST return a JSON object. Two valid modes:
 
-```typescript
+### UI Mode (default)
+
+Used when visualisation adds value. Returns a structured card.
+
+### Text Mode (fallback)
+
+Used ONLY when the answer is short, conversational, or no visual improves clarity.
+
+## Response Schema
+
+```json
 {
-  intent: string;       // What the user is trying to do (e.g. "calculate_resistor", "lookup_component", "build_circuit")
-  ui_type: string;      // How to render it (e.g. "card", "diagram", "calculation", "chart", "parts_list")
-  behavior: string;     // Interaction model (e.g. "static", "expandable", "interactive", "animated")
-  data: object;         // The actual content for rendering
+  "intent": "<string>",
+  "mode": "ui | text",
+  "ui": {
+    "type": "card | chart | text",
+    "component": "<component-name>",
+    "data": {}
+  },
+  "text": "<string | null>",
+  "behavior": {
+    "animation": "fadeIn | slideUp | expand",
+    "state": "open | collapsed"
+  }
 }
 ```
 
-### UI Type Priority
+### Rules
 
-1. **Cards** over raw text — component info, specs, tips
-2. **Calculations** over paragraphs — resistor values, Ohm's law, power
-3. **Diagrams** over descriptions — circuit layouts, pinouts, wiring
-4. **Charts** over tables — voltage/current relationships, power curves
-5. **Parts lists** over bullet points — structured, actionable shopping lists
-6. **Text** only as a last resort for conversational responses
+- ALWAYS return valid JSON
+- NEVER return raw text outside JSON
+- `mode: "text"` → fill `text`, set `ui` to null
+- `mode: "ui"` → fill `ui`, keep `text` minimal or null
 
-### Animation & Feel
+## Intent Detection
 
-- All UI transitions must be smooth (fade-in, slide-up)
-- Cards should appear with subtle entrance animations
-- Calculation results should animate their values
-- The interface should feel responsive and futuristic, not static
+### Core Intents → Mode Mapping
 
-## Design Tokens
+| Intent | Mode | When |
+|--------|------|------|
+| `spec_card` | UI | Product specs, features, component details |
+| `comparison_card` | UI | Comparing two or more items |
+| `explanation_card` | UI | Explaining concepts with structure |
+| `hybrid_card` | UI | Mix of explanation + structured info |
+| `recommendation_card` | UI | Suggesting products or options |
+| `troubleshooting_card` | UI | Step-by-step debugging guidance |
+| `calculation_card` | UI | Resistor values, Ohm's law, power |
+| `quick_answer` | Text | Simple factual or conversational reply |
 
-Defined in `app/globals.css`. Always use token classes, never hardcode colors:
+**Default bias: UI mode.**
+
+## Decision Engine
+
+Before answering, the LLM decides:
+
+1. Multi-attribute, comparative, visual, or structured? → **UI mode**
+2. Simple, one sentence, conversational? → **Text mode**
+
+## UI Components
+
+### Spec Card
+`component: "specCard"` — title, keySpecs[], optionalDetails (collapsible)
+
+### Comparison Card
+`component: "comparisonCard"` — items[], attributes[], keyDifferences[]
+
+### Explanation Card
+`component: "explanationCard"` — title, summary, keyPoints[]
+
+### Recommendation Card
+`component: "recommendationCard"` — items[], reason, highlights[]
+
+### Troubleshooting Card
+`component: "troubleshootingCard"` — issue, steps[], tips[]
+
+### Calculation Card
+`component: "calculationCard"` — title, formula, inputs{}, result{}
+
+## UI Philosophy
+
+Apple UI + Tesla UI + AI-native system.
+
+- Futuristic and fluid
+- Components appear, expand, collapse, transition smoothly
+- Avoid static blocks
+- Prefer visual clarity over verbosity
+- Minimal but meaningful
+
+## Animation Rules
+
+- UI mode: animation REQUIRED, default state `collapsed`, expand if high relevance
+- Text mode: no animation required, concise and clean
+- Default duration: 200ms ease-out
+- Stagger siblings: 50-100ms
+- Enter: `opacity-0 → 1` + `translate-y-2 → 0`
+- Respect `prefers-reduced-motion`
+
+## Design Tokens (globals.css)
 
 - Surfaces: `surface-0` through `surface-4`
 - Text: `text-primary`, `text-secondary`, `text-muted`
 - Accent: `accent`, `accent-dim`, `accent-muted`
 - Semantic: `success`, `warning`, `error`
 - Borders: `border`, `border-accent`
-
-## AI Integration
-
-### Tool-Calling Architecture
-
-The AI (Claude) decides when to use tools. Tools are defined in `lib/ai/tools.ts`:
-
-- `lookup_component` — Component specs, pinout, datasheet info
-- `search_components` — Search by category or keyword
-- `calculate_resistor` — LED limiting, voltage divider, pull-up
-- `ohms_law` — V/I/R/P calculations
-
-The AI receives tool results and generates structured UI responses. The frontend renders the appropriate component based on `ui_type`.
-
-### Server-Side Only
-
-- API key is set server-side (`ANTHROPIC_API_KEY` env var)
-- Users never provide or see API keys
-- Rate limiting protects against abuse
+- Use `font-mono` for technical values
 
 ## Commands
 
 ```bash
-npm run dev          # Start dev server
+npm run dev          # Dev server
 npm run build        # Production build
 npm run validate     # Type check + lint + format check
-npm run lint:fix     # Auto-fix lint issues
-npm run format       # Format with Prettier
 ```
 
-## Conventions
+## Architecture
 
-- Use `font-mono` for technical values (resistance, voltage, pin names)
-- Use semantic color tokens for status (success/warning/error)
-- Keep components small and focused
-- Prefer composition over configuration
-- All new UI components should support the structured response schema
-- Test with `npm run validate` before committing
-
-## Component Database
-
-16 electronics components with full specs in `lib/data/components.ts`:
-
-**Passive**: Resistor, Capacitor, Diode
-**Active**: Transistor, Relay
-**Input**: Push Button, Potentiometer, Photoresistor, Temperature Sensor, Ultrasonic Sensor
-**Output**: LED, RGB LED, Piezo Speaker, Servo Motor, DC Motor, LCD Display
+```
+app/
+├── api/chat/route.ts           # OpenAI structured output endpoint
+├── globals.css                 # Design tokens
+├── layout.tsx                  # Root layout
+└── page.tsx                    # Entry → LocalConsole
+components/
+├── console/local-console.tsx   # Main chat interface
+├── ui/                         # Structured UI card components
+│   ├── ui-renderer.tsx         # Routes JSON → component
+│   ├── spec-card.tsx
+│   ├── comparison-card.tsx
+│   ├── explanation-card.tsx
+│   ├── recommendation-card.tsx
+│   ├── troubleshooting-card.tsx
+│   ├── calculation-card.tsx
+│   └── text-response.tsx
+└── studio/previews.tsx         # Circuit diagrams
+lib/
+├── ai/system-prompt.ts         # LLM system prompt with schema rules
+├── ai/response-schema.ts       # TypeScript types for the response schema
+└── data/                       # Electronics knowledge base (16 components)
+```
