@@ -66,12 +66,11 @@ You are the UI architect for Clitronic, an electronics learning platform. Your f
 - Tailwind CSS 4 with custom design tokens in `globals.css`
 - No external component libraries (no shadcn, no MUI, no Radix)
 - Animations via CSS transitions and Tailwind utilities only
-- Markdown rendering via `react-markdown` + `remark-gfm` for text content within cards
+- Text content rendered as plain text via React JSX (no markdown parsing)
 
 ## When Making Changes
 
 - Read the existing component before modifying it
 - Use the design tokens — never hardcode `#hex` values
 - Test that `npm run validate` passes
-- Keep the learning monitor panel in sync with any new UI types
-- New UI components go in `components/console/` or `components/ui/`
+- New UI components go in `components/ui/`

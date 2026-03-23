@@ -159,9 +159,7 @@ components/
 │   ├── troubleshooting-card.tsx
 │   ├── calculation-card.tsx
 │   └── text-response.tsx
-└── studio/previews.tsx         # Circuit diagrams
 lib/
 ├── ai/system-prompt.ts         # LLM system prompt with schema rules
-├── ai/response-schema.ts       # TypeScript types for the response schema
-└── data/                       # Electronics knowledge base (16 components)
+└── ai/response-schema.ts       # TypeScript types for the response schema
 ```

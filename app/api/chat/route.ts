@@ -43,13 +43,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No valid messages.' }, { status: 400 });
   }
 
+  // Guard against abuse: limit conversation size
+  const MAX_MESSAGES = 50;
+  const MAX_CONTENT_LENGTH = 4000;
+  const trimmed = messages.slice(-MAX_MESSAGES).map((msg) => ({
+    ...msg,
+    content: msg.content.slice(0, MAX_CONTENT_LENGTH),
+  }));
+
   try {
     const completion = await getClient().chat.completions.create({
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        ...messages.map((msg) => ({
+        ...trimmed.map((msg) => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
         })),
@@ -84,7 +92,10 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Chat API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate response. Please try again.' },
+      { status: 500 }
+    );
   }
 }

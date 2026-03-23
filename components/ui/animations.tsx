@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { AnimationType } from '@/lib/ai/response-schema';
 
 interface AnimateInProps {
@@ -11,7 +11,6 @@ interface AnimateInProps {
 
 export function AnimateIn({ animation, delay = 0, children }: AnimateInProps) {
   const [visible, setVisible] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setVisible(true), delay);
@@ -35,10 +34,7 @@ export function AnimateIn({ animation, delay = 0, children }: AnimateInProps) {
   const type = animation ?? 'fadeIn';
 
   return (
-    <div
-      ref={ref}
-      className={`${base} ${visible ? shown[type] : hidden[type]}`}
-    >
+    <div className={`${base} ${visible ? shown[type] : hidden[type]}`}>
       {children}
     </div>
   );

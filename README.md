@@ -1,99 +1,25 @@
 # Clitronic
 
-**Console-first local electronics chat MVP**
+**AI-powered electronics companion — dynamic UI engine**
 
-Clitronic is now focused on the simplest thing worth validating first:
+Clitronic turns natural language electronics questions into structured, animated UI cards. Ask about circuits, components, calculations, or troubleshooting and get visual, interactive responses.
 
-> can a local open-source model hold a genuinely useful electronics conversation inside a console-first interface?
+## How it works
 
-This refactor deliberately removes provider auth and the workbench-first default flow from the main route. The goal is to test the core interaction loop before rebuilding tools, voice, image analysis, and richer workspace behaviour on top.
-
-## What this version does
-
-- opens into a **console-first local chat UI**
-- runs against a **local in-process model runtime** via `node-llama-cpp`
-- avoids **remote vendor model calls**
-- avoids **provider auth** in the main user flow
-- includes a **guided tool layer** for resistor calculation, component lookup, circuit planning, and LED debug checklists
-- keeps the MVP **text-only and honest**
-
-## Runtime modes
-
-Clitronic currently supports two honest operating modes:
-
-- **Local model mode** → full `node-llama-cpp` conversation path
-- **Guided tools mode** → fast structured electronics help for planning, calculation, and debugging
-
-Guided tools mode is designed to stay useful rather than pretending to be a full local-model runtime when the environment is better suited to fast structured responses.
-
-Guided tools mode currently covers useful beginner flows such as:
-
-- resistor recommendations
-- component lookup
-- Arduino LED parts list + wiring plan
-- Raspberry Pi LED parts list + wiring plan
-- first-pass LED debug checklists
-
-## What this version does not do yet
-
-Right now the default route does **not** attempt to provide:
-
-- image understanding
-- voice input
-- workbench / topology / graph windows
-- broad tool execution beyond the first local calculation / lookup helpers
-- provider switching / auth flows
-
-Those can return later, one by one, once the local conversation loop is solid.
-
-## Local model behaviour
-
-Clitronic loads a GGUF model locally using `node-llama-cpp`.
-
-### Default model
-
-If you do not configure anything, Clitronic defaults to:
-
-```text
-hf:Qwen/Qwen2.5-1.5B-Instruct-GGUF:qwen2.5-1.5b-instruct-q4_k_m.gguf
+```
+User input → OpenAI (gpt-4o-mini) → Structured JSON → UI Renderer → Animated Cards
 ```
 
-That is a **small but more credible default** than the ultra-tiny variants, so the local MVP stays fast enough to boot while still being useful for real conversation.
+The LLM decides whether to render a visual card or a simple text response based on intent detection. Every response is valid JSON with a defined schema.
 
-### First run
+## Card types
 
-On the first real chat request, if the model is not cached yet, Clitronic will try to download it into the `node-llama-cpp` model cache (global by default, unless you override the cache directory).
-
-That means:
-
-- the **very first prompt can take longer**
-- later prompts should be much faster
-- you can replace the default with a larger or better GGUF as soon as you want
-
-## Configuration
-
-Copy the env file:
-
-```bash
-cp .env.example .env.local
-```
-
-Available settings:
-
-```bash
-# direct file path
-LOCAL_LLM_MODEL_PATH=/absolute/path/to/model.gguf
-
-# or auto-resolved model URI
-LOCAL_LLM_MODEL_URI=hf:Qwen/Qwen2.5-1.5B-Instruct-GGUF:qwen2.5-1.5b-instruct-q4_k_m.gguf
-
-# optional model cache directory
-LOCAL_LLM_MODELS_DIR=/absolute/path/to/model-cache
-
-# optional generation controls
-LOCAL_LLM_MAX_TOKENS=512
-LOCAL_LLM_TEMPERATURE=0.7
-```
+- **Spec Card** — component specs, features, pinouts
+- **Comparison Card** — side-by-side attribute comparison
+- **Explanation Card** — structured concept breakdowns
+- **Recommendation Card** — product/approach suggestions with highlights
+- **Troubleshooting Card** — interactive debug checklists
+- **Calculation Card** — formulas with inputs and results (Ohm's law, resistor values, etc.)
 
 ## Quick start
 
@@ -101,52 +27,59 @@ LOCAL_LLM_TEMPERATURE=0.7
 git clone https://github.com/sergiopesch/clitronic.git
 cd clitronic
 npm install
+```
+
+Create `.env.local` with your OpenAI key:
+
+```bash
+OPENAI_API_KEY=your_key_here
+```
+
+```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-If no GGUF is cached yet, the app will tell you. The first real message may trigger the model download.
-
 ## Development
 
 ```bash
-npm run dev
-npm run build
-npm run validate
+npm run dev          # Dev server
+npm run build        # Production build
+npm run validate     # Type check + lint + format check
 ```
 
-## Current architecture
+## Architecture
 
 ```text
-clitronic/
-├── app/
-│   ├── api/
-│   │   └── chat/            # local model status + local chat endpoint
-│   ├── layout.tsx           # app shell metadata
-│   └── page.tsx             # console-first local chat route
-├── components/
-│   └── console/             # local console UI
-├── lib/
-│   ├── ai/                  # prompt and response posture
-│   └── local-llm/           # node-llama-cpp runtime wiring
-└── cli/                     # legacy CLI package, still available separately
+app/
+├── api/chat/route.ts           # OpenAI structured output endpoint
+├── globals.css                 # Design tokens (dark-only)
+├── layout.tsx                  # Root layout
+└── page.tsx                    # Entry → LocalConsole
+components/
+├── console/local-console.tsx   # Main chat interface
+└── ui/                         # Structured UI card components
+    ├── ui-renderer.tsx         # Routes JSON → component
+    ├── animations.tsx          # AnimateIn entrance animations
+    ├── spec-card.tsx
+    ├── comparison-card.tsx
+    ├── explanation-card.tsx
+    ├── recommendation-card.tsx
+    ├── troubleshooting-card.tsx
+    ├── calculation-card.tsx
+    └── text-response.tsx
+lib/
+├── ai/system-prompt.ts         # LLM system prompt with schema rules
+└── ai/response-schema.ts       # TypeScript types for response schema
+cli/                            # Standalone CLI tool (separate package)
 ```
-
-## Direction after this pass
-
-The likely next sequence is:
-
-1. keep improving local chat quality
-2. add a minimal tool layer with explicit invocation rules
-3. reintroduce structured circuit actions one by one
-4. bring the workbench back only when it is grounded in real state
 
 ## Tech stack
 
-- **Web**: Next.js 16, React 19, Tailwind CSS
-- **Local inference**: `node-llama-cpp`
-- **Rendering**: React Markdown + remark-gfm
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS 4
+- **LLM**: OpenAI `gpt-4o-mini` with structured JSON output
+- **No database. No auth. No persistence.** Stateless MVP.
 
 ## License
 
