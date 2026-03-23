@@ -101,7 +101,7 @@ export function LocalConsole() {
   }, [isLoading]);
 
   return (
-    <main className="bg-surface-0 relative flex min-h-[100dvh] flex-col overflow-hidden">
+    <main className="bg-surface-0 relative flex min-h-[100dvh] flex-col">
       {/* Ambient background glow */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="bg-accent/[0.03] absolute top-1/3 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
@@ -188,7 +188,7 @@ export function LocalConsole() {
 
         {/* Response — the star of the show */}
         {hasResponse && !isLoading && (
-          <div className="flex max-h-[calc(100dvh-180px)] w-full max-w-2xl flex-col items-center gap-4 overflow-y-auto py-4">
+          <div className="flex w-full max-w-2xl flex-col items-center gap-3 py-2">
             {/* Query echo */}
             {currentQuery && (
               <div className="text-text-muted animate-fade-in-up mb-2 text-center text-sm">

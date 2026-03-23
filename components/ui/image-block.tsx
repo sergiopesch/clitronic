@@ -19,8 +19,8 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      {/* Visual area */}
-      <div className="bg-surface-0/40 flex justify-center px-5 py-6">
+      {/* Visual area — constrained height so card fits viewport */}
+      <div className="bg-surface-0/40 flex justify-center px-3 py-4 sm:px-5 sm:py-5">
         {mode === 'photo' ? (
           <PhotoRenderer searchQuery={data.searchQuery ?? caption} caption={caption} />
         ) : (
@@ -28,32 +28,30 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
         )}
       </div>
 
-      {/* Caption */}
-      <div className="border-border border-t px-5 py-4">
-        <h3 className="text-accent text-base font-semibold sm:text-lg">{caption}</h3>
+      {/* Caption + description + notes in a compact footer */}
+      <div className="border-border border-t px-4 py-3 sm:px-5 sm:py-4">
+        <h3 className="text-accent text-sm font-semibold sm:text-base">{caption}</h3>
         {data.description && (
-          <p className="text-text-secondary mt-2 text-sm leading-relaxed">{data.description}</p>
+          <p className="text-text-secondary mt-1 text-xs leading-relaxed sm:text-sm">
+            {data.description}
+          </p>
         )}
-      </div>
-
-      {/* Notes */}
-      {data.notes && data.notes.length > 0 && (
-        <div className="border-border border-t px-5 py-3.5">
-          <div className="space-y-1.5">
+        {data.notes && data.notes.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
             {data.notes.map((note, i) => (
-              <div
+              <span
                 key={i}
-                className={`text-text-secondary animate-fade-in-up flex gap-2.5 text-sm stagger-${Math.min(i + 1, 6)}`}
+                className={`text-text-secondary animate-fade-in-up inline-flex items-center gap-1.5 text-xs stagger-${Math.min(i + 1, 6)}`}
               >
-                <span className="bg-accent/10 text-accent mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-[10px]">
+                <span className="bg-accent/10 text-accent inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full font-mono text-[9px]">
                   {i + 1}
                 </span>
-                <span className="leading-relaxed">{note}</span>
-              </div>
+                {note}
+              </span>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -133,10 +131,10 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
 
   if (state === 'loading') {
     return (
-      <div className="bg-surface-2/60 relative aspect-[4/3] w-full overflow-hidden rounded-xl">
+      <div className="bg-surface-2/60 relative h-40 w-full overflow-hidden rounded-xl sm:h-52">
         <div className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent" />
         <div className="flex h-full flex-col items-center justify-center gap-3">
-          <div className="bg-accent/20 h-6 w-6 animate-pulse rounded-full" />
+          <div className="bg-accent/20 h-5 w-5 animate-pulse rounded-full" />
           <div
             key={msgIndex}
             className="text-text-muted animate-fade-in-up px-4 text-center font-mono text-[11px]"
@@ -150,23 +148,22 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
 
   if (state === 'error' || !imageUrl) {
     return (
-      <div className="border-border bg-surface-2/40 flex aspect-[4/3] w-full items-center justify-center rounded-xl border">
+      <div className="border-border bg-surface-2/40 flex h-32 w-full items-center justify-center rounded-xl border sm:h-40">
         <div className="text-text-muted text-center text-sm">
-          <div className="mb-2 text-2xl opacity-30">{'{ ? }'}</div>
-          <p>{"Couldn't find a good image for this one."}</p>
-          <p className="mt-1 text-xs opacity-50">Try a more specific query!</p>
+          <div className="mb-1 text-xl opacity-30">{'{ ? }'}</div>
+          <p className="text-xs">{"Couldn't find a good image for this one."}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full">
+    <div className="relative flex w-full justify-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={imageUrl}
         alt={caption}
-        className="max-h-[400px] w-full rounded-xl object-contain opacity-0 transition-opacity duration-500"
+        className="max-h-[40vh] w-auto max-w-full rounded-xl object-contain opacity-0 transition-opacity duration-500 sm:max-h-[45vh]"
         onLoad={(e) => {
           (e.target as HTMLImageElement).classList.replace('opacity-0', 'opacity-100');
         }}
@@ -174,7 +171,7 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
         loading="eager"
       />
       {attribution && (
-        <div className="text-text-muted mt-1.5 text-right text-[10px] opacity-60">
+        <div className="text-text-muted absolute right-1 bottom-1 rounded bg-black/40 px-1.5 py-0.5 text-[9px] opacity-70">
           {attribution}
         </div>
       )}
