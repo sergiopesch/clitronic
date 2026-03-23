@@ -147,6 +147,12 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
   }
 
   if (state === 'error' || !imageUrl) {
+    // Smart fallback: if a matching built-in diagram exists, show that instead of an error
+    const diagramType = matchDiagramType(query);
+    if (diagramType) {
+      return <DiagramRenderer type={diagramType} />;
+    }
+
     return (
       <div className="border-border bg-surface-2/40 flex h-32 w-full items-center justify-center rounded-xl border sm:h-40">
         <div className="text-text-muted text-center text-sm">
@@ -177,6 +183,26 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
       )}
     </div>
   );
+}
+
+/* ── Diagram type matcher for photo fallback ── */
+
+const DIAGRAM_KEYWORDS: [string[], string][] = [
+  [['breadboard'], 'breadboard'],
+  [['voltage', 'divider'], 'voltage-divider'],
+  [['led', 'circuit'], 'led-circuit'],
+  [['pull', 'up'], 'pull-up'],
+  [['pull', 'down'], 'pull-down'],
+  [['pwm', 'pulse', 'width'], 'pwm'],
+  [['capacitor', 'charge', 'rc'], 'capacitor-charge'],
+];
+
+function matchDiagramType(query: string): string | null {
+  const lower = query.toLowerCase();
+  for (const [keywords, type] of DIAGRAM_KEYWORDS) {
+    if (keywords.some((kw) => lower.includes(kw))) return type;
+  }
+  return null;
 }
 
 /* ── Diagram Renderer ── */

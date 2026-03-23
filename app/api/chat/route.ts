@@ -137,12 +137,43 @@ function validateResponse(raw: string): string {
   // Validate UI block if present
   if (parsed.ui && typeof parsed.ui === 'object') {
     const ui = parsed.ui as Record<string, unknown>;
-    if (!VALID_COMPONENTS.has(ui.component as string) || !ui.data || typeof ui.data !== 'object') {
-      // Unknown component or missing data — fall back to text
+
+    if (!VALID_COMPONENTS.has(ui.component as string)) {
+      // Unknown component — fall back to text
       parsed.mode = 'text';
       parsed.ui = null;
       if (!parsed.text) {
         parsed.text = 'Sorry, I had trouble rendering that. Could you rephrase?';
+      }
+    } else if (!ui.data || typeof ui.data !== 'object') {
+      // LLM likely flattened the structure — rescue data fields from ui level
+      const reserved = new Set(['type', 'component', 'data']);
+      const extracted: Record<string, unknown> = {};
+      let hasFields = false;
+      for (const [key, value] of Object.entries(ui)) {
+        if (!reserved.has(key)) {
+          extracted[key] = value;
+          hasFields = true;
+        }
+      }
+      if (hasFields) {
+        // Reconstruct the correct shape
+        ui.data = extracted;
+        // Clean up flattened fields from ui level
+        for (const key of Object.keys(extracted)) {
+          delete ui[key];
+        }
+        console.log(
+          '[clitronic] Rescued flattened ui.data:',
+          JSON.stringify(extracted).substring(0, 300)
+        );
+      } else {
+        // Truly empty — fall back to text
+        parsed.mode = 'text';
+        parsed.ui = null;
+        if (!parsed.text) {
+          parsed.text = 'Sorry, I had trouble rendering that. Could you rephrase?';
+        }
       }
     }
   }

@@ -12,7 +12,7 @@ interface ScoredImage {
 }
 
 /** Minimum score to consider a result "confident" (skip retry). */
-const CONFIDENCE_THRESHOLD = 2;
+const CONFIDENCE_THRESHOLD = 1;
 
 /**
  * Smart image search with confidence scoring.
@@ -41,15 +41,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ ...round1, confident: true });
   }
 
-  // ── Round 2: Retry with simplified query ──
-  const simplified = simplifyQuery(query);
-  if (simplified !== query) {
-    const round2 = await searchParallel(simplified, braveKey);
-
-    // Pick the best across both rounds
-    const best = betterResult(round1, round2);
-    if (best) {
-      return NextResponse.json({ ...best, confident: best.score >= CONFIDENCE_THRESHOLD });
+  // ── Round 2: Only retry if round 1 returned nothing and query is multi-word ──
+  const queryWords = query.trim().split(/\s+/);
+  if (!round1 && queryWords.length > 2) {
+    const simplified = simplifyQuery(query);
+    if (simplified !== query) {
+      const round2 = await searchParallel(simplified, braveKey);
+      if (round2) {
+        return NextResponse.json({ ...round2, confident: round2.score >= CONFIDENCE_THRESHOLD });
+      }
     }
   }
 
@@ -131,7 +131,7 @@ async function searchBrave(query: string, apiKey: string): Promise<ScoredImage |
         'Accept-Encoding': 'gzip',
         'X-Subscription-Token': apiKey,
       },
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(2000),
     });
 
     if (!res.ok) return null;
@@ -191,7 +191,7 @@ async function searchWikimedia(query: string): Promise<ScoredImage | null> {
     url.searchParams.set('origin', '*');
 
     const res = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(2500),
     });
 
     if (!res.ok) return null;

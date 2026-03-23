@@ -42,36 +42,55 @@ export function UIRenderer({ response }: UIRendererProps) {
   }
 
   // If no UI block at all, show fallback
-  if (!response.ui || !response.ui.data || typeof response.ui.data !== 'object') {
+  if (!response.ui) {
     return fallback;
   }
 
   const animation = response.behavior?.animation;
   const component = response.ui.component;
-  const data = response.ui.data;
+
+  // Try ui.data first; if missing, extract non-reserved fields from ui as fallback
+  let resolvedData: unknown = response.ui.data;
+  if (!resolvedData || typeof resolvedData !== 'object') {
+    const ui = response.ui as unknown as Record<string, unknown>;
+    const reserved = new Set(['type', 'component', 'data']);
+    const extracted: Record<string, unknown> = {};
+    let hasFields = false;
+    for (const [key, value] of Object.entries(ui)) {
+      if (!reserved.has(key)) {
+        extracted[key] = value;
+        hasFields = true;
+      }
+    }
+    resolvedData = hasFields ? extracted : null;
+  }
+
+  if (!resolvedData || typeof resolvedData !== 'object') {
+    return fallback;
+  }
 
   const renderComponent = () => {
     switch (component) {
       case 'specCard':
-        return <SpecCard data={data as SpecCardData} />;
+        return <SpecCard data={resolvedData as SpecCardData} />;
       case 'comparisonCard':
-        return <ComparisonCard data={data as ComparisonCardData} />;
+        return <ComparisonCard data={resolvedData as ComparisonCardData} />;
       case 'explanationCard':
-        return <ExplanationCard data={data as ExplanationCardData} />;
+        return <ExplanationCard data={resolvedData as ExplanationCardData} />;
       case 'recommendationCard':
-        return <RecommendationCard data={data as RecommendationCardData} />;
+        return <RecommendationCard data={resolvedData as RecommendationCardData} />;
       case 'troubleshootingCard':
-        return <TroubleshootingCard data={data as TroubleshootingCardData} />;
+        return <TroubleshootingCard data={resolvedData as TroubleshootingCardData} />;
       case 'calculationCard':
-        return <CalculationCard data={data as CalculationCardData} />;
+        return <CalculationCard data={resolvedData as CalculationCardData} />;
       case 'pinoutCard':
-        return <PinoutCard data={data as PinoutCardData} />;
+        return <PinoutCard data={resolvedData as PinoutCardData} />;
       case 'chartCard':
-        return <ChartCard data={data as ChartCardData} />;
+        return <ChartCard data={resolvedData as ChartCardData} />;
       case 'wiringCard':
-        return <WiringCard data={data as WiringCardData} />;
+        return <WiringCard data={resolvedData as WiringCardData} />;
       case 'imageBlock':
-        return <ImageBlock data={data as ImageBlockData} />;
+        return <ImageBlock data={resolvedData as ImageBlockData} />;
       default:
         return null;
     }
