@@ -16,13 +16,197 @@ interface ChatMessage {
   content: string;
 }
 
+/* ── Input validation ── */
+
 function isValidMessage(value: unknown): value is ChatMessage {
   if (!value || typeof value !== 'object') return false;
   const msg = value as Record<string, unknown>;
   return (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string';
 }
 
+/**
+ * Sanitize user input:
+ * - Strip control characters (except newline/tab)
+ * - Collapse excessive whitespace
+ * - Remove null bytes
+ */
+function sanitizeInput(text: string): string {
+  return text
+    .replace(/\0/g, '') // null bytes
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // control chars (keep \n \t \r)
+    .replace(/\n{4,}/g, '\n\n\n') // collapse excessive newlines
+    .replace(/ {4,}/g, '   ') // collapse excessive spaces
+    .trim();
+}
+
+/**
+ * Detect common prompt injection patterns.
+ * Returns true if the input looks suspicious.
+ */
+function detectInjection(text: string): boolean {
+  const lower = text.toLowerCase();
+  const patterns = [
+    // Direct instruction override attempts
+    /ignore\s+(all\s+)?(previous|above|prior|earlier)\s+(instructions|prompts|rules)/i,
+    /disregard\s+(all\s+)?(previous|above|prior)\s+(instructions|prompts)/i,
+    /forget\s+(all\s+)?(your|the|previous)\s+(instructions|rules|prompts)/i,
+    /override\s+(system|your)\s+(prompt|instructions|rules)/i,
+    // Role hijacking
+    /you\s+are\s+now\s+(a|an|the)\s+/i,
+    /act\s+as\s+(a|an|if)\s+/i,
+    /pretend\s+(to\s+be|you\s+are)/i,
+    /new\s+system\s+prompt/i,
+    /enter\s+(developer|debug|admin|god)\s+mode/i,
+    // Prompt extraction
+    /reveal\s+(your|the|system)\s+(prompt|instructions)/i,
+    /show\s+me\s+(your|the)\s+(system\s+)?(prompt|instructions)/i,
+    /what\s+are\s+your\s+(system\s+)?(instructions|rules|prompt)/i,
+    /repeat\s+(your|the)\s+(system\s+)?(prompt|instructions)/i,
+    /print\s+(your|the)\s+(system\s+)?(prompt|instructions)/i,
+    // Delimiter injection
+    /\[system\]/i,
+    /\[assistant\]/i,
+    /<<\s*sys/i,
+    /<\|im_start\|>/i,
+    /```system/i,
+  ];
+
+  for (const pattern of patterns) {
+    if (pattern.test(lower)) return true;
+  }
+
+  // Heuristic: message has an unusually high ratio of instruction-like language
+  const instructionWords = [
+    'instruction',
+    'prompt',
+    'system',
+    'override',
+    'ignore',
+    'disregard',
+    'bypass',
+    'jailbreak',
+    'DAN',
+    'developer mode',
+  ];
+  const hits = instructionWords.filter((w) => lower.includes(w)).length;
+  if (hits >= 3) return true;
+
+  return false;
+}
+
+/* ── Output validation ── */
+
+const VALID_COMPONENTS = new Set([
+  'specCard',
+  'comparisonCard',
+  'explanationCard',
+  'imageBlock',
+  'recommendationCard',
+  'troubleshootingCard',
+  'calculationCard',
+  'pinoutCard',
+  'chartCard',
+  'wiringCard',
+]);
+
+const VALID_MODES = new Set(['ui', 'text']);
+
+/**
+ * Validate and sanitize the model's JSON response.
+ * Ensures it matches our schema and doesn't leak system info.
+ */
+function validateResponse(raw: string): string {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return JSON.stringify({
+      intent: 'quick_answer',
+      mode: 'text',
+      ui: null,
+      text: 'Sorry, I had trouble processing that. Could you rephrase?',
+      behavior: null,
+    });
+  }
+
+  // Ensure mode is valid
+  if (!VALID_MODES.has(parsed.mode as string)) {
+    parsed.mode = parsed.ui ? 'ui' : 'text';
+  }
+
+  // Validate UI block if present
+  if (parsed.ui && typeof parsed.ui === 'object') {
+    const ui = parsed.ui as Record<string, unknown>;
+    if (!VALID_COMPONENTS.has(ui.component as string)) {
+      // Unknown component — fall back to text
+      parsed.mode = 'text';
+      parsed.ui = null;
+      if (!parsed.text) {
+        parsed.text = 'Sorry, I had trouble rendering that. Could you rephrase?';
+      }
+    }
+  }
+
+  // Strip any system prompt leakage from text fields
+  const textContent = typeof parsed.text === 'string' ? parsed.text : '';
+  if (textContent.toLowerCase().includes('system prompt') || textContent.includes('SECURITY')) {
+    parsed.text = 'I can only help with electronics questions. What would you like to know?';
+  }
+
+  return JSON.stringify(parsed);
+}
+
+/* ── Rate limiting (in-memory, per-IP) ── */
+
+const rateMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT = 20; // requests per window
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateMap.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > RATE_LIMIT;
+}
+
+// Clean up stale entries periodically
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateMap) {
+      if (now > entry.resetAt) rateMap.delete(ip);
+    }
+  }, RATE_WINDOW_MS);
+}
+
+/* ── Off-topic response ── */
+
+const OFF_TOPIC_RESPONSE = JSON.stringify({
+  intent: 'off_topic',
+  mode: 'text',
+  ui: null,
+  text: 'I only help with electronics and hardware topics. Try asking me about circuits, components, microcontrollers, or anything maker-related!',
+  behavior: null,
+});
+
+/* ── Main handler ── */
+
 export async function POST(req: Request) {
+  // Rate limiting
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a moment.' },
+      { status: 429 }
+    );
+  }
+
   let body: { messages?: unknown };
 
   try {
@@ -40,13 +224,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No valid messages.' }, { status: 400 });
   }
 
-  // Keep only recent context — less tokens = faster response
+  // Sanitize and check latest user message for injection
   const MAX_MESSAGES = 10;
   const MAX_CONTENT_LENGTH = 2000;
   const trimmed = messages.slice(-MAX_MESSAGES).map((msg) => ({
     ...msg,
-    content: msg.content.slice(0, MAX_CONTENT_LENGTH),
+    content: sanitizeInput(msg.content.slice(0, MAX_CONTENT_LENGTH)),
   }));
+
+  // Check the latest user message for injection patterns
+  const lastUserMsg = trimmed.filter((m) => m.role === 'user').pop();
+  if (lastUserMsg && detectInjection(lastUserMsg.content)) {
+    return new Response(OFF_TOPIC_RESPONSE, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   try {
     const completion = await getClient().chat.completions.create({
@@ -68,23 +260,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No response from model.' }, { status: 502 });
     }
 
-    // Validate parseable JSON
-    try {
-      JSON.parse(content);
-    } catch {
-      const fallback = JSON.stringify({
-        intent: 'quick_answer',
-        mode: 'text',
-        ui: null,
-        text: content,
-        behavior: null,
-      });
-      return new Response(fallback, {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    // Validate and sanitize the response
+    const validated = validateResponse(content);
 
-    return new Response(content, {
+    return new Response(validated, {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
