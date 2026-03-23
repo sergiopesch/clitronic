@@ -156,33 +156,69 @@ function validateResponse(raw: string): string {
   return JSON.stringify(parsed);
 }
 
-/* ── Rate limiting (in-memory, per-IP) ── */
+/* ── Rate limiting (in-memory, per-IP, dual window) ── */
 
-const rateMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT = 20; // requests per window
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateMap.get(ip);
-
-  if (!entry || now > entry.resetAt) {
-    rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return false;
-  }
-
-  entry.count++;
-  return entry.count > RATE_LIMIT;
+interface RateEntry {
+  minuteCount: number;
+  minuteResetAt: number;
+  dailyCount: number;
+  dailyResetAt: number;
 }
 
-// Clean up stale entries periodically
+const rateMap = new Map<string, RateEntry>();
+
+const MINUTE_WINDOW_MS = 60_000;
+const MINUTE_LIMIT = 20;
+const DAILY_WINDOW_MS = 86_400_000; // 24 hours
+const DAILY_LIMIT = Number(process.env.DAILY_RATE_LIMIT) || 20;
+
+function checkRateLimit(ip: string): { limited: boolean; reason?: string } {
+  const now = Date.now();
+  let entry = rateMap.get(ip);
+
+  if (!entry) {
+    entry = {
+      minuteCount: 0,
+      minuteResetAt: now + MINUTE_WINDOW_MS,
+      dailyCount: 0,
+      dailyResetAt: now + DAILY_WINDOW_MS,
+    };
+    rateMap.set(ip, entry);
+  }
+
+  // Reset minute window if expired
+  if (now > entry.minuteResetAt) {
+    entry.minuteCount = 0;
+    entry.minuteResetAt = now + MINUTE_WINDOW_MS;
+  }
+
+  // Reset daily window if expired
+  if (now > entry.dailyResetAt) {
+    entry.dailyCount = 0;
+    entry.dailyResetAt = now + DAILY_WINDOW_MS;
+  }
+
+  entry.minuteCount++;
+  entry.dailyCount++;
+
+  if (entry.dailyCount > DAILY_LIMIT) {
+    return { limited: true, reason: 'daily' };
+  }
+  if (entry.minuteCount > MINUTE_LIMIT) {
+    return { limited: true, reason: 'minute' };
+  }
+
+  return { limited: false };
+}
+
+// Clean up stale entries every 5 minutes
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {
     const now = Date.now();
     for (const [ip, entry] of rateMap) {
-      if (now > entry.resetAt) rateMap.delete(ip);
+      if (now > entry.dailyResetAt) rateMap.delete(ip);
     }
-  }, RATE_WINDOW_MS);
+  }, 5 * 60_000);
 }
 
 /* ── Off-topic response ── */
@@ -198,13 +234,15 @@ const OFF_TOPIC_RESPONSE = JSON.stringify({
 /* ── Main handler ── */
 
 export async function POST(req: Request) {
-  // Rate limiting
+  // Rate limiting (per-minute + daily)
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (isRateLimited(ip)) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please wait a moment.' },
-      { status: 429 }
-    );
+  const rateCheck = checkRateLimit(ip);
+  if (rateCheck.limited) {
+    const message =
+      rateCheck.reason === 'daily'
+        ? "You've reached the daily limit. Come back tomorrow to keep exploring!"
+        : 'Too many requests. Please wait a moment.';
+    return NextResponse.json({ error: message }, { status: 429 });
   }
 
   let body: { messages?: unknown };
