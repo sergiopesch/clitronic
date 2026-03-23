@@ -281,42 +281,43 @@ const InputBar = ({ ref, ...props }: InputBarProps & { ref: React.Ref<HTMLTextAr
 
 /* ── Floating Hints ── */
 
-const CYCLE_MS = 3500;
-const FADE_MS = 500;
-
 function FloatingHints({ hints, onSelect }: { hints: string[]; onSelect: (h: string) => void }) {
-  const [currentIdx, setCurrentIdx] = useState(() => Math.floor(Math.random() * hints.length));
-  const [phase, setPhase] = useState<'in' | 'out'>('in');
+  // Use a ref to track the previous index and avoid same hint repeating
+  const prevRef = useRef(-1);
+  const [hint, setHint] = useState<{ text: string; key: number } | null>(null);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setPhase('out');
-      setTimeout(() => {
-        setCurrentIdx((prev) => {
-          let next: number;
-          do {
-            next = Math.floor(Math.random() * hints.length);
-          } while (next === prev && hints.length > 1);
-          return next;
-        });
-        setPhase('in');
-      }, FADE_MS);
-    }, CYCLE_MS);
-    return () => clearInterval(timer);
-  }, [hints.length]);
+    let key = 0;
+    const pick = () => {
+      let next: number;
+      do {
+        next = Math.floor(Math.random() * hints.length);
+      } while (next === prevRef.current && hints.length > 1);
+      prevRef.current = next;
+      key++;
+      setHint({ text: hints[next], key });
+    };
+
+    // Initial pick after mount
+    const init = setTimeout(pick, 50);
+    const timer = setInterval(pick, 4000);
+    return () => {
+      clearTimeout(init);
+      clearInterval(timer);
+    };
+  }, [hints]);
+
+  if (!hint) return <div className="mt-10 h-[32px]" />;
 
   return (
-    <div className="mt-8 flex min-h-[36px] items-center justify-center">
+    <div className="mt-10 flex h-[32px] items-center justify-center">
       <button
-        key={currentIdx}
+        key={hint.key}
         type="button"
-        onClick={() => onSelect(hints[currentIdx])}
-        style={{
-          animation: `${phase === 'in' ? 'hint-drift-in' : 'hint-drift-out'} ${FADE_MS}ms cubic-bezier(0.16, 1, 0.3, 1) both, hint-float 3s ease-in-out ${FADE_MS}ms infinite`,
-        }}
-        className="border-border/60 bg-surface-1/40 text-text-muted/60 hover:border-accent/30 hover:text-text-secondary hover:bg-surface-2/60 cursor-pointer rounded-full border px-4 py-1.5 font-mono text-[11px] backdrop-blur-sm transition-colors"
+        onClick={() => onSelect(hint.text)}
+        className="hint-pill border-border/40 text-text-muted/50 hover:border-accent/20 hover:text-text-secondary cursor-pointer rounded-full border bg-white/[0.02] px-5 py-1.5 font-mono text-[11px] backdrop-blur-sm transition-colors duration-300"
       >
-        {hints[currentIdx]}
+        {hint.text}
       </button>
     </div>
   );

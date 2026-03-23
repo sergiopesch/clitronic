@@ -124,7 +124,7 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
     return (
       <div className="border-border bg-surface-2/40 flex h-32 w-full max-w-[400px] items-center justify-center rounded-lg border">
         <div className="text-text-muted text-center text-sm">
-          <span className="block text-lg opacity-40">&#128247;</span>
+          <span className="block text-lg opacity-40">{'\ud83d\udcf7'}</span>
           No image found
         </div>
       </div>

@@ -179,40 +179,41 @@ body {
   }
 }
 
-@keyframes hint-drift-in {
+@keyframes hint-pill {
   0% {
     opacity: 0;
-    transform: translateY(8px) scale(0.95);
-    filter: blur(4px);
+    transform: translateY(6px) scale(0.96);
+    filter: blur(6px);
   }
-  100% {
+  12% {
     opacity: 1;
     transform: translateY(0) scale(1);
     filter: blur(0);
   }
-}
-
-@keyframes hint-drift-out {
-  0% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.97);
-    filter: blur(3px);
-  }
-}
-
-@keyframes hint-float {
-  0%,
-  100% {
-    transform: translateY(0);
+  /* Hold visible and gently float */
+  25% {
+    transform: translateY(-2px);
   }
   50% {
-    transform: translateY(-3px);
+    transform: translateY(1px);
   }
+  75% {
+    transform: translateY(-1px);
+  }
+  88% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    filter: blur(4px);
+  }
+}
+
+.hint-pill {
+  animation: hint-pill 4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-card-enter {
