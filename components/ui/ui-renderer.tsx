@@ -44,18 +44,24 @@ export function UIRenderer({ response }: UIRendererProps) {
   const component = response.ui.component;
   const data = response.ui.data;
 
-  return (
-    <AnimateIn animation={animation}>
-      {component === 'specCard' && <SpecCard data={data as SpecCardData} />}
-      {component === 'comparisonCard' && <ComparisonCard data={data as ComparisonCardData} />}
-      {component === 'explanationCard' && <ExplanationCard data={data as ExplanationCardData} />}
-      {component === 'recommendationCard' && <RecommendationCard data={data as RecommendationCardData} />}
-      {component === 'troubleshootingCard' && <TroubleshootingCard data={data as TroubleshootingCardData} />}
-      {component === 'calculationCard' && <CalculationCard data={data as CalculationCardData} />}
-      {component === 'pinoutCard' && <PinoutCard data={data as PinoutCardData} />}
-      {component === 'chartCard' && <ChartCard data={data as ChartCardData} />}
-      {component === 'wiringCard' && <WiringCard data={data as WiringCardData} />}
-      {component === 'imageBlock' && <ImageBlock data={data as ImageBlockData} />}
-    </AnimateIn>
-  );
+  const renderComponent = () => {
+    switch (component) {
+      case 'specCard': return <SpecCard data={data as SpecCardData} />;
+      case 'comparisonCard': return <ComparisonCard data={data as ComparisonCardData} />;
+      case 'explanationCard': return <ExplanationCard data={data as ExplanationCardData} />;
+      case 'recommendationCard': return <RecommendationCard data={data as RecommendationCardData} />;
+      case 'troubleshootingCard': return <TroubleshootingCard data={data as TroubleshootingCardData} />;
+      case 'calculationCard': return <CalculationCard data={data as CalculationCardData} />;
+      case 'pinoutCard': return <PinoutCard data={data as PinoutCardData} />;
+      case 'chartCard': return <ChartCard data={data as ChartCardData} />;
+      case 'wiringCard': return <WiringCard data={data as WiringCardData} />;
+      case 'imageBlock': return <ImageBlock data={data as ImageBlockData} />;
+      default:
+        // Unknown component — fall back to text if available
+        if (response.text) return <TextResponse text={response.text} />;
+        return null;
+    }
+  };
+
+  return <AnimateIn animation={animation}>{renderComponent()}</AnimateIn>;
 }

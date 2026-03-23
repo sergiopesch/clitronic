@@ -9,6 +9,12 @@ import type { ImageBlockData } from '@/lib/ai/response-schema';
  * - "photo"  → fetches a real image via /api/image-search
  */
 export function ImageBlock({ data }: { data: ImageBlockData }) {
+  // Guard against malformed data from LLM
+  if (!data || typeof data !== 'object') {
+    return <FallbackCard message="Could not render image block." />;
+  }
+
+  const caption = data.caption ?? 'Electronics component';
   const mode = data.imageMode ?? (data.diagramType ? 'diagram' : 'photo');
 
   return (
@@ -16,7 +22,7 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
       {/* Visual area */}
       <div className="flex justify-center bg-surface-0/40 px-5 py-6">
         {mode === 'photo' ? (
-          <PhotoRenderer searchQuery={data.searchQuery} caption={data.caption} />
+          <PhotoRenderer searchQuery={data.searchQuery ?? caption} caption={caption} />
         ) : (
           <DiagramRenderer type={data.diagramType ?? 'generic'} labels={data.labels} />
         )}
@@ -24,7 +30,7 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
 
       {/* Caption */}
       <div className="border-t border-border px-5 py-4">
-        <h3 className="text-base font-semibold text-accent sm:text-lg">{data.caption}</h3>
+        <h3 className="text-base font-semibold text-accent sm:text-lg">{caption}</h3>
         {data.description && (
           <p className="mt-2 text-sm leading-relaxed text-text-secondary">{data.description}</p>
         )}
@@ -52,6 +58,14 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
   );
 }
 
+function FallbackCard({ message }: { message: string }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm p-6">
+      <p className="text-sm text-text-muted text-center">{message}</p>
+    </div>
+  );
+}
+
 /* ── Photo Renderer ── */
 
 interface PhotoRendererProps {
@@ -60,43 +74,38 @@ interface PhotoRendererProps {
 }
 
 function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
-  const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const query = searchQuery || caption || '';
+
+  const [state, setState] = useState<'loading' | 'loaded' | 'error'>(query ? 'loading' : 'error');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [attribution, setAttribution] = useState<string | null>(null);
 
   useEffect(() => {
-    const query = searchQuery ?? caption;
-    if (!query) {
-      setState('error');
-      return;
-    }
+    if (!query) return;
 
     let cancelled = false;
 
-    async function fetchImage() {
-      try {
-        const res = await fetch(`/api/image-search?q=${encodeURIComponent(query)}`);
-        if (!res.ok || cancelled) { setState('error'); return; }
-
-        const data = (await res.json()) as { url?: string | null; thumbnail?: string; attribution?: string; source?: string };
+    fetch(`/api/image-search?q=${encodeURIComponent(query)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('fetch failed');
+        return res.json();
+      })
+      .then((data: { url?: string | null; thumbnail?: string; attribution?: string }) => {
         if (cancelled) return;
-
         if (data.url) {
-          // Use thumbnail for fast initial load, full URL available via click
           setImageUrl(data.thumbnail ?? data.url);
           setAttribution(data.attribution ?? null);
           setState('loaded');
         } else {
           setState('error');
         }
-      } catch {
+      })
+      .catch(() => {
         if (!cancelled) setState('error');
-      }
-    }
+      });
 
-    fetchImage();
     return () => { cancelled = true; };
-  }, [searchQuery, caption]);
+  }, [query]);
 
   if (state === 'loading') {
     return (

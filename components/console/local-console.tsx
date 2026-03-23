@@ -10,13 +10,17 @@ type ConversationEntry = {
   structured?: StructuredResponse;
 };
 
-const STARTER_PROMPTS = [
+const HINTS = [
   'What resistor for a red LED on 5V?',
   'Compare Arduino Uno vs Raspberry Pi Pico',
   'Explain how transistors work',
   'My LED circuit is not blinking — help',
   'Calculate a voltage divider for 3.3V from 5V',
   'Best components for a beginner starter kit',
+  'Show me an ESP32 pinout',
+  'How does PWM work?',
+  'Wire a servo to Arduino',
+  'NPN vs PNP transistor',
 ];
 
 export function LocalConsole() {
@@ -153,19 +157,8 @@ export function LocalConsole() {
               />
             </div>
 
-            {/* Starter prompts */}
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {STARTER_PROMPTS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => void submit(s)}
-                  className="rounded-full border border-border bg-surface-1/60 px-3.5 py-1.5 text-xs text-text-secondary backdrop-blur-sm transition hover:border-border-accent hover:text-text-primary hover:bg-surface-2/80"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            {/* Floating hint pills — ambient, cycling */}
+            <FloatingHints hints={HINTS} onSelect={(h) => void submit(h)} />
           </div>
         )}
 
@@ -294,6 +287,47 @@ const InputBar = ({
     </form>
   );
 };
+
+/* ── Floating Hints ── */
+
+const CYCLE_MS = 3500;
+const FADE_MS = 500;
+
+function FloatingHints({ hints, onSelect }: { hints: string[]; onSelect: (h: string) => void }) {
+  const [currentIdx, setCurrentIdx] = useState(() => Math.floor(Math.random() * hints.length));
+  const [phase, setPhase] = useState<'in' | 'out'>('in');
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPhase('out');
+      setTimeout(() => {
+        setCurrentIdx((prev) => {
+          let next: number;
+          do { next = Math.floor(Math.random() * hints.length); } while (next === prev && hints.length > 1);
+          return next;
+        });
+        setPhase('in');
+      }, FADE_MS);
+    }, CYCLE_MS);
+    return () => clearInterval(timer);
+  }, [hints.length]);
+
+  return (
+    <div className="mt-8 flex min-h-[36px] items-center justify-center">
+      <button
+        key={currentIdx}
+        type="button"
+        onClick={() => onSelect(hints[currentIdx])}
+        style={{
+          animation: `${phase === 'in' ? 'hint-drift-in' : 'hint-drift-out'} ${FADE_MS}ms cubic-bezier(0.16, 1, 0.3, 1) both, hint-float 3s ease-in-out ${FADE_MS}ms infinite`,
+        }}
+        className="cursor-pointer rounded-full border border-border/60 bg-surface-1/40 px-4 py-1.5 font-mono text-[11px] text-text-muted/60 backdrop-blur-sm transition-colors hover:border-accent/30 hover:text-text-secondary hover:bg-surface-2/60"
+      >
+        {hints[currentIdx]}
+      </button>
+    </div>
+  );
+}
 
 /* ── Thinking Indicator ── */
 function ThinkingIndicator() {
