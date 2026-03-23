@@ -43,9 +43,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No valid messages.' }, { status: 400 });
   }
 
-  // Guard against abuse: limit conversation size
-  const MAX_MESSAGES = 50;
-  const MAX_CONTENT_LENGTH = 4000;
+  // Keep only recent context — less tokens = faster response
+  const MAX_MESSAGES = 10;
+  const MAX_CONTENT_LENGTH = 2000;
   const trimmed = messages.slice(-MAX_MESSAGES).map((msg) => ({
     ...msg,
     content: msg.content.slice(0, MAX_CONTENT_LENGTH),
@@ -62,8 +62,8 @@ export async function POST(req: Request) {
           content: msg.content,
         })),
       ],
-      temperature: 0.7,
-      max_tokens: 1024,
+      temperature: 0.4,
+      max_tokens: 800,
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -71,11 +71,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No response from model.' }, { status: 502 });
     }
 
-    // Validate it's parseable JSON
+    // Validate parseable JSON
     try {
       JSON.parse(content);
     } catch {
-      // Model returned non-JSON despite json_object mode — wrap it
       const fallback = JSON.stringify({
         intent: 'quick_answer',
         mode: 'text',

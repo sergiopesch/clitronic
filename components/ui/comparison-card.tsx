@@ -38,6 +38,23 @@ export function ComparisonCard({ data }: { data: ComparisonCardData }) {
         ))}
       </div>
 
+      {/* Use cases */}
+      {data.useCases && data.useCases.length > 0 && (
+        <div className="border-t border-border px-5 py-4">
+          <div className="mb-2.5 text-[11px] tracking-wider text-success/70 uppercase">
+            Best for
+          </div>
+          <div className="space-y-2">
+            {data.useCases.map((uc, i) => (
+              <div key={i} className="flex gap-2 text-sm">
+                <span className="font-medium text-text-primary">{uc.item}:</span>
+                <span className="text-text-secondary">{uc.useCase}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Key differences */}
       {data.keyDifferences.length > 0 && (
         <div className="border-t border-border bg-accent/[0.03] px-5 py-4">

@@ -11,6 +11,7 @@ import { CalculationCard } from './calculation-card';
 import { PinoutCard } from './pinout-card';
 import { ChartCard } from './chart-card';
 import { WiringCard } from './wiring-card';
+import { ImageBlock } from './image-block';
 import { TextResponse } from './text-response';
 import type {
   SpecCardData,
@@ -22,6 +23,7 @@ import type {
   PinoutCardData,
   ChartCardData,
   WiringCardData,
+  ImageBlockData,
 } from '@/lib/ai/response-schema';
 
 interface UIRendererProps {
@@ -53,6 +55,7 @@ export function UIRenderer({ response }: UIRendererProps) {
       {component === 'pinoutCard' && <PinoutCard data={data as PinoutCardData} />}
       {component === 'chartCard' && <ChartCard data={data as ChartCardData} />}
       {component === 'wiringCard' && <WiringCard data={data as WiringCardData} />}
+      {component === 'imageBlock' && <ImageBlock data={data as ImageBlockData} />}
     </AnimateIn>
   );
 }

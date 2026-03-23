@@ -12,9 +12,10 @@ export type ComponentName =
   | 'calculationCard'
   | 'pinoutCard'
   | 'chartCard'
-  | 'wiringCard';
+  | 'wiringCard'
+  | 'imageBlock';
 
-export type UIType = 'card' | 'chart' | 'text';
+export type UIType = 'card' | 'chart' | 'text' | 'image';
 
 export interface SpecCardData {
   title: string;
@@ -27,6 +28,7 @@ export interface ComparisonCardData {
   items: string[];
   attributes: { name: string; values: string[] }[];
   keyDifferences: string[];
+  useCases?: { item: string; useCase: string }[];
 }
 
 export interface ExplanationCardData {
@@ -72,6 +74,14 @@ export interface WiringCardData {
   warnings?: string[];
 }
 
+export interface ImageBlockData {
+  diagramType: string;
+  caption: string;
+  description?: string;
+  labels?: Record<string, string>;
+  notes?: string[];
+}
+
 export type CardData =
   | SpecCardData
   | ComparisonCardData
@@ -81,7 +91,8 @@ export type CardData =
   | CalculationCardData
   | PinoutCardData
   | ChartCardData
-  | WiringCardData;
+  | WiringCardData
+  | ImageBlockData;
 
 export interface UIBlock {
   type: UIType;
