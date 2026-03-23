@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ImageBlockData } from '@/lib/ai/response-schema';
 
 /**
@@ -73,12 +73,34 @@ interface PhotoRendererProps {
   caption: string;
 }
 
+const SEARCH_MESSAGES = [
+  'Scanning the interwebs...',
+  'Asking the electrons nicely...',
+  'Rummaging through datasheets...',
+  'Almost got it, hold my capacitor...',
+  'Checking every pixel...',
+  'Decoding image frequencies...',
+  'Soldering together some results...',
+];
+
 function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
   const query = searchQuery || caption || '';
 
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>(query ? 'loading' : 'error');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [attribution, setAttribution] = useState<string | null>(null);
+  const [msgIndex, setMsgIndex] = useState(0);
+  const msgRef = useRef(0);
+
+  // Rotate fun messages while loading
+  useEffect(() => {
+    if (state !== 'loading') return;
+    const timer = setInterval(() => {
+      msgRef.current = (msgRef.current + 1) % SEARCH_MESSAGES.length;
+      setMsgIndex(msgRef.current);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [state]);
 
   useEffect(() => {
     if (!query) return;
@@ -113,8 +135,14 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
     return (
       <div className="bg-surface-2/60 relative aspect-[4/3] w-full overflow-hidden rounded-xl">
         <div className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent" />
-        <div className="flex h-full items-center justify-center">
-          <div className="text-text-muted text-xs">Searching for image...</div>
+        <div className="flex h-full flex-col items-center justify-center gap-3">
+          <div className="bg-accent/20 h-6 w-6 animate-pulse rounded-full" />
+          <div
+            key={msgIndex}
+            className="text-text-muted animate-fade-in-up px-4 text-center font-mono text-[11px]"
+          >
+            {SEARCH_MESSAGES[msgIndex]}
+          </div>
         </div>
       </div>
     );
@@ -124,8 +152,9 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
     return (
       <div className="border-border bg-surface-2/40 flex aspect-[4/3] w-full items-center justify-center rounded-xl border">
         <div className="text-text-muted text-center text-sm">
-          <span className="block text-lg opacity-40">{'\ud83d\udcf7'}</span>
-          No image found
+          <div className="mb-2 text-2xl opacity-30">{'{ ? }'}</div>
+          <p>{"Couldn't find a good image for this one."}</p>
+          <p className="mt-1 text-xs opacity-50">Try a more specific query!</p>
         </div>
       </div>
     );

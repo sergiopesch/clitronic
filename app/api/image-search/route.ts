@@ -3,17 +3,26 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-interface ImageResult {
+interface ScoredImage {
   url: string;
   thumbnail?: string;
   attribution: string;
   source: 'brave' | 'wikimedia';
+  score: number;
 }
 
+/** Minimum score to consider a result "confident" (skip retry). */
+const CONFIDENCE_THRESHOLD = 2;
+
 /**
- * Multi-provider image search: Brave (primary) → Wikimedia (fallback).
- * Uses the query as-is — the LLM is responsible for providing a
- * precise, descriptive search term. No generic suffixes.
+ * Smart image search with confidence scoring.
+ *
+ * Round 1: Search Brave + Wikimedia in parallel with exact query.
+ *          If best result score >= threshold → return immediately.
+ * Round 2: If no confident match, retry with a simplified query.
+ *          Pick the best result across all attempts.
+ *
+ * Response includes `confident: boolean` so the client knows quality.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -23,27 +32,97 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing query parameter.' }, { status: 400 });
   }
 
-  // Try Brave first if API key is configured
   const braveKey = process.env.BRAVE_API_KEY;
-  if (braveKey) {
-    const result = await searchBrave(query, braveKey);
-    if (result) return NextResponse.json(result);
+
+  // ── Round 1: Parallel search with exact query ──
+  const round1 = await searchParallel(query, braveKey);
+
+  if (round1 && round1.score >= CONFIDENCE_THRESHOLD) {
+    return NextResponse.json({ ...round1, confident: true });
   }
 
-  // Fallback to Wikimedia (free, no key needed)
-  const result = await searchWikimedia(query);
-  if (result) return NextResponse.json(result);
+  // ── Round 2: Retry with simplified query ──
+  const simplified = simplifyQuery(query);
+  if (simplified !== query) {
+    const round2 = await searchParallel(simplified, braveKey);
 
-  return NextResponse.json({ url: null });
+    // Pick the best across both rounds
+    const best = betterResult(round1, round2);
+    if (best) {
+      return NextResponse.json({ ...best, confident: best.score >= CONFIDENCE_THRESHOLD });
+    }
+  }
+
+  // Return round 1 result even if low confidence, or null
+  if (round1) {
+    return NextResponse.json({ ...round1, confident: false });
+  }
+
+  return NextResponse.json({ url: null, confident: false });
+}
+
+/* ── Parallel search across providers ── */
+
+async function searchParallel(query: string, braveKey?: string): Promise<ScoredImage | null> {
+  const searches: Promise<ScoredImage | null>[] = [];
+
+  if (braveKey) searches.push(searchBrave(query, braveKey));
+  searches.push(searchWikimedia(query));
+
+  const results = await Promise.all(searches);
+  return results.reduce<ScoredImage | null>((best, r) => betterResult(best, r), null);
+}
+
+function betterResult(a: ScoredImage | null, b: ScoredImage | null): ScoredImage | null {
+  if (!a) return b;
+  if (!b) return a;
+  return b.score > a.score ? b : a;
+}
+
+/* ── Query simplification for retry ── */
+
+function simplifyQuery(query: string): string {
+  // Remove version numbers, qualifiers, and extra words
+  return query
+    .replace(/\b(v\d+|r\d+|rev\s*\d+|module|board|kit|sensor|breakout)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* ── Scoring helpers ── */
+
+function scoreResult(query: string, title: string, width?: number, height?: number): number {
+  const queryWords = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 1);
+  const titleLower = title.toLowerCase();
+
+  // Base: how many query words appear in the title
+  let score = queryWords.filter((word) => titleLower.includes(word)).length;
+
+  // Bonus for reasonable dimensions
+  const w = width ?? 0;
+  const h = height ?? 0;
+  if (w >= 300 && h >= 200) score += 0.5;
+  const ratio = w && h ? w / h : 1;
+  if (ratio > 0.5 && ratio < 2.5) score += 0.5;
+
+  // Penalty if title contains "kit", "set", "bundle" (likely a collection, not the item)
+  if (/\b(kit|set|bundle|pack|lot|collection)\b/i.test(titleLower)) {
+    score -= 1;
+  }
+
+  return score;
 }
 
 /* ── Brave Image Search ── */
 
-async function searchBrave(query: string, apiKey: string): Promise<ImageResult | null> {
+async function searchBrave(query: string, apiKey: string): Promise<ScoredImage | null> {
   try {
     const url = new URL('https://api.search.brave.com/res/v1/images/search');
     url.searchParams.set('q', query);
-    url.searchParams.set('count', '8');
+    url.searchParams.set('count', '10');
     url.searchParams.set('safesearch', 'strict');
 
     const res = await fetch(url.toString(), {
@@ -61,10 +140,7 @@ async function searchBrave(query: string, apiKey: string): Promise<ImageResult |
     const results = data.results;
     if (!results?.length) return null;
 
-    // Score results by relevance to the query
-    const queryWords = query.toLowerCase().split(/\s+/);
-    let bestResult: (typeof results)[0] | null = null;
-    let bestScore = -1;
+    let best: ScoredImage | null = null;
 
     for (const img of results) {
       const imageUrl = img.thumbnail?.src ?? img.properties?.url;
@@ -72,32 +148,27 @@ async function searchBrave(query: string, apiKey: string): Promise<ImageResult |
       if (imageUrl.endsWith('.svg')) continue;
 
       const w = img.properties?.width ?? 0;
-      const h = img.properties?.height ?? 0;
       if (w > 0 && w < 150) continue;
 
-      // Score: how many query words appear in the title
-      const title = (img.title ?? '').toLowerCase();
-      let score = queryWords.filter((word) => title.includes(word)).length;
+      const score = scoreResult(
+        query,
+        img.title ?? '',
+        img.properties?.width,
+        img.properties?.height
+      );
 
-      // Bonus for reasonable image dimensions (not tiny, not banners)
-      if (w >= 300 && h >= 200) score += 1;
-      const ratio = w && h ? w / h : 1;
-      if (ratio > 0.5 && ratio < 2.5) score += 1; // Not too wide/tall
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestResult = img;
+      if (!best || score > best.score) {
+        best = {
+          url: img.properties?.url ?? imageUrl,
+          thumbnail: img.thumbnail?.src,
+          attribution: img.source ?? 'Brave Search',
+          source: 'brave',
+          score,
+        };
       }
     }
 
-    if (!bestResult) return null;
-
-    return {
-      url: bestResult.properties?.url ?? bestResult.thumbnail?.src ?? '',
-      thumbnail: bestResult.thumbnail?.src,
-      attribution: bestResult.source ?? 'Brave Search',
-      source: 'brave',
-    };
+    return best;
   } catch {
     return null;
   }
@@ -105,14 +176,14 @@ async function searchBrave(query: string, apiKey: string): Promise<ImageResult |
 
 /* ── Wikimedia Commons Search ── */
 
-async function searchWikimedia(query: string): Promise<ImageResult | null> {
+async function searchWikimedia(query: string): Promise<ScoredImage | null> {
   try {
     const url = new URL('https://commons.wikimedia.org/w/api.php');
     url.searchParams.set('action', 'query');
     url.searchParams.set('generator', 'search');
     url.searchParams.set('gsrnamespace', '6');
     url.searchParams.set('gsrsearch', query);
-    url.searchParams.set('gsrlimit', '8');
+    url.searchParams.set('gsrlimit', '10');
     url.searchParams.set('prop', 'imageinfo');
     url.searchParams.set('iiprop', 'url|extmetadata|size');
     url.searchParams.set('iiurlwidth', '600');
@@ -129,10 +200,7 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
     const pages = data.query?.pages;
     if (!pages) return null;
 
-    // Score results by relevance
-    const queryWords = query.toLowerCase().split(/\s+/);
-    let bestPage: WikimediaPage | null = null;
-    let bestScore = -1;
+    let best: ScoredImage | null = null;
 
     for (const page of Object.values(pages)) {
       const info = page.imageinfo?.[0];
@@ -141,33 +209,24 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
       const imageUrl = info.thumburl ?? info.url;
       if (!imageUrl) continue;
       if (imageUrl.endsWith('.svg') || imageUrl.endsWith('.SVG')) continue;
-
-      // Skip tiny images
       if (info.width && info.width < 150) continue;
 
-      // Score based on title match
-      const title = (page.title ?? '').toLowerCase().replace('file:', '');
-      let score = queryWords.filter((word) => title.includes(word)).length;
+      const title = (page.title ?? '').replace(/^File:/i, '');
+      const score = scoreResult(query, title, info.width);
 
-      // Prefer photos over diagrams/icons (larger files tend to be photos)
-      if (info.width && info.width >= 400) score += 1;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestPage = page;
+      if (!best || score > best.score) {
+        best = {
+          url: imageUrl,
+          attribution: info.extmetadata?.Artist?.value
+            ? stripHtml(info.extmetadata.Artist.value)
+            : 'Wikimedia Commons',
+          source: 'wikimedia',
+          score,
+        };
       }
     }
 
-    if (!bestPage) return null;
-
-    const info = bestPage.imageinfo![0];
-    return {
-      url: info.thumburl ?? info.url!,
-      attribution: info.extmetadata?.Artist?.value
-        ? stripHtml(info.extmetadata.Artist.value)
-        : 'Wikimedia Commons',
-      source: 'wikimedia',
-    };
+    return best;
   } catch {
     return null;
   }
