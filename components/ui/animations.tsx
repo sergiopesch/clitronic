@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { AnimationType } from '@/lib/ai/response-schema';
 
 interface AnimateInProps {
@@ -10,31 +10,20 @@ interface AnimateInProps {
 }
 
 export function AnimateIn({ animation, delay = 0, children }: AnimateInProps) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(timer);
-  }, [delay]);
-
-  const base = 'transition-all duration-200 ease-out';
-
-  const hidden = {
-    fadeIn: 'opacity-0',
-    slideUp: 'opacity-0 translate-y-2',
-    expand: 'opacity-0 scale-y-95 origin-top',
-  };
-
-  const shown = {
-    fadeIn: 'opacity-100',
-    slideUp: 'opacity-100 translate-y-0',
-    expand: 'opacity-100 scale-y-100',
-  };
-
   const type = animation ?? 'fadeIn';
 
+  const className =
+    type === 'expand'
+      ? 'animate-card-expand'
+      : type === 'slideUp'
+        ? 'animate-card-enter'
+        : 'animate-fade-in-up';
+
   return (
-    <div className={`${base} ${visible ? shown[type] : hidden[type]}`}>
+    <div
+      className={className}
+      style={{ animationDelay: `${delay}ms` }}
+    >
       {children}
     </div>
   );

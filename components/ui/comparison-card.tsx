@@ -4,22 +4,33 @@ import type { ComparisonCardData } from '@/lib/ai/response-schema';
 
 export function ComparisonCard({ data }: { data: ComparisonCardData }) {
   return (
-    <div className="rounded-xl border border-border bg-surface-1 overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm">
+      {/* Header row with item names */}
       <div className="flex border-b border-border">
-        <div className="w-1/3 px-4 py-2.5 text-[11px] tracking-wider text-text-muted uppercase" />
+        <div className="w-2/5 px-5 py-3" />
         {data.items.map((item) => (
-          <div key={item} className="flex-1 px-4 py-2.5 text-center text-sm font-semibold text-accent">
+          <div
+            key={item}
+            className="flex-1 px-4 py-3 text-center text-sm font-semibold text-accent"
+          >
             {item}
           </div>
         ))}
       </div>
 
+      {/* Attribute rows */}
       <div className="divide-y divide-border">
-        {data.attributes.map((attr) => (
-          <div key={attr.name} className="flex">
-            <div className="w-1/3 px-4 py-2.5 text-xs text-text-muted">{attr.name}</div>
-            {attr.values.map((val, i) => (
-              <div key={i} className="flex-1 px-4 py-2.5 text-center font-mono text-sm text-text-primary">
+        {data.attributes.map((attr, i) => (
+          <div
+            key={attr.name}
+            className={`flex animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}
+          >
+            <div className="w-2/5 px-5 py-3 text-xs text-text-muted">{attr.name}</div>
+            {attr.values.map((val, j) => (
+              <div
+                key={j}
+                className="flex-1 px-4 py-3 text-center font-mono text-sm text-text-primary"
+              >
                 {val}
               </div>
             ))}
@@ -27,13 +38,17 @@ export function ComparisonCard({ data }: { data: ComparisonCardData }) {
         ))}
       </div>
 
+      {/* Key differences */}
       {data.keyDifferences.length > 0 && (
-        <div className="border-t border-border px-4 py-3">
-          <div className="mb-2 text-[11px] tracking-wider text-text-muted uppercase">Key differences</div>
-          <ul className="space-y-1">
+        <div className="border-t border-border bg-accent/[0.03] px-5 py-4">
+          <div className="mb-2.5 text-[11px] tracking-wider text-accent/70 uppercase">
+            Key differences
+          </div>
+          <ul className="space-y-1.5">
             {data.keyDifferences.map((diff, i) => (
-              <li key={i} className="text-sm text-text-secondary">
-                <span className="mr-1.5 text-accent">-</span>{diff}
+              <li key={i} className="flex gap-2 text-sm text-text-secondary">
+                <span className="mt-0.5 text-accent">-</span>
+                <span>{diff}</span>
               </li>
             ))}
           </ul>

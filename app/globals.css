@@ -61,46 +61,146 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Prose overrides for chat bubbles */
-.prose pre {
-  margin: 0.5rem 0;
-}
-
-.prose p {
-  margin: 0.25rem 0;
-}
-
-.prose ul,
-.prose ol {
-  margin: 0.25rem 0;
-  padding-left: 1.25rem;
-}
-
-.prose table {
-  margin: 0.5rem 0;
-}
-
-.prose h1,
-.prose h2,
-.prose h3,
-.prose h4 {
-  margin: 0.5rem 0 0.25rem;
-}
-
-/* Scrollbar styling */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #4b5563;
   border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
+}
+
+/* ── Card entrance animations ── */
+@keyframes card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes card-enter-expand {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.9) scaleX(0.98);
+    transform-origin: top center;
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scaleY(1) scaleX(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes thinking-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.08), 0 0 60px rgba(34, 211, 238, 0.04);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.15), 0 0 80px rgba(34, 211, 238, 0.08);
+  }
+}
+
+@keyframes thinking-dots {
+  0%, 20% { opacity: 0.2; }
+  50% { opacity: 1; }
+  80%, 100% { opacity: 0.2; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes subtle-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-card-enter {
+  animation: card-enter 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-card-expand {
+  animation: card-enter-expand 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-thinking-glow {
+  animation: thinking-glow 2s ease-in-out infinite;
+}
+
+.animate-cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(34, 211, 238, 0.06) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* Stagger children delays */
+.stagger-1 { animation-delay: 60ms; }
+.stagger-2 { animation-delay: 120ms; }
+.stagger-3 { animation-delay: 180ms; }
+.stagger-4 { animation-delay: 240ms; }
+.stagger-5 { animation-delay: 300ms; }
+.stagger-6 { animation-delay: 360ms; }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-card-enter,
+  .animate-card-expand,
+  .animate-fade-in-up {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  .animate-thinking-glow {
+    animation: none;
+  }
 }
