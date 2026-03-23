@@ -75,10 +75,15 @@ export interface WiringCardData {
 }
 
 export interface ImageBlockData {
-  diagramType: string;
+  imageMode: 'diagram' | 'photo';
+  // diagram mode
+  diagramType?: string;
+  labels?: Record<string, string>;
+  // photo mode
+  searchQuery?: string;
+  // shared
   caption: string;
   description?: string;
-  labels?: Record<string, string>;
   notes?: string[];
 }
 

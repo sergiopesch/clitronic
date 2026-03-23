@@ -1,18 +1,25 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { ImageBlockData } from '@/lib/ai/response-schema';
 
 /**
- * Renders SVG diagrams for electronics concepts.
- * The LLM provides a diagramType and the component renders a
- * pre-built visual with dynamic labels and captions.
+ * Dual-mode image block:
+ * - "diagram" → renders built-in SVG electronics diagrams
+ * - "photo"  → fetches a real image via /api/image-search
  */
 export function ImageBlock({ data }: { data: ImageBlockData }) {
+  const mode = data.imageMode ?? (data.diagramType ? 'diagram' : 'photo');
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-surface-1/80 backdrop-blur-sm">
-      {/* Diagram area */}
+      {/* Visual area */}
       <div className="flex justify-center bg-surface-0/40 px-5 py-6">
-        <DiagramRenderer type={data.diagramType} labels={data.labels} />
+        {mode === 'photo' ? (
+          <PhotoRenderer searchQuery={data.searchQuery} caption={data.caption} />
+        ) : (
+          <DiagramRenderer type={data.diagramType ?? 'generic'} labels={data.labels} />
+        )}
       </div>
 
       {/* Caption */}
@@ -39,6 +46,94 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Photo Renderer ── */
+
+interface PhotoRendererProps {
+  searchQuery?: string;
+  caption: string;
+}
+
+function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
+  const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [attribution, setAttribution] = useState<string | null>(null);
+
+  useEffect(() => {
+    const query = searchQuery ?? caption;
+    if (!query) {
+      setState('error');
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchImage() {
+      try {
+        const res = await fetch(`/api/image-search?q=${encodeURIComponent(query)}`);
+        if (!res.ok || cancelled) { setState('error'); return; }
+
+        const data = (await res.json()) as { url?: string | null; thumbnail?: string; attribution?: string; source?: string };
+        if (cancelled) return;
+
+        if (data.url) {
+          // Use thumbnail for fast initial load, full URL available via click
+          setImageUrl(data.thumbnail ?? data.url);
+          setAttribution(data.attribution ?? null);
+          setState('loaded');
+        } else {
+          setState('error');
+        }
+      } catch {
+        if (!cancelled) setState('error');
+      }
+    }
+
+    fetchImage();
+    return () => { cancelled = true; };
+  }, [searchQuery, caption]);
+
+  if (state === 'loading') {
+    return (
+      <div className="relative h-48 w-full max-w-[400px] overflow-hidden rounded-lg bg-surface-2/60">
+        <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/5 to-transparent" />
+        <div className="flex h-full items-center justify-center">
+          <div className="text-xs text-text-muted">Loading image...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'error' || !imageUrl) {
+    return (
+      <div className="flex h-32 w-full max-w-[400px] items-center justify-center rounded-lg border border-border bg-surface-2/40">
+        <div className="text-center text-sm text-text-muted">
+          <span className="block text-lg opacity-40">&#128247;</span>
+          No image found
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full max-w-[400px]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageUrl}
+        alt={caption}
+        className="w-full rounded-lg object-contain opacity-0 transition-opacity duration-500"
+        onLoad={(e) => { (e.target as HTMLImageElement).classList.replace('opacity-0', 'opacity-100'); }}
+        onError={() => setState('error')}
+        loading="eager"
+      />
+      {attribution && (
+        <div className="mt-1.5 text-right text-[10px] text-text-muted opacity-60">
+          {attribution}
         </div>
       )}
     </div>

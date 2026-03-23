@@ -30,7 +30,7 @@ Step 3 — Pick the MOST VISUAL component that fits. Diagram > explanation. Char
 specCard: {title, subtitle?, keySpecs:[{label,value}], optionalDetails?:[{label,value}]}
 comparisonCard: {items:[str,str], attributes:[{name,values:[str,str]}], keyDifferences:[str], useCases?:[{item,useCase}]}
 explanationCard: {title, summary, keyPoints:[str]}
-imageBlock: {diagramType, caption, description?, labels?:{k:v}, notes?:[str]}
+imageBlock: {imageMode:"diagram"|"photo", diagramType?, caption, description?, labels?:{k:v}, searchQuery?, notes?:[str]}
 recommendationCard: {items:[{name,reason}], highlights:[str]}
 troubleshootingCard: {issue, steps:[{label,detail}], tips:[str]}
 calculationCard: {title, formula, inputs:[{label,value}], result:{label,value,note?}}
@@ -38,14 +38,14 @@ pinoutCard: {component, description?, pins:[{number,label,type:"power|ground|dig
 chartCard: {title, subtitle?, bars:[{label,value:number,unit?,color?:"accent|success|warning|error"}]}
 wiringCard: {title, description?, steps:[{from,to,wire?,note?}], warnings?:[str]}
 
-# imageBlock diagram types
+# imageBlock modes
 
-"breadboard" — labels: {power?, ground?}
-"voltage-divider" — labels: {vin, vout, r1, r2}
-"led-circuit" — labels: {voltage, resistor}
-"pull-up" / "pull-down" — labels: {type, resistor}
-"pwm" — labels: {duty}
-"capacitor-charge" — labels: {voltage}
+## imageMode: "diagram" — built-in SVG diagrams
+Use for abstract electronics concepts (circuits, waveforms, layouts).
+diagramType options: "breadboard" (labels: {power?, ground?}), "voltage-divider" (labels: {vin, vout, r1, r2}), "led-circuit" (labels: {voltage, resistor}), "pull-up"/"pull-down" (labels: {type, resistor}), "pwm" (labels: {duty}), "capacitor-charge" (labels: {voltage})
+
+## imageMode: "photo" — real product/component images
+Use when the user asks to SEE a real component, board, module, or product. Set searchQuery to a specific, descriptive search term (e.g. "Arduino Uno R3 board", "ESP32-CAM module", "OV7670 camera module"). Do NOT use for abstract concepts — use diagram mode instead.
 
 # pinoutCard rules
 Pins in physical order (1,2,3...). First half = left side, second half = right side (reversed). Include ALL pins.
