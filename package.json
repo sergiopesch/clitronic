@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "validate": "npm run type-check && npm run lint && npm run format:check",
-    "test": "tsx --test \"tests/**/*.test.ts\"",
+    "test": "tsx --test",
     "scaffold:component": "node scripts/scaffold-component.mjs"
   },
   "dependencies": {
