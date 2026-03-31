@@ -31,6 +31,20 @@ function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   });
 }
 
+function toSafeTextResponse(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return null;
+  const obj = payload as Record<string, unknown>;
+  const text = typeof obj.text === 'string' && obj.text.trim() ? obj.text : null;
+  if (!text) return null;
+  return {
+    intent: typeof obj.intent === 'string' && obj.intent.trim() ? obj.intent : 'quick_answer',
+    mode: 'text' as const,
+    ui: null,
+    text,
+    behavior: null,
+  };
+}
+
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const rateCheck = checkRateLimit(ip);
@@ -101,7 +115,14 @@ export async function POST(req: Request) {
     if (!normalized) return jsonResponse(FALLBACK_TEXT_RESPONSE);
 
     const validated = validateStructuredResponse(normalized);
-    if (!validated) return jsonResponse(RENDER_FALLBACK_TEXT_RESPONSE);
+    if (!validated) {
+      const recoveredText = toSafeTextResponse(normalized);
+      if (recoveredText) {
+        logger.warn('[clitronic] Falling back to recovered text response');
+        return jsonResponse(recoveredText);
+      }
+      return jsonResponse(RENDER_FALLBACK_TEXT_RESPONSE);
+    }
 
     logger.debug('[clitronic] Validated output:', JSON.stringify(validated).substring(0, 500));
     return jsonResponse(validated);

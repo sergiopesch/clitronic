@@ -45,7 +45,7 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
         <div className="flex justify-center overflow-x-auto px-3 py-5 sm:px-5 sm:py-6">
           <svg
             viewBox={`0 0 400 ${chipHeight + 40}`}
-            className="w-full max-w-[400px] min-w-[340px]"
+            className="h-auto w-full max-w-[400px]"
             style={{ height: `${Math.min(chipHeight + 40, 400)}px` }}
           >
             {/* IC Body */}

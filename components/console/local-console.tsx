@@ -236,8 +236,12 @@ export function LocalConsole() {
             : 'pointer-events-none -translate-y-4 opacity-0'
         }`}
       >
-        <button type="button" onClick={reset} className="transition hover:opacity-80">
-          <Logo scale={0.8} />
+        <button
+          type="button"
+          onClick={reset}
+          className="max-w-[150px] transition hover:opacity-80 sm:max-w-none"
+        >
+          <Logo scale={0.62} className="h-auto w-full sm:w-auto" />
         </button>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {isViewingHistory && (
@@ -264,7 +268,7 @@ export function LocalConsole() {
         {/* Idle state */}
         {!hasResponse && !isLoading && !error && (
           <div className="animate-fade-in-up flex w-full max-w-2xl flex-col items-center">
-            <Logo scale={1.6} />
+            <Logo scale={1} className="h-auto w-full max-w-[270px] px-2 sm:max-w-[420px] sm:px-0" />
             <p className="text-text-muted mt-2 text-center text-sm">
               Your electronics companion. Ask anything.
             </p>
@@ -493,15 +497,16 @@ function FloatingHints({ hints, onSelect }: { hints: string[]; onSelect: (h: str
     };
   }, [hints]);
 
-  if (!hint) return <div className="mt-10 h-[32px]" />;
+  if (!hint) return <div className="mt-10 h-[32px] w-full" />;
 
   return (
-    <div className="mt-10 flex h-[32px] items-center justify-center">
+    <div className="mt-10 flex h-[32px] w-full items-center justify-center px-2">
       <button
         key={hint.key}
         type="button"
         onClick={() => onSelect(hint.text)}
-        className="hint-pill border-border/40 text-text-muted/50 hover:border-accent/20 hover:text-text-secondary cursor-pointer rounded-full border bg-white/[0.02] px-5 py-1.5 font-mono text-[11px] backdrop-blur-sm transition-colors duration-300"
+        className="hint-pill border-border/40 text-text-muted/50 hover:border-accent/20 hover:text-text-secondary max-w-full cursor-pointer truncate rounded-full border bg-white/[0.02] px-4 py-1.5 font-mono text-[11px] backdrop-blur-sm transition-colors duration-300 sm:px-5"
+        title={hint.text}
       >
         {hint.text}
       </button>

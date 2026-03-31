@@ -5,7 +5,33 @@ import type { ComparisonCardData } from '@/lib/ai/response-schema';
 export function ComparisonCard({ data }: { data: ComparisonCardData }) {
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="overflow-x-auto">
+      {/* Mobile layout: stacked rows to avoid horizontal overflow */}
+      <div className="divide-border divide-y sm:hidden">
+        {(data.attributes ?? []).map((attr, i) => (
+          <div
+            key={`${attr.name}-mobile-${i}`}
+            className={`animate-fade-in-up px-4 py-3.5 stagger-${Math.min(i + 1, 6)}`}
+          >
+            <div className="text-text-muted text-[11px] tracking-wider uppercase">{attr.name}</div>
+            <div className="mt-2 space-y-1.5">
+              {(data.items ?? []).map((item, idx) => (
+                <div
+                  key={`${attr.name}-${item}-mobile-${idx}`}
+                  className="bg-surface-2/50 border-border/60 rounded-lg border px-2.5 py-2"
+                >
+                  <div className="text-accent text-[11px] font-semibold">{item}</div>
+                  <div className="text-text-primary mt-0.5 font-mono text-xs break-words">
+                    {attr.values?.[idx] ?? '-'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tablet/Desktop layout: table-like compare view */}
+      <div className="hidden overflow-x-auto sm:block">
         <div className="min-w-[560px]">
           {/* Header row with item names */}
           <div className="border-border flex border-b">

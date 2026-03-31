@@ -1,5 +1,7 @@
 'use client';
 
+import { useId } from 'react';
+
 /**
  * Pixel-grid logo for Clitronic.
  * Each letter is defined on a 5-row grid using rectangular blocks.
@@ -106,6 +108,7 @@ interface LogoProps {
 }
 
 export function Logo({ scale = 1, className }: LogoProps) {
+  const gradientId = `clitronic-grad-${useId().replace(/:/g, '')}`;
   // Calculate total width
   let totalCols = 0;
   for (let i = 0; i < WORD.length; i++) {
@@ -116,8 +119,6 @@ export function Logo({ scale = 1, className }: LogoProps) {
 
   const svgW = totalCols * (CELL + GAP) * scale;
   const svgH = 5 * (CELL + GAP) * scale;
-  const gradientId = 'clitronic-grad';
-
   // Build blocks with absolute x positions
   const allBlocks: { x: number; y: number; w: number }[] = [];
   let offsetX = 0;
@@ -141,6 +142,8 @@ export function Logo({ scale = 1, className }: LogoProps) {
       width={svgW}
       height={svgH}
       className={className}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ maxWidth: '100%' }}
       role="img"
       aria-label="Clitronic"
     >
