@@ -31,7 +31,9 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
       <div className="border-border border-b px-4 py-4 sm:px-5">
         <h3 className="text-accent text-base font-semibold sm:text-lg">{data.component}</h3>
-        {data.description && <p className="text-text-muted mt-1 text-sm">{data.description}</p>}
+        {data.description && (
+          <p className="text-text-muted mt-1 text-[13px] sm:text-sm">{data.description}</p>
+        )}
       </div>
 
       {totalPins === 0 && (

@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 
 :root {
+  --vvh: 100vh;
+
   /* Surface palette (dark-only) */
   --surface-0: #05070a;
   --surface-1: #080b10;
@@ -59,6 +61,22 @@ body {
   background: var(--surface-0);
   color: var(--text-primary);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Prevent iOS Safari auto-zooming form controls under 16px. */
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 /* ── Scrollbar ── */

@@ -66,9 +66,11 @@ export function WiringCard({ data }: { data: WiringCardData }) {
             </svg>
           </div>
           <div>
-            <h3 className="text-text-primary text-sm font-semibold sm:text-base">{data.title}</h3>
+            <h3 className="text-text-primary text-[13px] font-semibold sm:text-base">
+              {data.title}
+            </h3>
             {data.description && (
-              <p className="text-text-muted mt-0.5 text-xs">{data.description}</p>
+              <p className="text-text-muted mt-0.5 text-[11px] sm:text-xs">{data.description}</p>
             )}
           </div>
           {totalSteps > 0 && (

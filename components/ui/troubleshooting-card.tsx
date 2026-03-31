@@ -25,7 +25,7 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
         <div className="flex items-center justify-between">
           <div>
             <div className="text-warning text-[11px] tracking-wider uppercase">Troubleshooting</div>
-            <h3 className="text-text-primary mt-1 text-base font-semibold sm:text-lg">
+            <h3 className="text-text-primary mt-1 text-[15px] font-semibold sm:text-lg">
               {data.issue}
             </h3>
           </div>
@@ -88,7 +88,7 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
             </span>
             <div className="flex-1">
               <div
-                className={`text-sm font-medium transition-all ${
+                className={`text-[13px] font-medium transition-all sm:text-sm ${
                   checked.has(i) ? 'text-text-muted line-through' : 'text-text-primary'
                 }`}
               >

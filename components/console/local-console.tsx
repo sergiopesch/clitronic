@@ -206,8 +206,30 @@ export function LocalConsole() {
     if (!isLoading) inputRef.current?.focus();
   }, [isLoading]);
 
+  useEffect(() => {
+    const syncViewportHeight = () => {
+      const vv = window.visualViewport;
+      const nextHeight = vv?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty('--vvh', `${nextHeight}px`);
+    };
+
+    syncViewportHeight();
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', syncViewportHeight);
+    vv?.addEventListener('scroll', syncViewportHeight);
+    window.addEventListener('resize', syncViewportHeight);
+    window.addEventListener('orientationchange', syncViewportHeight);
+
+    return () => {
+      vv?.removeEventListener('resize', syncViewportHeight);
+      vv?.removeEventListener('scroll', syncViewportHeight);
+      window.removeEventListener('resize', syncViewportHeight);
+      window.removeEventListener('orientationchange', syncViewportHeight);
+    };
+  }, []);
+
   return (
-    <main className="bg-surface-0 relative flex min-h-[100dvh] flex-col">
+    <main className="bg-surface-0 relative flex min-h-[var(--vvh)] flex-col overflow-x-clip sm:min-h-[100dvh]">
       {/* Ambient background glow */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="bg-accent/[0.03] absolute top-1/3 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
@@ -230,7 +252,7 @@ export function LocalConsole() {
 
       {/* Top bar */}
       <header
-        className={`relative z-10 flex items-start justify-between gap-2 px-4 py-3 transition-all duration-500 sm:items-center sm:px-6 ${
+        className={`relative z-10 flex items-start justify-between gap-2 px-3 py-3 pt-[max(env(safe-area-inset-top),0px)] transition-all duration-500 sm:items-center sm:px-6 ${
           hasResponse || isLoading
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none -translate-y-4 opacity-0'
@@ -264,7 +286,7 @@ export function LocalConsole() {
       </header>
 
       {/* Main area */}
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 sm:px-6">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-3 sm:px-6">
         {/* Idle state */}
         {!hasResponse && !isLoading && !error && (
           <div className="animate-fade-in-up flex w-full max-w-2xl flex-col items-center">
@@ -337,7 +359,7 @@ export function LocalConsole() {
 
       {/* Bottom input */}
       {(hasResponse || error) && !isLoading && (
-        <div className="border-border/50 bg-surface-0/80 animate-fade-in-up relative z-10 border-t px-4 py-3 pb-[max(env(safe-area-inset-bottom),0px)] backdrop-blur-xl sm:px-6">
+        <div className="border-border/50 bg-surface-0/80 animate-fade-in-up relative z-10 border-t px-3 py-3 pb-[max(env(safe-area-inset-bottom),0px)] backdrop-blur-xl sm:px-6">
           <div className="mx-auto max-w-2xl">
             <InputBar
               ref={inputRef}
@@ -433,13 +455,18 @@ const InputBar = forwardRef<HTMLTextAreaElement, InputBarProps>(function InputBa
         e.preventDefault();
         onSubmit();
       }}
-      className={`border-border bg-surface-1/80 focus-within:border-border-accent flex items-end gap-2 rounded-2xl border backdrop-blur-sm transition-colors ${
+      className={`border-border bg-surface-1/80 focus-within:border-border-accent flex w-full max-w-full min-w-0 items-end gap-2 overflow-hidden rounded-2xl border backdrop-blur-sm transition-colors ${
         size === 'large' ? 'p-2' : 'p-1.5'
       }`}
     >
       <textarea
         ref={ref}
         value={value}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        enterKeyHint="send"
         onChange={(e) => {
           onChange(e.target.value);
           const el = e.target;
@@ -454,15 +481,17 @@ const InputBar = forwardRef<HTMLTextAreaElement, InputBarProps>(function InputBa
         }}
         rows={1}
         placeholder="Ask about electronics..."
-        className={`text-text-primary caret-accent placeholder:text-text-muted flex-1 resize-none bg-transparent font-mono outline-none ${
-          size === 'large' ? 'min-h-[44px] px-3 py-2.5 text-sm' : 'min-h-[36px] px-3 py-2 text-sm'
+        className={`text-text-primary caret-accent placeholder:text-text-muted min-w-0 flex-1 resize-none bg-transparent font-mono outline-none ${
+          size === 'large'
+            ? 'min-h-[44px] px-3 py-2.5 text-base sm:text-sm'
+            : 'min-h-[36px] px-3 py-2 text-base sm:text-sm'
         }`}
       />
       <button
         type="submit"
         disabled={isLoading || value.trim().length === 0}
-        className={`bg-accent text-surface-0 hover:bg-accent-dim disabled:bg-surface-3 disabled:text-text-muted shrink-0 rounded-xl font-medium transition disabled:cursor-not-allowed ${
-          size === 'large' ? 'px-5 py-2.5 text-sm' : 'px-4 py-2 text-xs'
+        className={`bg-accent text-surface-0 hover:bg-accent-dim disabled:bg-surface-3 disabled:text-text-muted shrink-0 rounded-xl font-medium whitespace-nowrap transition disabled:cursor-not-allowed ${
+          size === 'large' ? 'px-4 py-2.5 text-sm sm:px-5' : 'px-3 py-2 text-xs sm:px-4'
         }`}
       >
         Ask

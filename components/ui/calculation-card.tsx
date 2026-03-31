@@ -7,7 +7,7 @@ export function CalculationCard({ data }: { data: CalculationCardData }) {
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
       <div className="border-border border-b px-4 py-4 sm:px-5">
         <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
-        <div className="bg-surface-0/60 text-text-secondary mt-2 rounded-xl px-4 py-2.5 font-mono text-xs break-words sm:text-sm">
+        <div className="bg-surface-0/60 text-text-secondary mt-2 rounded-xl px-4 py-2.5 font-mono text-[11px] break-words sm:text-sm">
           {data.formula}
         </div>
       </div>
@@ -21,7 +21,7 @@ export function CalculationCard({ data }: { data: CalculationCardData }) {
             <div className="text-text-muted text-[11px] tracking-wider uppercase">
               {input.label}
             </div>
-            <div className="text-text-primary mt-1 font-mono text-sm font-medium break-words">
+            <div className="text-text-primary mt-1 font-mono text-[13px] font-medium break-words sm:text-sm">
               {input.value}
             </div>
           </div>
@@ -32,7 +32,7 @@ export function CalculationCard({ data }: { data: CalculationCardData }) {
         <div className="text-success/70 text-[11px] tracking-wider uppercase">
           {data.result.label}
         </div>
-        <div className="text-success mt-1.5 font-mono text-xl font-bold break-words sm:text-2xl">
+        <div className="text-success mt-1.5 font-mono text-lg font-bold break-words sm:text-2xl">
           {data.result.value}
         </div>
         {data.result.note && (

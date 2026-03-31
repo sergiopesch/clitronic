@@ -11,7 +11,9 @@ export function SpecCard({ data }: { data: SpecCardData }) {
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
       <div className="border-border border-b px-4 py-4 sm:px-5">
         <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
-        {data.subtitle && <p className="text-text-muted mt-1 text-sm">{data.subtitle}</p>}
+        {data.subtitle && (
+          <p className="text-text-muted mt-1 text-[13px] sm:text-sm">{data.subtitle}</p>
+        )}
       </div>
 
       <div className="bg-border grid gap-px sm:grid-cols-2">
@@ -32,7 +34,7 @@ export function SpecCard({ data }: { data: SpecCardData }) {
         <>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="border-border text-accent hover:bg-surface-2/50 flex w-full items-center justify-center gap-1 border-t px-4 py-2.5 text-xs transition sm:px-5"
+            className="border-border text-accent hover:bg-surface-2/50 flex w-full items-center justify-center gap-1 border-t px-4 py-2.5 text-[11px] transition sm:px-5 sm:text-xs"
           >
             {expanded ? 'Hide details' : 'Show details'}
             <svg

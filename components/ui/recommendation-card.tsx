@@ -11,8 +11,12 @@ export function RecommendationCard({ data }: { data: RecommendationCardData }) {
             key={`${item.name}-${i}`}
             className={`animate-fade-in-up px-4 py-4 stagger-${Math.min(i + 1, 6)} sm:px-5`}
           >
-            <div className="text-text-primary text-sm font-semibold sm:text-base">{item.name}</div>
-            <p className="text-text-secondary mt-1.5 text-sm leading-relaxed">{item.reason}</p>
+            <div className="text-text-primary text-[13px] font-semibold sm:text-base">
+              {item.name}
+            </div>
+            <p className="text-text-secondary mt-1.5 text-[13px] leading-relaxed sm:text-sm">
+              {item.reason}
+            </p>
           </div>
         ))}
       </div>
@@ -24,7 +28,7 @@ export function RecommendationCard({ data }: { data: RecommendationCardData }) {
           </div>
           <ul className="space-y-1.5">
             {(data.highlights ?? []).map((h, i) => (
-              <li key={`${h}-${i}`} className="text-success/90 flex gap-2 text-sm">
+              <li key={`${h}-${i}`} className="text-success/90 flex gap-2 text-[13px] sm:text-sm">
                 <span className="mt-0.5">+</span>
                 <span>{h}</span>
               </li>

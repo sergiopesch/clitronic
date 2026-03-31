@@ -22,8 +22,8 @@ export function TextResponse({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <div className="border-border bg-surface-1/80 rounded-2xl border px-5 py-4 backdrop-blur-sm">
-      <p className="text-text-primary text-sm leading-relaxed sm:text-base">
+    <div className="border-border bg-surface-1/80 rounded-2xl border px-4 py-3.5 backdrop-blur-sm sm:px-5 sm:py-4">
+      <p className="text-text-primary text-[13px] leading-relaxed sm:text-base">
         {displayed}
         {!done && (
           <span className="bg-accent animate-cursor-blink ml-0.5 inline-block h-4 w-[2px]" />
