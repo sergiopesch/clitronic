@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { sanitizeVisibleResponse } from '@/app/api/chat/route';
 import { parseAndNormalizeResponse } from '@/app/api/chat/response-normalizer';
 import { validateStructuredResponse } from '@/app/api/chat/response-validator';
 
@@ -79,4 +80,93 @@ test('accepts valid chart response after normalization and validation', () => {
   const validated = validateStructuredResponse(normalized);
   assert.ok(validated);
   assert.equal(validated?.ui?.component, 'chartCard');
+});
+
+test('accepts optional voice payload with spoken summary', () => {
+  const payload = {
+    intent: 'troubleshoot_led',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'troubleshootingCard',
+      data: {
+        issue: 'LED not blinking',
+        steps: [{ label: 'Pin mode', detail: 'Set pin 13 as OUTPUT' }],
+        tips: ['Check polarity'],
+      },
+    },
+    text: 'Check pin mode and polarity.',
+    behavior: { animation: 'expand', state: 'open' },
+    voice: {
+      spokenSummary: 'Set pin 13 to output, then verify LED polarity.',
+      canInterrupt: true,
+    },
+  };
+
+  const validated = validateStructuredResponse(payload);
+  assert.ok(validated);
+  assert.equal(validated?.voice?.spokenSummary, 'Set pin 13 to output, then verify LED polarity.');
+});
+
+test('sanitizes internal reasoning text from visible response fields', () => {
+  const payload = {
+    intent: 'explain_pwm',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'explanationCard',
+      data: {
+        title: 'PWM basics',
+        summary:
+          'The user is asking how PWM works. A visual would make this better. PWM rapidly switches voltage on and off to simulate an average output level.',
+        keyPoints: [
+          'Step 1 - What is the user asking for?',
+          'PWM duty cycle controls the average delivered power.',
+        ],
+      },
+    },
+    text: 'Here is my reasoning. PWM is useful for dimming LEDs and controlling motor speed.',
+    behavior: { animation: 'fadeIn', state: 'open' },
+    voice: {
+      spokenSummary:
+        'I should use an explanation card here. PWM changes average power by varying duty cycle.',
+    },
+  };
+
+  const sanitized = sanitizeVisibleResponse(payload);
+
+  assert.equal(
+    sanitized.ui.data.summary,
+    'PWM rapidly switches voltage on and off to simulate an average output level.'
+  );
+  assert.deepEqual(sanitized.ui.data.keyPoints, ['PWM duty cycle controls the average delivered power.']);
+  assert.equal(sanitized.text, 'PWM is useful for dimming LEDs and controlling motor speed.');
+  assert.equal(sanitized.voice.spokenSummary, 'PWM changes average power by varying duty cycle.');
+});
+
+test('preserves normal user-facing card content during sanitization', () => {
+  const payload = {
+    intent: 'troubleshoot_led',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'troubleshootingCard',
+      data: {
+        issue: 'LED stays off',
+        steps: [
+          { label: 'Power', detail: 'Confirm the board is powered and ground is connected.' },
+        ],
+        tips: ['Check LED polarity and resistor value.'],
+      },
+    },
+    text: 'Verify power first, then check LED polarity.',
+    behavior: { animation: 'expand', state: 'open' },
+    voice: {
+      spokenSummary: 'Check power and LED polarity first.',
+    },
+  };
+
+  const sanitized = sanitizeVisibleResponse(payload);
+
+  assert.deepEqual(sanitized, payload);
 });

@@ -9,6 +9,7 @@ export const OFF_TOPIC_RESPONSE = {
   ui: null,
   text: 'I only help with electronics and hardware topics. Try asking me about circuits, components, microcontrollers, or anything maker-related!',
   behavior: null,
+  voice: null,
 } as const;
 
 export const FALLBACK_TEXT_RESPONSE = {
@@ -17,6 +18,7 @@ export const FALLBACK_TEXT_RESPONSE = {
   ui: null,
   text: 'Sorry, I had trouble processing that. Could you rephrase?',
   behavior: null,
+  voice: null,
 } as const;
 
 export const RENDER_FALLBACK_TEXT_RESPONSE = {
@@ -25,6 +27,7 @@ export const RENDER_FALLBACK_TEXT_RESPONSE = {
   ui: null,
   text: 'Sorry, I had trouble rendering that. Could you rephrase?',
   behavior: null,
+  voice: null,
 } as const;
 
 export const DAILY_LIMIT_RESPONSE = {
@@ -33,4 +36,5 @@ export const DAILY_LIMIT_RESPONSE = {
   ui: null,
   text: DAILY_LIMIT_MESSAGE,
   behavior: null,
+  voice: null,
 } as const;

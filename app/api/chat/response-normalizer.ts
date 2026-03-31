@@ -24,7 +24,16 @@ function extractDataFields(
 
 function normalizeResponse(parsed: Record<string, unknown>): Record<string, unknown> {
   if (!parsed.ui || typeof parsed.ui !== 'object') {
-    const ignore = new Set(['intent', 'mode', 'text', 'behavior', 'component', 'type', 'ui']);
+    const ignore = new Set([
+      'intent',
+      'mode',
+      'text',
+      'behavior',
+      'voice',
+      'component',
+      'type',
+      'ui',
+    ]);
     const data = extractDataFields(parsed, ignore);
 
     const componentFromName =

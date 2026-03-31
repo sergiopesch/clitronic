@@ -7,6 +7,20 @@ const behaviorSchema = z.object({
   state: z.enum(['open', 'collapsed']),
 });
 
+const voiceSchema = z
+  .object({
+    transcript: z
+      .object({
+        raw: z.string().optional(),
+        cleaned: z.string().optional(),
+      })
+      .optional(),
+    spokenSummary: z.string().nullable().optional(),
+    listeningState: z.enum(['idle', 'listening', 'processing', 'speaking']).optional(),
+    canInterrupt: z.boolean().optional(),
+  })
+  .nullable();
+
 const uiSchema = z
   .object({
     type: z.enum(['card', 'chart', 'text', 'image']),
@@ -31,6 +45,7 @@ const structuredResponseSchema = z
     ui: uiSchema.nullable(),
     text: z.string().nullable(),
     behavior: behaviorSchema.nullable(),
+    voice: voiceSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.mode === 'ui' && value.ui === null) {

@@ -48,7 +48,10 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
           <svg
             viewBox={`0 0 400 ${chipHeight + 40}`}
             className="h-auto w-full max-w-[400px]"
-            style={{ height: `${Math.min(chipHeight + 40, 400)}px` }}
+            style={{
+              height: `${Math.min(chipHeight + 40, 400)}px`,
+              maxHeight: '52vh',
+            }}
           >
             {/* IC Body */}
             <rect

@@ -30,7 +30,7 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
             </h3>
           </div>
           {/* Progress ring */}
-          <div className="flex h-10 w-10 items-center justify-center">
+          <div className="relative flex h-10 w-10 items-center justify-center">
             <svg width="36" height="36" viewBox="0 0 36 36">
               <circle
                 cx="18"

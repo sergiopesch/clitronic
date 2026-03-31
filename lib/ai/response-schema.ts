@@ -82,6 +82,7 @@ export interface ImageBlockData {
   labels?: Record<string, string>;
   // photo mode
   searchQuery?: string;
+  imageCount?: number;
   // shared
   caption: string;
   description?: string;
@@ -111,10 +112,21 @@ export interface ResponseBehavior {
   state: BehaviorState;
 }
 
+export interface VoicePayload {
+  transcript?: {
+    raw?: string;
+    cleaned?: string;
+  };
+  spokenSummary?: string | null;
+  listeningState?: 'idle' | 'listening' | 'processing' | 'speaking';
+  canInterrupt?: boolean;
+}
+
 export interface StructuredResponse {
   intent: string;
   mode: UIMode;
   ui: UIBlock | null;
   text: string | null;
   behavior: ResponseBehavior | null;
+  voice?: VoicePayload | null;
 }

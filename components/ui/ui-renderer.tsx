@@ -34,7 +34,6 @@ interface UIRendererProps {
   response: StructuredResponse;
 }
 
-const FALLBACK_TEXT = 'Sorry, I had trouble displaying that. Try rephrasing your question.';
 const IS_DEV = process.env.NODE_ENV === 'development';
 
 const CARD_RENDERERS: Record<ComponentName, (data: unknown) => ReactNode> = {
@@ -51,8 +50,6 @@ const CARD_RENDERERS: Record<ComponentName, (data: unknown) => ReactNode> = {
 };
 
 export function UIRenderer({ response }: UIRendererProps) {
-  const fallback = <TextResponse text={response.text || FALLBACK_TEXT} />;
-
   // Debug: log once per unique response
   const lastLogRef = useRef<string>('');
   useEffect(() => {
@@ -65,15 +62,20 @@ export function UIRenderer({ response }: UIRendererProps) {
     }
   }, [response]);
 
-  // If there's a text response and no UI block, show text
-  if (response.text && !response.ui) {
-    return <TextResponse text={response.text} />;
-  }
-
-  // If no UI block at all, show fallback
+  const fallbackText = response.voice?.spokenSummary ?? response.text;
   if (!response.ui) {
-    if (IS_DEV) console.warn('[clitronic:ui] No ui block in response');
-    return fallback;
+    if (!fallbackText?.trim()) {
+      if (IS_DEV) console.warn('[clitronic:ui] No ui block in response');
+      return null;
+    }
+
+    return (
+      <CardErrorBoundary fallback={null}>
+        <AnimateIn animation={response.behavior?.animation ?? 'fadeIn'}>
+          <TextResponse key={fallbackText} text={fallbackText} />
+        </AnimateIn>
+      </CardErrorBoundary>
+    );
   }
 
   const animation = response.behavior?.animation;
@@ -82,16 +84,16 @@ export function UIRenderer({ response }: UIRendererProps) {
 
   if (!resolvedData || typeof resolvedData !== 'object') {
     if (IS_DEV) console.warn('[clitronic:ui] No data for component:', component, response.ui);
-    return fallback;
+    return null;
   }
 
   const rendered = CARD_RENDERERS[component]?.(resolvedData);
 
-  // If switch didn't match, fall back to text
-  if (!rendered) return fallback;
+  // If switch didn't match, keep visual area empty.
+  if (!rendered) return null;
 
   return (
-    <CardErrorBoundary fallback={fallback}>
+    <CardErrorBoundary fallback={null}>
       <AnimateIn animation={animation}>{rendered}</AnimateIn>
     </CardErrorBoundary>
   );

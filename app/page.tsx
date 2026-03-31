@@ -1,5 +1,5 @@
-import { LocalConsole } from '@/components/console/local-console';
+import { HomeClient } from './home-client';
 
 export default function Home() {
-  return <LocalConsole />;
+  return <HomeClient />;
 }

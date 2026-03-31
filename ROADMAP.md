@@ -1,43 +1,42 @@
 # Roadmap
 
-## Current State (v0.1)
+## Current State (v0.2)
 
-Text-in, visual-out electronics companion with 10 UI components, conversation history with timeline navigation, and multi-provider image search.
+Voice-first electronics companion with:
 
----
-
-## v0.2 — Realtime Voice
-
-Talk to Clitronic instead of typing. Ask questions hands-free while soldering or wiring.
-
-### Goals
-
-- Push-to-talk voice input using Web Speech API or Whisper
-- Streaming TTS responses for key information (values, steps, warnings)
-- Voice-optimized response mode: shorter text, spoken summaries of visual cards
-- Visual indicator showing listening/processing/speaking states
-- Fallback to text input on unsupported browsers
-
-### Technical Approach
-
-- OpenAI Realtime API or Whisper for speech-to-text
-- OpenAI TTS or Web Speech API for text-to-speech
-- New `voice` field in response schema for spoken summaries
-- Audio context management (pause TTS on new input, handle interruptions)
-
-### Key Decisions
-
-- Push-to-talk vs always-listening (PTT preferred for noise tolerance in workshops)
-- Whether voice responses should narrate full card content or just key values
-- Latency budget: voice round-trip should feel conversational (<2s)
+- realtime microphone input via OpenAI Realtime
+- live user captions while speaking
+- assistant speech mirrored on-screen word by word
+- structured UI cards for explanations, troubleshooting, images, comparisons, wiring, charts, and calculations
+- context-aware image follow-ups like `show me one`
+- multi-provider image search with Brave + Wikimedia fallback
 
 ---
+
+## Recently Shipped — Realtime Voice
+
+Clitronic can now be used hands-free while soldering, wiring, or probing a board.
+
+### Landed
+
+- Push-to-talk voice input with OpenAI Realtime
+- Live transcription while the user is speaking
+- Spoken assistant responses with matching on-screen captions
+- Voice summaries for structured cards
+- Visual state transitions for listening, processing, and speaking
+- Visible text fallback when a card is not rendered
+
+### Follow-up polish ideas
+
+- tighter sync between spoken audio timing and the on-screen word reveal
+- local/dev tooling for easier browser-level voice regression testing
+- optional text input fallback for unsupported browsers or silent environments
 
 ## v0.3 — Complex Context with Rich Visuals
 
 Deeper understanding of multi-turn conversations with richer image and diagram capabilities.
 
-### Goals
+### v0.3 Goals
 
 - Multi-card responses: a single query can produce multiple related cards (e.g., wiring card + pinout card + warning)
 - Contextual image generation: AI-generated circuit diagrams tailored to the exact question, not just predefined SVGs
@@ -45,7 +44,7 @@ Deeper understanding of multi-turn conversations with richer image and diagram c
 - Project memory: track components the user has mentioned across turns ("you're using an ESP32 with a DHT22, so...")
 - Smart follow-ups: suggest the next logical question based on what was discussed
 
-### Technical Approach
+### v0.3 Technical Approach
 
 - Expand response schema to support `cards: []` array for multi-card responses
 - Integrate an image generation model (e.g., DALL-E, Stable Diffusion) for custom circuit diagrams
@@ -53,7 +52,7 @@ Deeper understanding of multi-turn conversations with richer image and diagram c
 - Session-level context extraction: parse mentioned components, voltages, and connections into a structured "project state"
 - New `suggestions` field in response schema for follow-up prompts
 
-### Key Decisions
+### v0.3 Key Decisions
 
 - How many cards per response before it feels cluttered (likely 2-3 max)
 - Generated diagrams vs. expanded SVG library (generated is more flexible, SVG is faster)
@@ -65,7 +64,7 @@ Deeper understanding of multi-turn conversations with richer image and diagram c
 
 Go beyond static answers. Let users simulate circuits directly in the browser.
 
-### Goals
+### v0.4 Goals
 
 - Interactive circuit simulator embedded in responses
 - Drag-and-drop component placement on a virtual breadboard
@@ -73,7 +72,7 @@ Go beyond static answers. Let users simulate circuits directly in the browser.
 - "What if" mode: change a resistor value and see the effect instantly
 - Export simulation as shareable link or image
 
-### Technical Approach
+### v0.4 Technical Approach
 
 - SPICE-based simulation engine compiled to WebAssembly (e.g., ngspice-wasm or custom)
 - Canvas/WebGL renderer for circuit visualization with animated current flow
@@ -81,7 +80,7 @@ Go beyond static answers. Let users simulate circuits directly in the browser.
 - New `simulation` component type in response schema with netlist, component positions, and initial conditions
 - Bidirectional: user modifications to the simulation feed back as context for follow-up questions
 
-### Key Decisions
+### v0.4 Key Decisions
 
 - Scope of simulation: DC only vs. AC/transient analysis
 - Component library size at launch (resistors, capacitors, LEDs, transistors, op-amps as minimum)

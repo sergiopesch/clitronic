@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ImageBlockData } from '@/lib/ai/response-schema';
 
 /**
@@ -22,7 +22,12 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
       {/* Visual area — constrained height so card fits viewport */}
       <div className="bg-surface-0/40 flex justify-center overflow-x-auto px-3 py-4 sm:px-5 sm:py-5">
         {mode === 'photo' ? (
-          <PhotoRenderer searchQuery={data.searchQuery ?? caption} caption={caption} />
+          <PhotoRenderer
+            searchQuery={data.searchQuery ?? caption}
+            imageCount={data.imageCount}
+            caption={caption}
+            description={data.description}
+          />
         ) : (
           <DiagramRenderer type={data.diagramType ?? 'generic'} labels={data.labels} />
         )}
@@ -68,7 +73,20 @@ function FallbackCard({ message }: { message: string }) {
 
 interface PhotoRendererProps {
   searchQuery?: string;
+  imageCount?: number;
   caption: string;
+  description?: string;
+}
+
+const QUERY_HISTORY_LIMIT = 12;
+const SEEN_IMAGES_BY_QUERY = new Map<string, string[]>();
+
+function normalizeImageUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('http://')) return `https://${trimmed.slice('http://'.length)}`;
+  return trimmed;
 }
 
 const SEARCH_MESSAGES = [
@@ -81,14 +99,34 @@ const SEARCH_MESSAGES = [
   'Soldering together some results...',
 ];
 
-function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
+function PhotoRenderer({ searchQuery, imageCount, caption, description }: PhotoRendererProps) {
   const query = searchQuery || caption || '';
+  const count = Math.min(Math.max(Math.floor(imageCount ?? 1), 1), 6);
+  const queryKey = query.trim().toLowerCase();
 
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>(query ? 'loading' : 'error');
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [attribution, setAttribution] = useState<string | null>(null);
+  const [images, setImages] = useState<
+    { url: string; thumbnail?: string; attribution?: string | null }[]
+  >([]);
   const [msgIndex, setMsgIndex] = useState(0);
   const msgRef = useRef(0);
+
+  const readSeenForQuery = useCallback((): string[] => {
+    return queryKey ? (SEEN_IMAGES_BY_QUERY.get(queryKey) ?? []) : [];
+  }, [queryKey]);
+
+  const recordSeenForQuery = useCallback(
+    (urls: string[]) => {
+      if (!queryKey || urls.length === 0) return;
+      const existing = SEEN_IMAGES_BY_QUERY.get(queryKey) ?? [];
+      const next = [...existing];
+      for (const url of urls) {
+        if (!next.includes(url)) next.push(url);
+      }
+      SEEN_IMAGES_BY_QUERY.set(queryKey, next.slice(-QUERY_HISTORY_LIMIT));
+    },
+    [queryKey]
+  );
 
   // Rotate fun messages while loading
   useEffect(() => {
@@ -104,30 +142,78 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
     if (!query) return;
 
     let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 4500);
 
-    fetch(`/api/image-search?q=${encodeURIComponent(query)}`)
+    const params = new URLSearchParams({ q: query, caption });
+    const fetchCount = Math.max(count, 4);
+    params.set('count', String(fetchCount));
+    if (description) {
+      params.set('description', description);
+    }
+    const excludedUrls = readSeenForQuery().slice(-6);
+    for (const excludedUrl of excludedUrls) {
+      params.append('exclude', excludedUrl);
+    }
+    fetch(`/api/image-search?${params.toString()}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error('fetch failed');
         return res.json();
       })
-      .then((data: { url?: string | null; thumbnail?: string; attribution?: string }) => {
-        if (cancelled) return;
-        if (data.url) {
-          setImageUrl(data.thumbnail ?? data.url);
-          setAttribution(data.attribution ?? null);
-          setState('loaded');
-        } else {
-          setState('error');
+      .then(
+        (data: {
+          url?: string | null;
+          thumbnail?: string;
+          attribution?: string;
+          images?: { url?: string; thumbnail?: string; attribution?: string }[];
+          confident?: boolean;
+        }) => {
+          if (cancelled) return;
+          const candidates = (data.images ?? [])
+            .map((item) => ({
+              url: normalizeImageUrl(item.url) ?? '',
+              thumbnail: normalizeImageUrl(item.thumbnail) ?? undefined,
+              attribution: item.attribution ?? null,
+            }))
+            .filter((item) => Boolean(item.url));
+
+          const full = normalizeImageUrl(data.url);
+          const thumb = normalizeImageUrl(data.thumbnail);
+          const unseenCandidates = candidates.filter((item) => !excludedUrls.includes(item.url));
+          const selectedCandidates = (
+            unseenCandidates.length > 0 ? unseenCandidates : candidates
+          ).slice(0, count);
+
+          if (selectedCandidates.length > 0) {
+            setImages(selectedCandidates);
+            recordSeenForQuery(selectedCandidates.map((item) => item.url));
+            setState('loaded');
+          } else if (full || thumb) {
+            const fallbackItems = [
+              {
+                url: full ?? thumb!,
+                thumbnail: thumb ?? undefined,
+                attribution: data.attribution ?? null,
+              },
+            ];
+            setImages(fallbackItems);
+            recordSeenForQuery(fallbackItems.map((item) => item.url));
+            setState('loaded');
+          } else {
+            setState('error');
+          }
         }
-      })
+      )
       .catch(() => {
         if (!cancelled) setState('error');
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
-  }, [query]);
+  }, [caption, count, description, query, readSeenForQuery, recordSeenForQuery]);
 
   if (state === 'loading') {
     return (
@@ -146,7 +232,7 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
     );
   }
 
-  if (state === 'error' || !imageUrl) {
+  if (state === 'error' || images.length === 0) {
     // Smart fallback: if a matching built-in diagram exists, show that instead of an error
     const diagramType = matchDiagramType(query);
     if (diagramType) {
@@ -164,17 +250,76 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
   }
 
   return (
+    <div className={`grid w-full gap-2 ${images.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+      {images.map((item, idx) => (
+        <PhotoTile
+          key={`${item.url}-${idx}`}
+          url={item.url}
+          thumbnail={item.thumbnail}
+          alt={`${caption} ${idx + 1}`}
+          attribution={item.attribution}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PhotoTile({
+  url,
+  thumbnail,
+  alt,
+  attribution,
+}: {
+  url: string;
+  thumbnail?: string;
+  alt: string;
+  attribution?: string | null;
+}) {
+  const candidateSources = [url, thumbnail].filter((value): value is string => Boolean(value));
+  const [srcIndex, setSrcIndex] = useState(0);
+  const [src, setSrc] = useState(candidateSources[0] ?? url);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className="border-border bg-surface-2/40 text-text-muted flex h-36 w-full items-center justify-center rounded-xl border text-xs sm:h-44">
+        <span>Image unavailable</span>
+      </div>
+    );
+  }
+
+  const advanceToNextSource = () => {
+    const nextIndex = srcIndex + 1;
+    if (nextIndex < candidateSources.length) {
+      setSrcIndex(nextIndex);
+      setSrc(candidateSources[nextIndex]!);
+      setLoaded(false);
+      return;
+    }
+    setFailed(true);
+  };
+
+  return (
     <div className="relative flex w-full justify-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={imageUrl}
-        alt={caption}
-        className="max-h-[40vh] w-auto max-w-full rounded-xl object-contain opacity-0 transition-opacity duration-500 sm:max-h-[45vh]"
-        onLoad={(e) => {
-          (e.target as HTMLImageElement).classList.replace('opacity-0', 'opacity-100');
+        src={toProxyUrl(src)}
+        alt={alt}
+        className={`max-h-[32vh] w-auto max-w-full rounded-xl object-contain transition-opacity duration-500 sm:max-h-[36vh] ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        }`}
+        onLoad={(event) => {
+          const element = event.currentTarget;
+          if (element.naturalWidth < 2 || element.naturalHeight < 2) {
+            advanceToNextSource();
+            return;
+          }
+          setLoaded(true);
         }}
-        onError={() => setState('error')}
+        onError={advanceToNextSource}
         loading="eager"
+        referrerPolicy="no-referrer"
       />
       {attribution && (
         <div className="text-text-muted absolute right-1 bottom-1 rounded bg-black/40 px-1.5 py-0.5 text-[9px] opacity-70">
@@ -183,6 +328,11 @@ function PhotoRenderer({ searchQuery, caption }: PhotoRendererProps) {
       )}
     </div>
   );
+}
+
+function toProxyUrl(rawUrl: string): string {
+  const params = new URLSearchParams({ url: rawUrl });
+  return `/api/image-proxy?${params.toString()}`;
 }
 
 /* ── Diagram type matcher for photo fallback ── */

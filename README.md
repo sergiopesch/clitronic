@@ -1,16 +1,24 @@
 # Clitronic
 
-Your electronics companion. Ask anything about circuits, components, microcontrollers, and maker hardware — get instant visual answers.
+Your voice-first electronics companion. Ask about circuits, components, microcontrollers, and maker hardware, then get live captions, spoken responses, and instant visual cards.
 
 ## What It Does
 
-Clitronic turns natural language questions into rich, animated UI cards. It's not a chatbot — it's a dynamic UI engine for electronics.
+Clitronic turns natural language questions into rich, animated UI cards. It is not a chatbot UI with a transcript dump. It is a dynamic UI engine for electronics with realtime voice layered on top.
 
 ```text
-User input → LLM → Structured JSON → UI Renderer → Animated Components
+Mic input → Realtime transcription → Structured JSON → UI Renderer → Animated Components
 ```
 
 Ask "What resistor for a red LED on 5V?" and get a calculation card with the formula, inputs, and result. Ask "Compare Arduino Uno vs Raspberry Pi Pico" and get a side-by-side comparison. Ask "Show me what a breadboard looks like" and get a real photo with attribution.
+
+## Latest Update
+
+- Realtime voice is now the primary interaction path.
+- User speech appears live while speaking instead of waiting for the full turn to finish.
+- Assistant speech is mirrored on-screen word by word at a slower listening-friendly pace.
+- Text fallbacks no longer disappear silently. If a card is not available, the spoken summary/text still renders visibly.
+- Image follow-ups like "show me one" now resolve from recent context instead of collapsing into generic searches.
 
 ### 10 Visual Components
 
@@ -30,7 +38,8 @@ Ask "What resistor for a red LED on 5V?" and get a calculation card with the for
 ## Stack
 
 - **Frontend**: Next.js 16 (App Router) + React 19 + Tailwind CSS 4
-- **LLM**: OpenAI `gpt-4o-mini` with structured JSON output
+- **Structured UI generation**: OpenAI `gpt-4o-mini` with structured JSON output
+- **Realtime voice**: OpenAI Realtime API + `gpt-4o-mini-transcribe`
 - **Image Search**: Brave Search API + Wikimedia Commons fallback
 - **Design**: Dark-only, Apple/Tesla-inspired, animation-first
 
@@ -57,6 +66,24 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Local Voice Test
+
+1. Start the app with `npm run dev`.
+2. Open `http://localhost:3000` in a Chromium-based browser or Safari.
+3. Allow microphone access when prompted.
+4. Press the talk button and say something like `show me an Arduino image`.
+5. Expected behavior:
+   - your words appear while you are speaking
+   - the assistant starts speaking back with a live on-screen word-by-word caption
+   - the matching visual card appears underneath
+
+Good smoke tests:
+
+- `show me an Arduino image`
+- `tell me about the ESP32` then `show me one`
+- `compare Arduino Uno vs Raspberry Pi Pico`
+- `my LED is not blinking`
+
 ## Commands
 
 ```bash
@@ -77,10 +104,14 @@ app/
 ├── api/chat/security.ts        # Input sanitization + injection detection
 ├── api/chat/rate-limit.ts      # In-memory per-IP limiter with cleanup
 ├── api/image-search/route.ts   # Multi-provider image search (Brave + Wikimedia)
+├── api/image-proxy/route.ts    # Safe image proxy for remote image tiles
+├── api/realtime/session/route.ts # OpenAI Realtime session bootstrap
 ├── globals.css                 # Design tokens + keyframe animations
 └── page.tsx                    # Entry point
 components/
-├── console/local-console.tsx   # Main UI with conversation timeline
+├── console/local-console.tsx   # Client entry wrapper
+├── console/conversation-shell.tsx # Voice-first shell and card stage
+├── voice/voice-transcript-strip.tsx # Live user/assistant captions
 └── ui/                         # 10 visual card components + renderer
     ├── ui-renderer.tsx         # Routes JSON → component via registry map
     ├── animations.tsx          # AnimateIn wrapper
@@ -94,21 +125,26 @@ components/
     ├── pinout-card.tsx         # SVG IC pin layout
     ├── chart-card.tsx          # Horizontal bar chart
     ├── wiring-card.tsx         # Step-by-step wiring guide
-    └── text-response.tsx       # Typewriter effect
+    └── text-response.tsx       # Word-by-word spoken-text fallback
+hooks/
+├── useConversationState.ts     # Structured response fetch + history context
+└── useVoiceInteraction.ts      # Realtime voice, transcripts, audio, turn handling
 lib/
 ├── ai/component-registry.ts    # Single source of truth for component names/aliases/types
 ├── ai/response-schema.ts       # TypeScript response contracts
 ├── ai/rate-limit.ts            # Shared rate-limit constants/messages
-└── ai/system-prompt.ts         # Intent detection + response formatting
+├── ai/system-prompt.ts         # Intent detection + response formatting
+└── ai/transcript-utils.ts      # Light cleanup for speech transcripts
 ```
 
 ## How It Works
 
-1. **Intent Detection**: 3-step engine classifies queries by signal words and question shape
-2. **Response Normalization**: Server-side normalizer handles multiple LLM output shapes, alias mapping, and signature-based fallback detection
-3. **Response Validation**: Strict runtime schema validation guarantees component-safe payloads before returning to client
-4. **Client Rendering**: `UIRenderer` routes structured JSON to the correct animated component
-5. **Conversation Context**: Compact history summaries keep the LLM aware of what was discussed, preventing false off-topic flags on follow-ups
+1. **Realtime voice capture**: the client opens an OpenAI Realtime session and streams mic audio.
+2. **Live captions**: partial transcripts update the UI while the user is still speaking.
+3. **Turn finalization**: once the transcript is finalized, the cleaned utterance is sent to `/api/chat`.
+4. **Structured response generation**: the chat route normalizes and validates the model output, with fast-path handling for explicit photo requests.
+5. **Client rendering**: `UIRenderer` routes the validated payload to the correct animated card, or falls back to a visible word-by-word text response.
+6. **Context-aware visuals**: compact assistant summaries preserve image/component context so follow-ups like `show me one` still resolve correctly.
 
 ### Adding or Updating Components
 
@@ -142,7 +178,7 @@ npm run scaffold:component -- --name "Signal Meter" --kind chart
 
 ## Roadmap
 
-See [ROADMAP.md](./ROADMAP.md) for planned features: realtime voice, rich visuals with AI-generated diagrams, and circuit simulation.
+See [ROADMAP.md](./ROADMAP.md) for upcoming work beyond the shipped realtime voice flow, including richer multi-card responses and circuit simulation.
 
 ## License
 
