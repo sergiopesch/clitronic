@@ -54,7 +54,7 @@ export function WiringCard({ data }: { data: WiringCardData }) {
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
       {/* Header */}
       <div className="px-4 py-4 sm:px-5">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap sm:items-center">
           <div className="bg-accent/10 border-accent/20 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-accent">
               <path
@@ -72,7 +72,7 @@ export function WiringCard({ data }: { data: WiringCardData }) {
             )}
           </div>
           {totalSteps > 0 && (
-            <div className="text-text-muted ml-auto font-mono text-[10px]">
+            <div className="text-text-muted ml-auto font-mono text-[10px] sm:pt-0.5">
               {totalSteps} step{totalSteps !== 1 ? 's' : ''}
             </div>
           )}
@@ -89,7 +89,7 @@ export function WiringCard({ data }: { data: WiringCardData }) {
 
           return (
             <div
-              key={i}
+              key={`${step.from}-${step.to}-${step.wire ?? 'wire'}-${i}`}
               className={`animate-fade-in-up border-border relative border-t px-4 py-3.5 sm:px-5 stagger-${Math.min(i + 1, 6)}`}
             >
               {/* Step progress line (left gutter) */}
@@ -113,19 +113,19 @@ export function WiringCard({ data }: { data: WiringCardData }) {
               </div>
 
               {/* Step content */}
-              <div className="ml-8 sm:ml-9">
+              <div className="ml-8 min-w-0 sm:ml-9">
                 {/* Connection visual */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   {/* From */}
                   <div
-                    className="shrink-0 rounded-lg px-2.5 py-1"
+                    className="max-w-full shrink-0 rounded-lg px-2.5 py-1"
                     style={{
                       backgroundColor: fromAccent.bg,
                       border: `1px solid ${fromAccent.border}`,
                     }}
                   >
                     <span
-                      className="font-mono text-[11px] font-semibold"
+                      className="font-mono text-[11px] font-semibold break-all"
                       style={{ color: fromAccent.text }}
                     >
                       {step.from}
@@ -133,7 +133,7 @@ export function WiringCard({ data }: { data: WiringCardData }) {
                   </div>
 
                   {/* Arrow with wire */}
-                  <div className="flex min-w-0 flex-1 flex-col items-center">
+                  <div className="flex w-full min-w-0 flex-1 flex-col items-center sm:w-auto">
                     <div className="relative flex w-full items-center">
                       <div
                         className="h-[2px] flex-1 rounded-full"
@@ -161,14 +161,14 @@ export function WiringCard({ data }: { data: WiringCardData }) {
 
                   {/* To */}
                   <div
-                    className="shrink-0 rounded-lg px-2.5 py-1"
+                    className="max-w-full shrink-0 rounded-lg px-2.5 py-1"
                     style={{
                       backgroundColor: toAccent.bg,
                       border: `1px solid ${toAccent.border}`,
                     }}
                   >
                     <span
-                      className="font-mono text-[11px] font-semibold"
+                      className="font-mono text-[11px] font-semibold break-all"
                       style={{ color: toAccent.text }}
                     >
                       {step.to}
@@ -191,7 +191,7 @@ export function WiringCard({ data }: { data: WiringCardData }) {
         <div className="border-warning/20 bg-warning/[0.04] border-t px-4 py-3 sm:px-5">
           <div className="space-y-1.5">
             {data.warnings.map((w, i) => (
-              <div key={i} className="text-warning/90 flex items-start gap-2 text-xs">
+              <div key={`${w}-${i}`} className="text-warning/90 flex items-start gap-2 text-xs">
                 <svg
                   width="14"
                   height="14"

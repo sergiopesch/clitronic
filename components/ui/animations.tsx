@@ -25,21 +25,3 @@ export function AnimateIn({ animation, delay = 0, children }: AnimateInProps) {
     </div>
   );
 }
-
-interface StaggerChildrenProps {
-  animation: AnimationType | undefined;
-  stagger?: number;
-  children: ReactNode[];
-}
-
-export function StaggerChildren({ animation, stagger = 80, children }: StaggerChildrenProps) {
-  return (
-    <>
-      {children.map((child, i) => (
-        <AnimateIn key={i} animation={animation} delay={i * stagger}>
-          {child}
-        </AnimateIn>
-      ))}
-    </>
-  );
-}

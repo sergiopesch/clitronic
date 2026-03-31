@@ -1,19 +1,11 @@
+import type { RegisteredComponentName } from './component-registry';
+
 export type UIMode = 'ui' | 'text';
 
 export type AnimationType = 'fadeIn' | 'slideUp' | 'expand';
 export type BehaviorState = 'open' | 'collapsed';
 
-export type ComponentName =
-  | 'specCard'
-  | 'comparisonCard'
-  | 'explanationCard'
-  | 'recommendationCard'
-  | 'troubleshootingCard'
-  | 'calculationCard'
-  | 'pinoutCard'
-  | 'chartCard'
-  | 'wiringCard'
-  | 'imageBlock';
+export type ComponentName = RegisteredComponentName;
 
 export type UIType = 'card' | 'chart' | 'text' | 'image';
 

@@ -20,7 +20,7 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
       {/* Visual area — constrained height so card fits viewport */}
-      <div className="bg-surface-0/40 flex justify-center px-3 py-4 sm:px-5 sm:py-5">
+      <div className="bg-surface-0/40 flex justify-center overflow-x-auto px-3 py-4 sm:px-5 sm:py-5">
         {mode === 'photo' ? (
           <PhotoRenderer searchQuery={data.searchQuery ?? caption} caption={caption} />
         ) : (
@@ -40,7 +40,7 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
             {data.notes.map((note, i) => (
               <span
-                key={i}
+                key={`${note}-${i}`}
                 className={`text-text-secondary animate-fade-in-up inline-flex items-center gap-1.5 text-xs stagger-${Math.min(i + 1, 6)}`}
               >
                 <span className="bg-accent/10 text-accent inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full font-mono text-[9px]">

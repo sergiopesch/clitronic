@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 import { AnimateIn } from './animations';
 import { CardErrorBoundary } from './card-error-boundary';
@@ -16,6 +17,7 @@ import { WiringCard } from './wiring-card';
 import { ImageBlock } from './image-block';
 import { TextResponse } from './text-response';
 import type {
+  ComponentName,
   SpecCardData,
   ComparisonCardData,
   ExplanationCardData,
@@ -33,6 +35,20 @@ interface UIRendererProps {
 }
 
 const FALLBACK_TEXT = 'Sorry, I had trouble displaying that. Try rephrasing your question.';
+const IS_DEV = process.env.NODE_ENV === 'development';
+
+const CARD_RENDERERS: Record<ComponentName, (data: unknown) => ReactNode> = {
+  specCard: (data) => <SpecCard data={data as SpecCardData} />,
+  comparisonCard: (data) => <ComparisonCard data={data as ComparisonCardData} />,
+  explanationCard: (data) => <ExplanationCard data={data as ExplanationCardData} />,
+  recommendationCard: (data) => <RecommendationCard data={data as RecommendationCardData} />,
+  troubleshootingCard: (data) => <TroubleshootingCard data={data as TroubleshootingCardData} />,
+  calculationCard: (data) => <CalculationCard data={data as CalculationCardData} />,
+  pinoutCard: (data) => <PinoutCard data={data as PinoutCardData} />,
+  chartCard: (data) => <ChartCard data={data as ChartCardData} />,
+  wiringCard: (data) => <WiringCard data={data as WiringCardData} />,
+  imageBlock: (data) => <ImageBlock data={data as ImageBlockData} />,
+};
 
 export function UIRenderer({ response }: UIRendererProps) {
   const fallback = <TextResponse text={response.text || FALLBACK_TEXT} />;
@@ -43,7 +59,9 @@ export function UIRenderer({ response }: UIRendererProps) {
     const key = JSON.stringify(response);
     if (key !== lastLogRef.current) {
       lastLogRef.current = key;
-      console.log('[clitronic:ui] Response:', JSON.stringify(response, null, 2));
+      if (IS_DEV) {
+        console.log('[clitronic:ui] Response:', JSON.stringify(response, null, 2));
+      }
     }
   }, [response]);
 
@@ -54,65 +72,20 @@ export function UIRenderer({ response }: UIRendererProps) {
 
   // If no UI block at all, show fallback
   if (!response.ui) {
-    console.warn('[clitronic:ui] No ui block in response');
+    if (IS_DEV) console.warn('[clitronic:ui] No ui block in response');
     return fallback;
   }
 
   const animation = response.behavior?.animation;
   const component = response.ui.component;
-
-  // Try ui.data first; if missing, extract non-reserved fields from ui as fallback
-  let resolvedData: unknown = response.ui.data;
-  if (!resolvedData || typeof resolvedData !== 'object') {
-    const ui = response.ui as unknown as Record<string, unknown>;
-    const reserved = new Set(['type', 'component', 'data']);
-    const extracted: Record<string, unknown> = {};
-    let hasFields = false;
-    for (const [key, value] of Object.entries(ui)) {
-      if (!reserved.has(key)) {
-        extracted[key] = value;
-        hasFields = true;
-      }
-    }
-    resolvedData = hasFields ? extracted : null;
-    if (hasFields) {
-      console.log('[clitronic:ui] Rescued flattened data from ui level');
-    }
-  }
+  const resolvedData = response.ui.data;
 
   if (!resolvedData || typeof resolvedData !== 'object') {
-    console.warn('[clitronic:ui] No data for component:', component, response.ui);
+    if (IS_DEV) console.warn('[clitronic:ui] No data for component:', component, response.ui);
     return fallback;
   }
 
-  const renderComponent = () => {
-    switch (component) {
-      case 'specCard':
-        return <SpecCard data={resolvedData as SpecCardData} />;
-      case 'comparisonCard':
-        return <ComparisonCard data={resolvedData as ComparisonCardData} />;
-      case 'explanationCard':
-        return <ExplanationCard data={resolvedData as ExplanationCardData} />;
-      case 'recommendationCard':
-        return <RecommendationCard data={resolvedData as RecommendationCardData} />;
-      case 'troubleshootingCard':
-        return <TroubleshootingCard data={resolvedData as TroubleshootingCardData} />;
-      case 'calculationCard':
-        return <CalculationCard data={resolvedData as CalculationCardData} />;
-      case 'pinoutCard':
-        return <PinoutCard data={resolvedData as PinoutCardData} />;
-      case 'chartCard':
-        return <ChartCard data={resolvedData as ChartCardData} />;
-      case 'wiringCard':
-        return <WiringCard data={resolvedData as WiringCardData} />;
-      case 'imageBlock':
-        return <ImageBlock data={resolvedData as ImageBlockData} />;
-      default:
-        return null;
-    }
-  };
-
-  const rendered = renderComponent();
+  const rendered = CARD_RENDERERS[component]?.(resolvedData);
 
   // If switch didn't match, fall back to text
   if (!rendered) return fallback;

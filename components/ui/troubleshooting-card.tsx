@@ -21,7 +21,7 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-5 py-4">
+      <div className="border-border border-b px-4 py-4 sm:px-5">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-warning text-[11px] tracking-wider uppercase">Troubleshooting</div>
@@ -64,9 +64,9 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
       <div className="divide-border divide-y">
         {steps.map((step, i) => (
           <button
-            key={i}
+            key={`${step.label}-${i}`}
             onClick={() => toggle(i)}
-            className={`hover:bg-surface-2/40 animate-fade-in-up flex w-full items-start gap-3.5 px-5 py-3.5 text-left transition-colors stagger-${Math.min(i + 1, 6)}`}
+            className={`hover:bg-surface-2/40 animate-fade-in-up flex w-full items-start gap-3.5 px-4 py-3.5 text-left transition-colors stagger-${Math.min(i + 1, 6)} sm:px-5`}
           >
             <span
               className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
@@ -101,11 +101,11 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
       </div>
 
       {tips.length > 0 && (
-        <div className="border-border bg-accent/[0.03] border-t px-5 py-4">
+        <div className="border-border bg-accent/[0.03] border-t px-4 py-4 sm:px-5">
           <div className="text-accent/70 mb-2.5 text-[11px] tracking-wider uppercase">Tips</div>
           <ul className="space-y-1.5">
             {tips.map((tip, i) => (
-              <li key={i} className="text-text-secondary text-xs leading-relaxed">
+              <li key={`${tip}-${i}`} className="text-text-secondary text-xs leading-relaxed">
                 {tip}
               </li>
             ))}

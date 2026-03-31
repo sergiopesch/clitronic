@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { UIRenderer } from '@/components/ui/ui-renderer';
 import { Logo } from '@/components/ui/logo';
+import { DAILY_LIMIT_DEFAULT, DAILY_LIMIT_MESSAGE } from '@/lib/ai/rate-limit';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 
 type ConversationEntry = {
@@ -68,7 +69,6 @@ function summarizeAssistantResponse(structured: StructuredResponse): string {
   return parts.join(' — ');
 }
 
-const DAILY_LIMIT = 20;
 const RATE_LIMIT_KEY = 'clitronic_daily';
 
 function getDailyUsage(): { count: number; date: string } {
@@ -90,9 +90,6 @@ function incrementDailyUsage(): number {
   } catch {}
   return usage.count;
 }
-
-const DAILY_LIMIT_MESSAGE =
-  "Thanks for testing Clitronic! You've hit the daily limit, but you can come back tomorrow for more. If you're interested in collaborating, reach out on X @sergiopesch — would love to hear from you. Cheers!";
 
 export function LocalConsole() {
   const [history, setHistory] = useState<ConversationEntry[]>([]);
@@ -122,7 +119,7 @@ export function LocalConsole() {
 
       // Client-side daily limit check (backup for serverless cold starts)
       const usage = getDailyUsage();
-      if (usage.count >= DAILY_LIMIT) {
+      if (usage.count >= DAILY_LIMIT_DEFAULT) {
         setPrompt('');
         setCurrentQuery(text);
         setCurrentResponse({
@@ -233,7 +230,7 @@ export function LocalConsole() {
 
       {/* Top bar */}
       <header
-        className={`relative z-10 flex items-center justify-between px-4 py-3 transition-all duration-500 sm:px-6 ${
+        className={`relative z-10 flex items-start justify-between gap-2 px-4 py-3 transition-all duration-500 sm:items-center sm:px-6 ${
           hasResponse || isLoading
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none -translate-y-4 opacity-0'
@@ -242,7 +239,7 @@ export function LocalConsole() {
         <button type="button" onClick={reset} className="transition hover:opacity-80">
           <Logo scale={0.8} />
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {isViewingHistory && (
             <button
               type="button"
@@ -336,7 +333,7 @@ export function LocalConsole() {
 
       {/* Bottom input */}
       {(hasResponse || error) && !isLoading && (
-        <div className="border-border/50 bg-surface-0/80 animate-fade-in-up relative z-10 border-t px-4 py-3 backdrop-blur-xl sm:px-6">
+        <div className="border-border/50 bg-surface-0/80 animate-fade-in-up relative z-10 border-t px-4 py-3 pb-[max(env(safe-area-inset-bottom),0px)] backdrop-blur-xl sm:px-6">
           <div className="mx-auto max-w-2xl">
             <InputBar
               ref={inputRef}
@@ -422,9 +419,10 @@ interface InputBarProps {
   size: 'large' | 'compact';
 }
 
-const InputBar = ({ ref, ...props }: InputBarProps & { ref: React.Ref<HTMLTextAreaElement> }) => {
-  const { value, onChange, onSubmit, isLoading, size } = props;
-
+const InputBar = forwardRef<HTMLTextAreaElement, InputBarProps>(function InputBar(
+  { value, onChange, onSubmit, isLoading, size },
+  ref
+) {
   return (
     <form
       onSubmit={(e) => {
@@ -467,7 +465,7 @@ const InputBar = ({ ref, ...props }: InputBarProps & { ref: React.Ref<HTMLTextAr
       </button>
     </form>
   );
-};
+});
 
 /* ── Floating Hints ── */
 

@@ -4,7 +4,7 @@
 
 A dynamic UI engine for electronics enthusiasts. NOT a traditional chat app.
 
-```
+```text
 User input → LLM → Structured JSON → UI Renderer → Animated Components
 ```
 
@@ -134,7 +134,7 @@ The LLM uses signal words and question shape — not hardcoded examples:
 
 ## Image Search Pipeline
 
-```
+```text
 User asks to see a component → LLM returns imageBlock with imageMode: "photo"
 → Client fetches /api/image-search?q={searchQuery}
 → Brave Search (if BRAVE_API_KEY set) → Wikimedia Commons (fallback)
@@ -185,13 +185,19 @@ Apple UI + Tesla UI + AI-native system.
 npm run dev          # Dev server
 npm run build        # Production build
 npm run validate     # Type check + lint + format check
+npm test             # Runtime schema + normalization tests
+npm run scaffold:component -- --name "Signal Meter" --kind chart
 ```
 
 ## Architecture
 
-```
+```text
 app/
 ├── api/chat/route.ts           # OpenAI structured output endpoint
+├── api/chat/response-normalizer.ts # Output normalization + alias rescue
+├── api/chat/response-validator.ts  # Strict runtime response validator (zod)
+├── api/chat/security.ts        # Input sanitization + injection detection
+├── api/chat/rate-limit.ts      # In-memory per-IP rate limiting
 ├── api/image-search/route.ts   # Multi-provider image search (Brave + Wikimedia)
 ├── globals.css                 # Design tokens + keyframe animations
 ├── layout.tsx                  # Root layout
@@ -200,7 +206,7 @@ components/
 ├── console/local-console.tsx   # Single-response focused UI
 ├── ui/                         # Structured UI card components
 │   ├── ui-renderer.tsx         # Routes JSON → component
-│   ├── animations.tsx          # AnimateIn + StaggerChildren
+│   ├── animations.tsx          # AnimateIn wrapper
 │   ├── spec-card.tsx
 │   ├── comparison-card.tsx
 │   ├── explanation-card.tsx
@@ -213,6 +219,8 @@ components/
 │   ├── wiring-card.tsx         # Step-by-step wiring guide
 │   └── text-response.tsx       # Typewriter effect
 lib/
+├── ai/component-registry.ts    # Single source of truth for component names/aliases/types
 ├── ai/system-prompt.ts         # Compact ~1.2k token prompt with 3-step engine
-└── ai/response-schema.ts       # TypeScript types for all components
+├── ai/response-schema.ts       # TypeScript types for all components
+└── ai/rate-limit.ts            # Shared rate-limit constants/messages
 ```

@@ -29,21 +29,23 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-5 py-4">
+      <div className="border-border border-b px-4 py-4 sm:px-5">
         <h3 className="text-accent text-base font-semibold sm:text-lg">{data.component}</h3>
         {data.description && <p className="text-text-muted mt-1 text-sm">{data.description}</p>}
       </div>
 
       {totalPins === 0 && (
-        <div className="text-text-muted px-5 py-8 text-center text-sm">No pin data available.</div>
+        <div className="text-text-muted px-4 py-8 text-center text-sm sm:px-5">
+          No pin data available.
+        </div>
       )}
 
       {/* SVG Pinout Diagram */}
       {totalPins > 0 && (
-        <div className="flex justify-center overflow-x-auto px-5 py-6">
+        <div className="flex justify-center overflow-x-auto px-3 py-5 sm:px-5 sm:py-6">
           <svg
             viewBox={`0 0 400 ${chipHeight + 40}`}
-            className="w-full max-w-[400px]"
+            className="w-full max-w-[400px] min-w-[340px]"
             style={{ height: `${Math.min(chipHeight + 40, 400)}px` }}
           >
             {/* IC Body */}
@@ -187,7 +189,7 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
 
       {/* Pin type legend */}
       {totalPins > 0 && (
-        <div className="border-border flex flex-wrap gap-3 border-t px-5 py-3">
+        <div className="border-border flex flex-wrap gap-3 border-t px-4 py-3 sm:px-5">
           {(['power', 'ground', 'digital', 'analog'] as const).map((type) => (
             <div key={type} className="flex items-center gap-1.5">
               <span

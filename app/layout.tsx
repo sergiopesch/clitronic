@@ -1,34 +1,26 @@
 import type { Metadata, Viewport } from 'next';
+import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Clitronic - Local Electronics Console',
+  title: 'Clitronic - Electronics Companion',
   description:
-    'Console-first local electronics chat for testing the core interaction loop without provider auth or remote model calls.',
-  keywords: [
-    'electronics',
-    'hardware',
-    'local llm',
-    'llama.cpp',
-    'console ui',
-    'circuits',
-    'components',
-  ],
+    'An AI-native electronics companion that turns questions into structured visual cards for circuits, components, and maker hardware.',
+  keywords: ['electronics', 'hardware', 'openai', 'next.js', 'ai ui', 'circuits', 'components'],
   authors: [{ name: 'Sergio Peschiera' }],
   creator: 'Sergio Peschiera',
   openGraph: {
-    title: 'Clitronic - Local Electronics Console',
+    title: 'Clitronic - Electronics Companion',
     description:
-      'A console-first local chat MVP for electronics thinking, learning, and future tool use.',
+      'Structured visual answers for electronics questions, from specs to wiring guides.',
     type: 'website',
     locale: 'en_US',
     siteName: 'Clitronic',
   },
   twitter: {
     card: 'summary',
-    title: 'Clitronic - Local Electronics Console',
-    description:
-      'Console-first local electronics chat for testing the interaction loop before tools and workbench layers return.',
+    title: 'Clitronic - Electronics Companion',
+    description: 'Ask electronics questions and get animated, structured visual responses.',
   },
   appleWebApp: {
     capable: true,
@@ -49,7 +41,7 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html lang="en" className="dark">

@@ -20,15 +20,17 @@ export function ChartCard({ data }: { data: ChartCardData }) {
         {data.subtitle && <p className="text-text-muted mt-1 text-sm">{data.subtitle}</p>}
       </div>
 
-      <div className="space-y-3 px-5 py-5">
+      <div className="space-y-3 px-4 py-4 sm:px-5 sm:py-5">
         {bars.map((bar, i) => {
           const pct = (bar.value / maxValue) * 100;
           const palette = BAR_COLORS[bar.color ?? 'accent'] ?? BAR_COLORS.accent;
 
           return (
             <div key={bar.label} className={`animate-fade-in-up stagger-${Math.min(i + 1, 6)}`}>
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <span className="text-text-primary text-sm">{bar.label}</span>
+              <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                <span className="text-text-primary min-w-0 flex-1 text-xs break-words sm:text-sm">
+                  {bar.label}
+                </span>
                 <span className="font-mono text-sm font-semibold" style={{ color: palette.bar }}>
                   {bar.value}
                   {bar.unit && (

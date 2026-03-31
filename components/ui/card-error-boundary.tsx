@@ -11,6 +11,8 @@ interface State {
   hasError: boolean;
 }
 
+const IS_DEV = process.env.NODE_ENV === 'development';
+
 export class CardErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -22,7 +24,7 @@ export class CardErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    console.error('Card render error:', error.message);
+    if (IS_DEV) console.error('Card render error:', error.message);
   }
 
   render() {

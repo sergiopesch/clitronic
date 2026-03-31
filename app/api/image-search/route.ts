@@ -41,14 +41,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ ...round1, confident: true });
   }
 
-  // ── Round 2: Only retry if round 1 returned nothing and query is multi-word ──
+  // ── Round 2: Retry if no result OR low confidence and query is multi-word ──
   const queryWords = query.trim().split(/\s+/);
-  if (!round1 && queryWords.length > 2) {
+  if ((!round1 || round1.score < CONFIDENCE_THRESHOLD) && queryWords.length > 2) {
     const simplified = simplifyQuery(query);
     if (simplified !== query) {
       const round2 = await searchParallel(simplified, braveKey);
       if (round2) {
-        return NextResponse.json({ ...round2, confident: round2.score >= CONFIDENCE_THRESHOLD });
+        const best = betterResult(round1, round2) ?? round2;
+        return NextResponse.json({ ...best, confident: best.score >= CONFIDENCE_THRESHOLD });
       }
     }
   }

@@ -9,7 +9,7 @@ export function SpecCard({ data }: { data: SpecCardData }) {
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-5 py-4">
+      <div className="border-border border-b px-4 py-4 sm:px-5">
         <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
         {data.subtitle && <p className="text-text-muted mt-1 text-sm">{data.subtitle}</p>}
       </div>
@@ -18,10 +18,12 @@ export function SpecCard({ data }: { data: SpecCardData }) {
         {(data.keySpecs ?? []).map((spec, i) => (
           <div
             key={spec.label}
-            className={`bg-surface-1/80 animate-fade-in-up px-5 py-3 stagger-${Math.min(i + 1, 6)}`}
+            className={`bg-surface-1/80 animate-fade-in-up px-4 py-3 stagger-${Math.min(i + 1, 6)} sm:px-5`}
           >
             <div className="text-text-muted text-[11px] tracking-wider uppercase">{spec.label}</div>
-            <div className="text-text-primary mt-1 font-mono text-sm font-medium">{spec.value}</div>
+            <div className="text-text-primary mt-1 font-mono text-sm font-medium break-words">
+              {spec.value}
+            </div>
           </div>
         ))}
       </div>
@@ -30,7 +32,7 @@ export function SpecCard({ data }: { data: SpecCardData }) {
         <>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="border-border text-accent hover:bg-surface-2/50 flex w-full items-center justify-center gap-1 border-t px-5 py-2.5 text-xs transition"
+            className="border-border text-accent hover:bg-surface-2/50 flex w-full items-center justify-center gap-1 border-t px-4 py-2.5 text-xs transition sm:px-5"
           >
             {expanded ? 'Hide details' : 'Show details'}
             <svg
@@ -48,11 +50,11 @@ export function SpecCard({ data }: { data: SpecCardData }) {
           {expanded && (
             <div className="bg-border border-border animate-card-expand grid gap-px border-t sm:grid-cols-2">
               {data.optionalDetails!.map((detail) => (
-                <div key={detail.label} className="bg-surface-2/60 px-5 py-3">
+                <div key={detail.label} className="bg-surface-2/60 px-4 py-3 sm:px-5">
                   <div className="text-text-muted text-[11px] tracking-wider uppercase">
                     {detail.label}
                   </div>
-                  <div className="text-text-secondary mt-1 text-sm">{detail.value}</div>
+                  <div className="text-text-secondary mt-1 text-sm break-words">{detail.value}</div>
                 </div>
               ))}
             </div>
