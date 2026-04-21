@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
+import { REALTIME_VOICE_INSTRUCTIONS } from '@/lib/ai/voice-prompts';
 
 export type VoiceState =
   | 'idle'
@@ -69,8 +70,6 @@ const ASSISTANT_AUDIO_DELTA_EVENTS = new Set([
 
 const ASSISTANT_AUDIO_DONE_EVENTS = new Set(['response.audio.done', 'response.output_audio.done']);
 
-const REALTIME_REPLY_INSTRUCTIONS =
-  'You are Clitronic, a voice-first electronics assistant. Always answer in English only, even if the user mixes languages. Reply in plain spoken language, 1-2 short sentences, practical and concise. Prioritize safety warnings first when relevant. If the user asks to show, see, picture, image, or photo of something, say that you are showing it on screen now. Only answer electronics/hardware topics; for off-topic requests, briefly say you can only help with electronics.';
 const REALTIME_SESSION_TIMEOUT_MS = 12000;
 const REALTIME_SDP_TIMEOUT_MS = 15000;
 const DATA_CHANNEL_TIMEOUT_MS = 10000;
@@ -676,7 +675,7 @@ export function useVoiceInteraction({
         modalities: ['text', 'audio'],
         voice: 'alloy',
         output_audio_format: 'pcm16',
-        instructions: REALTIME_REPLY_INSTRUCTIONS,
+        instructions: REALTIME_VOICE_INSTRUCTIONS,
         turn_detection: SERVER_VAD_CONFIG,
         input_audio_transcription: {
           model: 'gpt-4o-mini-transcribe',

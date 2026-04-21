@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
+import { VOICE_PROMPT_RULES } from '@/lib/ai/voice-prompts';
 import {
   DAILY_LIMIT_RESPONSE,
   FALLBACK_TEXT_RESPONSE,
@@ -105,17 +106,6 @@ export function sanitizeVisibleResponse<T>(payload: T): T {
   return sanitizeVisibleValue(payload) as T;
 }
 
-const VOICE_PROMPT_RULES = `
-
-# Voice-first additions
-- Input may come from speech-to-text and can include filler words, repetitions, and false starts.
-- When inputMode is voice, interpret transcript generously and preserve electronics values exactly.
-- Keep text concise and practical.
-- For UI responses, include voice.spokenSummary: a short spoken-friendly summary.
-- voice.spokenSummary rules: 1-2 sentences, plain text, ideally <= 180 characters, prioritize warnings and next action.
-- Never narrate full tables or full card contents in voice.spokenSummary.
-`;
-
 const PHOTO_REQUEST_HINTS =
   /\b(show|picture|photo|image|see|looks?\s+like|look\s+like|what\s+does\s+.+\s+look\s+like)\b/i;
 const NOT_PHOTO_HINTS = /\b(pinout|pins|wiring|wire|connect|schematic|diagram|circuit)\b/i;
@@ -163,6 +153,14 @@ export function derivePhotoQuery(input: string): string | null {
   return candidate;
 }
 
+// Matches the prefix produced by `summarizeAssistantResponse` in
+// hooks/useConversationState.ts: e.g. "[Showed specCard] — ESP32 — …".
+// We treat this as a signal that the history entry describes a concrete
+// electronics entity and is safe to use as a photo-query source. Other
+// assistant prose ("hi there", "sure!") would otherwise be silently
+// forwarded to an image search.
+const STRUCTURED_SUMMARY_MARKER = /^\s*\[showed\s+/i;
+
 export function derivePhotoQueryFromContext(
   input: string,
   history: Array<{ role: 'user' | 'assistant'; content: string }>
@@ -171,11 +169,27 @@ export function derivePhotoQueryFromContext(
   if (direct) return direct;
 
   for (let index = history.length - 1; index >= 0; index -= 1) {
-    const searchedCandidate = extractHistorySearchQuery(history[index]?.content ?? '');
+    const entry = history[index];
+    const content = entry?.content ?? '';
+
+    // Highest-confidence source: an explicit `(searched: X)` marker that we
+    // emitted ourselves from a previous imageBlock response. Trust it
+    // regardless of role so a prior fast-path search can still seed a
+    // follow-up.
+    const searchedCandidate = extractHistorySearchQuery(content);
     if (searchedCandidate) return searchedCandidate;
 
-    const candidate = derivePhotoQuery(stripHistoryArtifacts(history[index]?.content ?? ''));
-    if (candidate) return candidate;
+    // Medium-confidence source: an assistant message that starts with our
+    // structured `[Showed <component>]` marker. The title that follows has
+    // already been curated by the renderer so it's a reasonable entity for
+    // image search.
+    if (entry?.role === 'assistant' && STRUCTURED_SUMMARY_MARKER.test(content)) {
+      const candidate = derivePhotoQuery(stripHistoryArtifacts(content));
+      if (candidate) return candidate;
+    }
+    // Anything else ("hi there", "sure!", general prose) is deliberately
+    // NOT used as a fallback -- returning an arbitrary user/assistant line
+    // as a photo query was a real source of confusing results.
   }
 
   return null;
