@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
 import {
@@ -11,6 +10,7 @@ import {
   RENDER_FALLBACK_TEXT_RESPONSE,
 } from './constants';
 import { logger } from './logger';
+import { getChatClient } from './openai-client';
 import { checkRateLimit } from './rate-limit';
 import { parseAndNormalizeResponse } from './response-normalizer';
 import { validateStructuredResponse } from './response-validator';
@@ -25,12 +25,6 @@ export const dynamic = 'force-dynamic';
 // for the legacy runtime) so we always get a chance to return a graceful
 // fallback rather than having the platform kill the request.
 const OPENAI_REQUEST_TIMEOUT_MS = 8_000;
-
-let _openai: OpenAI | null = null;
-function getClient() {
-  if (!_openai) _openai = new OpenAI();
-  return _openai;
-}
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -321,7 +315,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const completion = await getClient().chat.completions.create(
+    const completion = await getChatClient().chat.completions.create(
       {
         model: 'gpt-4o-mini',
         response_format: { type: 'json_object' },
