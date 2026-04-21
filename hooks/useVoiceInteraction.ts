@@ -62,7 +62,10 @@ const ASSISTANT_TRANSCRIPT_DONE_EVENTS = new Set([
   'response.output_text.done',
 ]);
 
-const ASSISTANT_AUDIO_DELTA_EVENTS = new Set(['response.audio.delta', 'response.output_audio.delta']);
+const ASSISTANT_AUDIO_DELTA_EVENTS = new Set([
+  'response.audio.delta',
+  'response.output_audio.delta',
+]);
 
 const ASSISTANT_AUDIO_DONE_EVENTS = new Set(['response.audio.done', 'response.output_audio.done']);
 
@@ -756,7 +759,9 @@ export function useVoiceInteraction({
     smoothedInputRef.current = 0;
     smoothedOutputRef.current = 0;
     setVoiceState('idle');
-    setSessionReady(Boolean(dataChannelRef.current && dataChannelRef.current.readyState === 'open'));
+    setSessionReady(
+      Boolean(dataChannelRef.current && dataChannelRef.current.readyState === 'open')
+    );
   }, [interruptAssistant, sendRealtimeEvent]);
 
   const cancelCapture = useCallback(() => {

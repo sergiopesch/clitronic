@@ -139,7 +139,9 @@ test('sanitizes internal reasoning text from visible response fields', () => {
     sanitized.ui.data.summary,
     'PWM rapidly switches voltage on and off to simulate an average output level.'
   );
-  assert.deepEqual(sanitized.ui.data.keyPoints, ['PWM duty cycle controls the average delivered power.']);
+  assert.deepEqual(sanitized.ui.data.keyPoints, [
+    'PWM duty cycle controls the average delivered power.',
+  ]);
   assert.equal(sanitized.text, 'PWM is useful for dimming LEDs and controlling motor speed.');
   assert.equal(sanitized.voice.spokenSummary, 'PWM changes average power by varying duty cycle.');
 });
