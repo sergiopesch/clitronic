@@ -6,6 +6,18 @@ on:
   pull_request:
     branches: [main, master]
 
+# Cancel superseded runs for the same ref. Keeps dev loops fast and saves
+# minutes: if you push three times to a PR in a row, only the last run
+# actually finishes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Principle of least privilege. Individual jobs can opt-in to more if
+# they ever need it (none of these do right now).
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Validate
@@ -18,11 +30,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Validate
         run: npm run validate
@@ -42,11 +55,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Build
         run: npm run build
@@ -62,14 +76,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
-
-      - name: Install root dependencies
-        run: npm ci
+          # The CLI lives in /cli with its own lockfile. Scoping the cache
+          # to that lockfile means cached deps stay warm across runs
+          # instead of invalidating on every root-lockfile change.
+          cache-dependency-path: cli/package-lock.json
 
       - name: Install CLI dependencies
-        run: cd cli && npm ci
+        working-directory: cli
+        run: npm ci --prefer-offline --no-audit
 
       - name: Verify CLI loads
-        run: cd cli && npm run start -- --help
+        working-directory: cli
+        run: npm run start -- --help
