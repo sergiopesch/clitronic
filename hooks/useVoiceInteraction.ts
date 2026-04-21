@@ -1,40 +1,32 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
 import { REALTIME_VOICE_INSTRUCTIONS } from '@/lib/ai/voice-prompts';
+import { initialVoiceState, voiceReducer } from './useVoiceInteraction.reducer';
+import { createDefaultRealtimeTransport } from './useVoiceInteraction.transport';
+import type { RealtimeEvent, RealtimeTransport } from './useVoiceInteraction.types';
 
-export type VoiceState =
-  | 'idle'
-  | 'requesting_mic'
-  | 'connecting_realtime'
-  | 'listening'
-  | 'capturing'
-  | 'transcribing'
-  | 'processing'
-  | 'speaking'
-  | 'error';
+export type { VoiceDebugInfo, VoiceState } from './useVoiceInteraction.types';
 
 type UseVoiceInteractionOptions = {
   onFinalTranscript?: (payload: { raw: string; cleaned: string }) => void | Promise<void>;
   onTurnStart?: () => void;
   debugEnabled?: boolean;
-};
-
-type RealtimeSessionResponse = {
-  client_secret?: {
-    value?: string;
-  };
-};
-
-type RealtimeEvent = {
-  type?: string;
-  delta?: string;
-  transcript?: string;
-  text?: string;
-  response?: {
-    status?: string;
-  };
+  /**
+   * Optional transport override. Production code uses the default WebRTC
+   * transport; tests inject a fake to exercise the state machine without
+   * a real browser or OpenAI connection.
+   */
+  transport?: RealtimeTransport;
 };
 
 const USER_TRANSCRIPT_DELTA_EVENTS = new Set([
@@ -70,8 +62,6 @@ const ASSISTANT_AUDIO_DELTA_EVENTS = new Set([
 
 const ASSISTANT_AUDIO_DONE_EVENTS = new Set(['response.audio.done', 'response.output_audio.done']);
 
-const REALTIME_SESSION_TIMEOUT_MS = 12000;
-const REALTIME_SDP_TIMEOUT_MS = 15000;
 const DATA_CHANNEL_TIMEOUT_MS = 10000;
 
 const SERVER_VAD_CONFIG = {
@@ -82,19 +72,6 @@ const SERVER_VAD_CONFIG = {
   create_response: true,
   interrupt_response: true,
 } as const;
-
-export type VoiceDebugInfo = {
-  transport: 'openai-realtime-webrtc';
-  sessionReady: boolean;
-  pcConnectionState: RTCPeerConnectionState | 'none';
-  iceConnectionState: RTCIceConnectionState | 'none';
-  dataChannelState: RTCDataChannelState | 'none';
-  receivedEventCount: number;
-  sentEventCount: number;
-  lastReceivedEvent: string | null;
-  lastEvents: string[];
-  lastSentEvent: string | null;
-};
 
 function clamp01(value: number): number {
   if (value < 0) return 0;
@@ -110,7 +87,6 @@ function readNormalizedLevel(analyser: AnalyserNode, binBuffer: Uint8Array<Array
     sum += normalized * normalized;
   }
   const rms = Math.sqrt(sum / binBuffer.length);
-  // Gate room noise and compress into a stable 0-1 range.
   return clamp01((rms - 0.02) / 0.24);
 }
 
@@ -118,31 +94,17 @@ export function useVoiceInteraction({
   onFinalTranscript,
   onTurnStart,
   debugEnabled = false,
+  transport: providedTransport,
 }: UseVoiceInteractionOptions = {}) {
-  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  const [partialTranscript, setPartialTranscript] = useState('');
-  const [finalTranscript, setFinalTranscript] = useState('');
-  const [assistantPartialTranscript, setAssistantPartialTranscript] = useState('');
-  const [assistantFinalTranscript, setAssistantFinalTranscript] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [hasMounted, setHasMounted] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [inputLevel, setInputLevel] = useState(0);
-  const [outputLevel, setOutputLevel] = useState(0);
-  const [sessionReady, setSessionReady] = useState(false);
-  const [debug, setDebug] = useState<VoiceDebugInfo>({
-    transport: 'openai-realtime-webrtc',
-    sessionReady: false,
-    pcConnectionState: 'none',
-    iceConnectionState: 'none',
-    dataChannelState: 'none',
-    receivedEventCount: 0,
-    sentEventCount: 0,
-    lastReceivedEvent: null,
-    lastEvents: [],
-    lastSentEvent: null,
-  });
+  const [state, dispatch] = useReducer(voiceReducer, initialVoiceState);
+
+  // Resolve the transport once per hook instance. In SSR we still want a
+  // stable object; the default transport's `isSupported` flag is safe to
+  // read pre-mount because it gates on `typeof window`.
+  const transport = useMemo(
+    () => providedTransport ?? createDefaultRealtimeTransport(),
+    [providedTransport]
+  );
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -163,26 +125,38 @@ export function useVoiceInteraction({
   const smoothedOutputRef = useRef(0);
   const responseInProgressRef = useRef(false);
   const startCancelledRef = useRef(false);
-
-  const isSupported =
-    hasMounted &&
-    typeof window !== 'undefined' &&
-    typeof navigator !== 'undefined' &&
-    typeof RTCPeerConnection !== 'undefined' &&
-    Boolean(navigator.mediaDevices?.getUserMedia);
+  const isMutedRef = useRef(state.isMuted);
+  const voiceStateRef = useRef(state.voiceState);
+  const isSpeakingRef = useRef(state.isSpeaking);
 
   useEffect(() => {
-    setHasMounted(true);
+    isMutedRef.current = state.isMuted;
+  }, [state.isMuted]);
+  useEffect(() => {
+    voiceStateRef.current = state.voiceState;
+  }, [state.voiceState]);
+  useEffect(() => {
+    isSpeakingRef.current = state.isSpeaking;
+  }, [state.isSpeaking]);
+
+  const isSupported = state.hasMounted && transport.isSupported;
+
+  useEffect(() => {
+    dispatch({ type: 'MOUNTED' });
   }, []);
 
   useEffect(() => {
     if (remoteAudioRef.current) {
-      remoteAudioRef.current.muted = isMuted;
+      remoteAudioRef.current.muted = state.isMuted;
     }
-    if (isMuted && isSpeaking) {
-      setIsSpeaking(false);
-    }
-  }, [isMuted, isSpeaking]);
+  }, [state.isMuted]);
+
+  const setIsMuted = useCallback((muted: boolean | ((prev: boolean) => boolean)) => {
+    dispatch({
+      type: 'SET_MUTED',
+      muted: typeof muted === 'function' ? muted(isMutedRef.current) : muted,
+    });
+  }, []);
 
   const finalizeTurn = useCallback(
     async (transcriptOverride?: string) => {
@@ -192,63 +166,46 @@ export function useVoiceInteraction({
       const raw = (transcriptOverride ?? finalBufferRef.current).trim();
       const cleaned = cleanTranscriptLight(raw);
       finalBufferRef.current = '';
-      setPartialTranscript('');
+      dispatch({ type: 'USER_TRANSCRIPT_COMMITTED', transcript: '' });
 
-      if (!cleaned) {
-        const isTrackEnabled = Boolean(audioTrackRef.current?.enabled);
-        setVoiceState(isTrackEnabled ? 'listening' : 'idle');
-        isFinalizingTurnRef.current = false;
-        return;
-      }
+      const trackEnabled = Boolean(audioTrackRef.current?.enabled);
 
-      if (cleaned === lastFinalizedTranscriptRef.current) {
-        const isTrackEnabled = Boolean(audioTrackRef.current?.enabled);
-        setVoiceState(isTrackEnabled ? 'listening' : 'idle');
+      if (!cleaned || cleaned === lastFinalizedTranscriptRef.current) {
+        dispatch({ type: 'SET_STATE', state: trackEnabled ? 'listening' : 'idle' });
         isFinalizingTurnRef.current = false;
         return;
       }
 
       lastFinalizedTranscriptRef.current = cleaned;
-      setFinalTranscript(cleaned);
+      dispatch({ type: 'USER_FINAL_SET', transcript: cleaned });
 
       if (!onFinalTranscript) {
-        const isTrackEnabled = Boolean(audioTrackRef.current?.enabled);
-        setVoiceState(isTrackEnabled ? 'listening' : 'idle');
+        dispatch({ type: 'SET_STATE', state: trackEnabled ? 'listening' : 'idle' });
         isFinalizingTurnRef.current = false;
         return;
       }
 
-      setVoiceState((prev) => (prev === 'speaking' ? prev : 'processing'));
+      if (voiceStateRef.current !== 'speaking') {
+        dispatch({ type: 'SET_STATE', state: 'processing' });
+      }
 
       try {
         await onFinalTranscript({ raw, cleaned });
-        setVoiceState((prev) => {
-          if (prev === 'speaking') return prev;
-          const isTrackEnabled = Boolean(audioTrackRef.current?.enabled);
-          return isTrackEnabled ? 'listening' : 'idle';
-        });
+        if (voiceStateRef.current !== 'speaking') {
+          const nextTrackEnabled = Boolean(audioTrackRef.current?.enabled);
+          dispatch({ type: 'SET_STATE', state: nextTrackEnabled ? 'listening' : 'idle' });
+        }
       } catch {
-        setVoiceState('error');
-        setError('Could not process voice input.');
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Could not process voice input.',
+          state: 'error',
+        });
       } finally {
         isFinalizingTurnRef.current = false;
       }
     },
     [onFinalTranscript]
-  );
-
-  const fetchWithTimeout = useCallback(
-    async (url: string, init: RequestInit, timeoutMs: number) => {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetch(url, { ...init, signal: controller.signal });
-        return response;
-      } finally {
-        window.clearTimeout(timeoutId);
-      }
-    },
-    []
   );
 
   const sendRealtimeEvent = useCallback(
@@ -257,11 +214,7 @@ export function useVoiceInteraction({
       if (!channel || channel.readyState !== 'open') return;
       const sentType = typeof payload.type === 'string' ? payload.type : null;
       if (sentType && debugEnabled) {
-        setDebug((prev) => ({
-          ...prev,
-          sentEventCount: prev.sentEventCount + 1,
-          lastSentEvent: sentType,
-        }));
+        dispatch({ type: 'DEBUG_PATCH', patch: {}, incrementSent: sentType });
       }
       channel.send(JSON.stringify(payload));
     },
@@ -269,9 +222,12 @@ export function useVoiceInteraction({
   );
 
   const interruptAssistant = useCallback(() => {
+    const currentVoiceState = voiceStateRef.current;
     const hasResponseInFlight =
-      responseInProgressRef.current || voiceState === 'processing' || voiceState === 'speaking';
-    const hasOutputPlayback = isSpeaking || voiceState === 'speaking';
+      responseInProgressRef.current ||
+      currentVoiceState === 'processing' ||
+      currentVoiceState === 'speaking';
+    const hasOutputPlayback = isSpeakingRef.current || currentVoiceState === 'speaking';
 
     if (hasResponseInFlight) {
       sendRealtimeEvent({ type: 'response.cancel' });
@@ -282,34 +238,28 @@ export function useVoiceInteraction({
 
     responseInProgressRef.current = false;
     assistantBufferRef.current = '';
-    setAssistantPartialTranscript('');
-    setIsSpeaking(false);
     smoothedOutputRef.current = 0;
-    setOutputLevel(0);
-    setVoiceState((prev) => {
-      if (prev === 'capturing' || prev === 'transcribing') return prev;
-      return audioTrackRef.current?.enabled ? 'listening' : 'idle';
-    });
-  }, [isSpeaking, sendRealtimeEvent, voiceState]);
+    const trackEnabled = Boolean(audioTrackRef.current?.enabled);
+    dispatch({ type: 'ASSISTANT_CLEARED', trackEnabled });
+  }, [sendRealtimeEvent]);
 
   const handleRealtimeEvent = useCallback(
     (event: RealtimeEvent) => {
       if (!event?.type) return;
       if (debugEnabled) {
-        setDebug((prev) => ({
-          ...prev,
-          receivedEventCount: prev.receivedEventCount + 1,
-          lastReceivedEvent: event.type ?? null,
-          lastEvents: [event.type!, ...prev.lastEvents].slice(0, 12),
-        }));
+        dispatch({
+          type: 'DEBUG_PATCH',
+          patch: {},
+          incrementReceived: event.type ?? null,
+        });
       }
 
       if (event.type === 'response.created') {
         responseInProgressRef.current = true;
-        setVoiceState((prev) => {
-          if (prev === 'capturing' || prev === 'transcribing') return prev;
-          return prev === 'speaking' ? prev : 'processing';
-        });
+        const current = voiceStateRef.current;
+        if (current !== 'capturing' && current !== 'transcribing' && current !== 'speaking') {
+          dispatch({ type: 'SET_STATE', state: 'processing' });
+        }
         return;
       }
 
@@ -317,23 +267,18 @@ export function useVoiceInteraction({
         finalBufferRef.current = '';
         assistantBufferRef.current = '';
         lastFinalizedTranscriptRef.current = '';
-        setPartialTranscript('');
-        setFinalTranscript('');
-        setAssistantPartialTranscript('');
-        setAssistantFinalTranscript('');
-        setIsSpeaking(false);
         smoothedOutputRef.current = 0;
-        setOutputLevel(0);
+        dispatch({ type: 'USER_TURN_STARTED' });
         onTurnStart?.();
         if (audioTrackRef.current?.enabled) {
-          setVoiceState('capturing');
+          dispatch({ type: 'SET_STATE', state: 'capturing' });
         }
         return;
       }
 
       if (event.type === 'input_audio_buffer.speech_stopped') {
         if (audioTrackRef.current?.enabled) {
-          setVoiceState('transcribing');
+          dispatch({ type: 'SET_STATE', state: 'transcribing' });
         }
         return;
       }
@@ -341,12 +286,12 @@ export function useVoiceInteraction({
       if (USER_TRANSCRIPT_DELTA_EVENTS.has(event.type)) {
         const delta = event.delta || event.text || '';
         if (delta) {
-          // Keep a functional transcript buffer even when debug transcript UI is disabled.
           finalBufferRef.current = `${finalBufferRef.current}${delta}`;
-          if (audioTrackRef.current?.enabled) {
-            setVoiceState((prev) => (prev === 'capturing' ? prev : 'capturing'));
-          }
-          setPartialTranscript((prev) => `${prev}${delta}`);
+          dispatch({
+            type: 'USER_TRANSCRIPT_DELTA',
+            delta,
+            trackEnabled: Boolean(audioTrackRef.current?.enabled),
+          });
         }
         return;
       }
@@ -356,9 +301,7 @@ export function useVoiceInteraction({
         const resolvedTranscript = transcript || finalBufferRef.current.trim();
         if (resolvedTranscript) {
           finalBufferRef.current = resolvedTranscript;
-        }
-        if (resolvedTranscript) {
-          setPartialTranscript(resolvedTranscript);
+          dispatch({ type: 'USER_TRANSCRIPT_COMMITTED', transcript: resolvedTranscript });
           if (audioTrackRef.current?.enabled) {
             void finalizeTurn(resolvedTranscript);
           }
@@ -368,8 +311,10 @@ export function useVoiceInteraction({
 
       if (ASSISTANT_AUDIO_DELTA_EVENTS.has(event.type)) {
         responseInProgressRef.current = true;
-        setIsSpeaking((prev) => (prev ? prev : true));
-        setVoiceState((prev) => (prev === 'speaking' ? prev : 'speaking'));
+        if (!isSpeakingRef.current) dispatch({ type: 'SET_SPEAKING', speaking: true });
+        if (voiceStateRef.current !== 'speaking') {
+          dispatch({ type: 'SET_STATE', state: 'speaking' });
+        }
         return;
       }
 
@@ -378,7 +323,7 @@ export function useVoiceInteraction({
         if (!delta) return;
         responseInProgressRef.current = true;
         assistantBufferRef.current = `${assistantBufferRef.current}${delta}`;
-        setAssistantPartialTranscript((prev) => `${prev}${delta}`);
+        dispatch({ type: 'ASSISTANT_DELTA', delta });
         return;
       }
 
@@ -387,30 +332,24 @@ export function useVoiceInteraction({
         const resolved = transcript || assistantBufferRef.current.trim();
         if (resolved) {
           assistantBufferRef.current = resolved;
-          setAssistantFinalTranscript(resolved);
         }
-        setAssistantPartialTranscript('');
+        dispatch({ type: 'ASSISTANT_DONE', transcript: resolved });
         return;
       }
 
       if (ASSISTANT_AUDIO_DONE_EVENTS.has(event.type)) {
-        setIsSpeaking(false);
         smoothedOutputRef.current = 0;
-        setOutputLevel(0);
+        dispatch({ type: 'ASSISTANT_AUDIO_DONE' });
         return;
       }
 
       if (event.type === 'output_audio_buffer.cleared') {
         responseInProgressRef.current = false;
         assistantBufferRef.current = '';
-        setAssistantPartialTranscript('');
-        setIsSpeaking(false);
         smoothedOutputRef.current = 0;
-        setOutputLevel(0);
-        setVoiceState((prev) => {
-          const trackEnabled = Boolean(audioTrackRef.current?.enabled);
-          if (prev === 'capturing' || prev === 'transcribing') return prev;
-          return trackEnabled ? 'listening' : 'idle';
+        dispatch({
+          type: 'ASSISTANT_CLEARED',
+          trackEnabled: Boolean(audioTrackRef.current?.enabled),
         });
         return;
       }
@@ -418,19 +357,13 @@ export function useVoiceInteraction({
       if (event.type === 'response.done') {
         responseInProgressRef.current = false;
         const responseStatus = event.response?.status ?? null;
-        if (responseStatus !== 'cancelled') {
-          setAssistantFinalTranscript((prev) => prev || assistantBufferRef.current.trim());
-        } else {
-          assistantBufferRef.current = '';
-        }
-        setAssistantPartialTranscript('');
-        setIsSpeaking(false);
+        const finalizeAssistant = responseStatus !== 'cancelled';
+        if (!finalizeAssistant) assistantBufferRef.current = '';
         smoothedOutputRef.current = 0;
-        setOutputLevel(0);
-        setVoiceState((prev) => {
-          const trackEnabled = Boolean(audioTrackRef.current?.enabled);
-          if (prev === 'capturing' || prev === 'transcribing' || prev === 'processing') return prev;
-          return trackEnabled ? 'listening' : 'idle';
+        dispatch({
+          type: 'RESPONSE_DONE',
+          trackEnabled: Boolean(audioTrackRef.current?.enabled),
+          finalizeAssistant,
         });
       }
     },
@@ -449,7 +382,7 @@ export function useVoiceInteraction({
       const rawInput =
         micAnalyser && micData && micTrackEnabled ? readNormalizedLevel(micAnalyser, micData) : 0;
       const rawOutput =
-        remoteAnalyser && remoteData && !isMuted
+        remoteAnalyser && remoteData && !isMutedRef.current
           ? readNormalizedLevel(remoteAnalyser, remoteData)
           : 0;
 
@@ -459,10 +392,9 @@ export function useVoiceInteraction({
       const nextInput = smoothedInputRef.current < 0.015 ? 0 : smoothedInputRef.current;
       const nextOutput = smoothedOutputRef.current < 0.015 ? 0 : smoothedOutputRef.current;
 
-      setInputLevel((prev) => (Math.abs(prev - nextInput) > 0.012 ? nextInput : prev));
-      setOutputLevel((prev) => (Math.abs(prev - nextOutput) > 0.012 ? nextOutput : prev));
+      dispatch({ type: 'LEVELS_TICK', input: nextInput, output: nextOutput });
     }, 66);
-  }, [isMuted]);
+  }, []);
 
   const stopMeterLoop = useCallback(() => {
     if (meterTimerRef.current !== null) {
@@ -479,10 +411,10 @@ export function useVoiceInteraction({
       }
       return existing;
     }
-    const ctx = new AudioContext();
+    const ctx = transport.createAudioContext();
     audioContextRef.current = ctx;
     return ctx;
-  }, []);
+  }, [transport]);
 
   const attachMicAnalyser = useCallback(
     async (stream: MediaStream) => {
@@ -517,17 +449,15 @@ export function useVoiceInteraction({
   const ensureRealtimeConnection = useCallback(async () => {
     if (!isSupported) return false;
     if (pcRef.current && dataChannelRef.current?.readyState === 'open') {
-      setSessionReady(true);
-      setDebug((prev) => ({ ...prev, sessionReady: true }));
+      dispatch({ type: 'SET_SESSION_READY', ready: true });
       return true;
     }
 
-    setVoiceState('requesting_mic');
-    setError(null);
-    setSessionReady(false);
-    setDebug((prev) => ({ ...prev, sessionReady: false }));
+    dispatch({ type: 'SET_STATE', state: 'requesting_mic' });
+    dispatch({ type: 'SET_ERROR', error: null });
+    dispatch({ type: 'SET_SESSION_READY', ready: false });
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await transport.acquireMicrophone();
     streamRef.current = stream;
     await attachMicAnalyser(stream);
     const track = stream.getAudioTracks()[0] ?? null;
@@ -535,63 +465,55 @@ export function useVoiceInteraction({
     track.enabled = false;
     audioTrackRef.current = track;
 
-    setVoiceState('connecting_realtime');
+    dispatch({ type: 'SET_STATE', state: 'connecting_realtime' });
 
-    const sessionRes = await fetchWithTimeout(
-      '/api/realtime/session',
-      { method: 'POST' },
-      REALTIME_SESSION_TIMEOUT_MS
-    );
-    if (!sessionRes.ok) {
-      throw new Error('Could not create realtime session.');
-    }
-    const sessionData = (await sessionRes.json()) as RealtimeSessionResponse;
+    const sessionData = await transport.createSession(new AbortController().signal);
     const ephemeralKey = sessionData.client_secret?.value;
     if (!ephemeralKey) {
       throw new Error('Realtime session is missing ephemeral key.');
     }
 
-    const pc = new RTCPeerConnection();
+    const pc = transport.createPeerConnection();
     pcRef.current = pc;
     pc.addTrack(track, stream);
-    setDebug((prev) => ({
-      ...prev,
-      pcConnectionState: pc.connectionState,
-      iceConnectionState: pc.iceConnectionState,
-      sessionReady: false,
-    }));
+    dispatch({
+      type: 'DEBUG_PATCH',
+      patch: {
+        pcConnectionState: pc.connectionState,
+        iceConnectionState: pc.iceConnectionState,
+        sessionReady: false,
+      },
+    });
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
-        setSessionReady(false);
         responseInProgressRef.current = false;
-        setDebug((prev) => ({ ...prev, sessionReady: false }));
+        dispatch({ type: 'SET_SESSION_READY', ready: false });
       }
       if (!debugEnabled) return;
-      setDebug((prev) => ({ ...prev, pcConnectionState: pc.connectionState }));
+      dispatch({ type: 'DEBUG_PATCH', patch: { pcConnectionState: pc.connectionState } });
     };
 
     pc.oniceconnectionstatechange = () => {
       if (!debugEnabled) return;
-      setDebug((prev) => ({ ...prev, iceConnectionState: pc.iceConnectionState }));
+      dispatch({ type: 'DEBUG_PATCH', patch: { iceConnectionState: pc.iceConnectionState } });
     };
 
     pc.ontrack = (event) => {
       const remoteStream = event.streams[0];
       if (!remoteStream) return;
       if (!remoteAudioRef.current) {
-        remoteAudioRef.current = new Audio();
-        remoteAudioRef.current.autoplay = true;
+        remoteAudioRef.current = transport.createAudioElement();
       }
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.muted = isMuted;
-      void remoteAudioRef.current.play().catch(() => {});
+      remoteAudioRef.current.muted = isMutedRef.current;
+      void remoteAudioRef.current.play?.().catch(() => {});
       void attachRemoteAnalyser(remoteStream);
     };
 
     const channel = pc.createDataChannel('oai-events');
     dataChannelRef.current = channel;
-    setDebug((prev) => ({ ...prev, dataChannelState: channel.readyState }));
+    dispatch({ type: 'DEBUG_PATCH', patch: { dataChannelState: channel.readyState } });
 
     channel.onmessage = (event) => {
       try {
@@ -603,69 +525,47 @@ export function useVoiceInteraction({
 
     const channelReady = new Promise<void>((resolve, reject) => {
       const timeoutId = window.setTimeout(() => {
-        setSessionReady(false);
-        setDebug((prev) => ({ ...prev, sessionReady: false }));
+        dispatch({ type: 'SET_SESSION_READY', ready: false });
         reject(new Error('Realtime data channel timed out.'));
       }, DATA_CHANNEL_TIMEOUT_MS);
       channel.onopen = () => {
         window.clearTimeout(timeoutId);
-        setSessionReady(true);
-        setDebug((prev) => ({
-          ...prev,
-          dataChannelState: channel.readyState,
-          sessionReady: true,
-        }));
+        dispatch({
+          type: 'DEBUG_PATCH',
+          patch: { dataChannelState: channel.readyState },
+        });
+        dispatch({ type: 'SET_SESSION_READY', ready: true });
         resolve();
       };
       channel.onerror = () => {
         window.clearTimeout(timeoutId);
-        setSessionReady(false);
         responseInProgressRef.current = false;
-        setDebug((prev) => ({
-          ...prev,
-          dataChannelState: channel.readyState,
-          sessionReady: false,
-        }));
+        dispatch({
+          type: 'DEBUG_PATCH',
+          patch: { dataChannelState: channel.readyState },
+        });
+        dispatch({ type: 'SET_SESSION_READY', ready: false });
         reject(new Error('Realtime data channel error.'));
       };
       channel.onclose = () => {
         window.clearTimeout(timeoutId);
-        setSessionReady(false);
         responseInProgressRef.current = false;
-        setDebug((prev) => ({
-          ...prev,
-          dataChannelState: channel.readyState,
-          sessionReady: false,
-        }));
+        dispatch({
+          type: 'DEBUG_PATCH',
+          patch: { dataChannelState: channel.readyState },
+        });
+        dispatch({ type: 'SET_SESSION_READY', ready: false });
       };
     });
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-
-    const sdpRes = await fetchWithTimeout(
-      'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
-      {
-        method: 'POST',
-        body: offer.sdp,
-        headers: {
-          Authorization: `Bearer ${ephemeralKey}`,
-          'Content-Type': 'application/sdp',
-          'OpenAI-Beta': 'realtime=v1',
-        },
-      },
-      REALTIME_SDP_TIMEOUT_MS
+    const answerSdp = await transport.negotiateSdp(
+      offer.sdp ?? '',
+      ephemeralKey,
+      new AbortController().signal
     );
-
-    if (!sdpRes.ok) {
-      throw new Error('Realtime SDP negotiation failed.');
-    }
-
-    const answerSdp = await sdpRes.text();
-    await pc.setRemoteDescription({
-      type: 'answer',
-      sdp: answerSdp,
-    });
+    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
     await channelReady;
 
@@ -689,17 +589,19 @@ export function useVoiceInteraction({
     attachMicAnalyser,
     attachRemoteAnalyser,
     debugEnabled,
-    fetchWithTimeout,
     handleRealtimeEvent,
-    isMuted,
     isSupported,
     sendRealtimeEvent,
+    transport,
   ]);
 
   const startCapture = useCallback(async () => {
     if (!isSupported) {
-      setVoiceState('error');
-      setError('Voice input is not supported in this browser.');
+      dispatch({
+        type: 'SET_ERROR',
+        error: 'Voice input is not supported in this browser.',
+        state: 'error',
+      });
       return;
     }
 
@@ -711,30 +613,26 @@ export function useVoiceInteraction({
       if (!track) throw new Error('Audio track unavailable.');
       if (startCancelledRef.current) {
         track.enabled = false;
-        setVoiceState('idle');
+        dispatch({ type: 'SET_STATE', state: 'idle' });
         return;
       }
       finalBufferRef.current = '';
       lastFinalizedTranscriptRef.current = '';
-      setFinalTranscript('');
-      setPartialTranscript('');
-      setAssistantPartialTranscript('');
-      setAssistantFinalTranscript('');
       assistantBufferRef.current = '';
-      setError(null);
       smoothedInputRef.current = 0;
       smoothedOutputRef.current = 0;
-      setInputLevel(0);
-      setOutputLevel(0);
+      dispatch({ type: 'RESET_TRANSCRIPTS' });
       sendRealtimeEvent({ type: 'input_audio_buffer.clear' });
       interruptAssistant();
       track.enabled = true;
-      setVoiceState('listening');
+      dispatch({ type: 'SET_STATE', state: 'listening' });
     } catch {
-      setVoiceState('error');
-      setError('Could not start voice capture.');
-      setSessionReady(false);
-      setDebug((prev) => ({ ...prev, sessionReady: false }));
+      dispatch({
+        type: 'SET_ERROR',
+        error: 'Could not start voice capture.',
+        state: 'error',
+      });
+      dispatch({ type: 'SET_SESSION_READY', ready: false });
     }
   }, [ensureRealtimeConnection, interruptAssistant, isSupported, sendRealtimeEvent]);
 
@@ -749,18 +647,14 @@ export function useVoiceInteraction({
     assistantBufferRef.current = '';
     lastFinalizedTranscriptRef.current = '';
     responseInProgressRef.current = false;
-    setPartialTranscript('');
-    setFinalTranscript('');
-    setAssistantPartialTranscript('');
-    setAssistantFinalTranscript('');
-    setInputLevel(0);
-    setOutputLevel(0);
     smoothedInputRef.current = 0;
     smoothedOutputRef.current = 0;
-    setVoiceState('idle');
-    setSessionReady(
-      Boolean(dataChannelRef.current && dataChannelRef.current.readyState === 'open')
-    );
+    dispatch({ type: 'RESET_TRANSCRIPTS' });
+    dispatch({ type: 'SET_STATE', state: 'idle' });
+    dispatch({
+      type: 'SET_SESSION_READY',
+      ready: Boolean(dataChannelRef.current && dataChannelRef.current.readyState === 'open'),
+    });
   }, [interruptAssistant, sendRealtimeEvent]);
 
   const cancelCapture = useCallback(() => {
@@ -782,7 +676,7 @@ export function useVoiceInteraction({
       streamRef.current = null;
       audioTrackRef.current = null;
       if (remoteAudioRef.current) {
-        remoteAudioRef.current.pause();
+        remoteAudioRef.current.pause?.();
         remoteAudioRef.current.srcObject = null;
         remoteAudioRef.current = null;
       }
@@ -794,41 +688,27 @@ export function useVoiceInteraction({
         void audioContextRef.current.close().catch(() => {});
         audioContextRef.current = null;
       }
-      setInputLevel(0);
-      setOutputLevel(0);
-      setSessionReady(false);
       responseInProgressRef.current = false;
       startCancelledRef.current = false;
-      setDebug((prev) => ({
-        ...prev,
-        sessionReady: false,
-        pcConnectionState: 'none',
-        iceConnectionState: 'none',
-        dataChannelState: 'none',
-        receivedEventCount: 0,
-        sentEventCount: 0,
-        lastReceivedEvent: null,
-        lastSentEvent: null,
-        lastEvents: [],
-      }));
+      dispatch({ type: 'CLEANUP' });
     };
   }, [stopMeterLoop]);
 
   return {
     isSupported,
-    sessionReady,
-    voiceState,
-    isSpeaking,
-    isMuted,
-    setIsMuted,
-    partialTranscript,
-    finalTranscript,
-    assistantPartialTranscript,
-    assistantFinalTranscript,
-    error,
-    debug,
-    inputLevel,
-    outputLevel,
+    sessionReady: state.sessionReady,
+    voiceState: state.voiceState,
+    isSpeaking: state.isSpeaking,
+    isMuted: state.isMuted,
+    setIsMuted: setIsMuted as Dispatch<SetStateAction<boolean>>,
+    partialTranscript: state.partialTranscript,
+    finalTranscript: state.finalTranscript,
+    assistantPartialTranscript: state.assistantPartialTranscript,
+    assistantFinalTranscript: state.assistantFinalTranscript,
+    error: state.error,
+    debug: state.debug,
+    inputLevel: state.inputLevel,
+    outputLevel: state.outputLevel,
     startCapture,
     stopCapture,
     cancelCapture,
