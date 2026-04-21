@@ -20,6 +20,12 @@ import type { ChatRequestBody } from './types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Budget for the single OpenAI chat completion call. Picked well below
+// Vercel's default serverless function timeout (10s on Hobby, 15s on Pro
+// for the legacy runtime) so we always get a chance to return a graceful
+// fallback rather than having the platform kill the request.
+const OPENAI_REQUEST_TIMEOUT_MS = 8_000;
+
 let _openai: OpenAI | null = null;
 function getClient() {
   if (!_openai) _openai = new OpenAI();
@@ -290,6 +296,13 @@ export async function POST(req: Request) {
   }));
 
   const lastUserMsg = trimmed.filter((m) => m.role === 'user').pop();
+
+  // Run the cheapest, most decisive guard first so we never waste work
+  // (photo-fallback construction, history scanning) on an injection attempt.
+  if (lastUserMsg && detectInjection(lastUserMsg.content)) {
+    return jsonResponse(OFF_TOPIC_RESPONSE);
+  }
+
   const requestSource = cleanedTranscriptMeta?.cleaned || lastUserMsg?.content;
   const requestedImageCount = deriveRequestedImageCount(requestSource);
   const forcedPhotoResponse = maybeBuildPhotoFallback(
@@ -299,9 +312,6 @@ export async function POST(req: Request) {
     requestedImageCount,
     trimmed.slice(0, -1)
   );
-  if (lastUserMsg && detectInjection(lastUserMsg.content)) {
-    return jsonResponse(OFF_TOPIC_RESPONSE);
-  }
 
   // Fast path: explicit "show me/photo/image" requests can skip LLM generation
   // and return a renderable image card immediately.
@@ -311,30 +321,38 @@ export async function POST(req: Request) {
   }
 
   try {
-    const completion = await getClient().chat.completions.create({
-      model: 'gpt-4o-mini',
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: inputMode === 'voice' ? `${SYSTEM_PROMPT}${VOICE_PROMPT_RULES}` : SYSTEM_PROMPT,
-        },
-        ...trimmed.map((msg) => ({
-          role: msg.role as 'user' | 'assistant',
-          content: msg.content,
-        })),
-        ...(cleanedTranscriptMeta?.cleaned
-          ? [
-              {
-                role: 'system' as const,
-                content: `Voice transcript meta (for interpretation only): ${JSON.stringify(cleanedTranscriptMeta)}`,
-              },
-            ]
-          : []),
-      ],
-      temperature: 0.4,
-      max_tokens: 1200,
-    });
+    const completion = await getClient().chat.completions.create(
+      {
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              inputMode === 'voice' ? `${SYSTEM_PROMPT}${VOICE_PROMPT_RULES}` : SYSTEM_PROMPT,
+          },
+          ...trimmed.map((msg) => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          })),
+          ...(cleanedTranscriptMeta?.cleaned
+            ? [
+                {
+                  role: 'system' as const,
+                  content: `Voice transcript meta (for interpretation only): ${JSON.stringify(cleanedTranscriptMeta)}`,
+                },
+              ]
+            : []),
+        ],
+        temperature: 0.4,
+        max_tokens: 1200,
+      },
+      // Budget the OpenAI call tightly so a stuck request doesn't tie up the
+      // serverless function for its entire platform timeout. The user either
+      // gets a fast structured answer or a graceful fallback via the catch
+      // block below.
+      { signal: AbortSignal.timeout(OPENAI_REQUEST_TIMEOUT_MS) }
+    );
 
     const choice = completion.choices[0];
     const content = choice?.message?.content;
@@ -386,6 +404,17 @@ export async function POST(req: Request) {
     logger.debug('[clitronic] Validated output:', JSON.stringify(sanitized).substring(0, 500));
     return jsonResponse(sanitized);
   } catch (error) {
+    // Distinguish the timeout path so ops logs are useful without leaking
+    // internals to the client.
+    const isTimeout =
+      error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    if (isTimeout) {
+      logger.warn('[clitronic] OpenAI call exceeded budget; returning fallback response');
+      // Prefer a forced photo fallback when the user clearly asked for a
+      // visual, otherwise a generic text fallback so the UI never spins
+      // forever on a slow upstream.
+      return jsonResponse(forcedPhotoResponse ?? FALLBACK_TEXT_RESPONSE);
+    }
     logger.error('Chat API error:', error);
     return NextResponse.json(
       { error: 'Failed to generate response. Please try again.' },
