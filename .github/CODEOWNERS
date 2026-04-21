@@ -1,0 +1,16 @@
+# Code owners for Clitronic.
+#
+# GitHub will automatically request review from the matching owners
+# whenever a PR modifies matching paths. Keep this list short and
+# accurate — stale entries silently route reviews to the wrong people.
+
+# Default owner for anything not matched below.
+*                               @sergiopesch
+
+# CI / infra changes
+/.github/                       @sergiopesch
+/vercel.json                    @sergiopesch
+/.nvmrc                         @sergiopesch
+
+# CLI sub-package
+/cli/                           @sergiopesch
