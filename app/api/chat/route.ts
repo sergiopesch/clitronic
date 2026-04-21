@@ -227,7 +227,7 @@ function maybeBuildPhotoFallback(
   };
 }
 
-function deriveRequestedImageCount(input: string | undefined): number {
+export function deriveRequestedImageCount(input: string | undefined): number {
   const value = (input || '').toLowerCase();
   if (!value) return 1;
 
