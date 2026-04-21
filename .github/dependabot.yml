@@ -1,0 +1,97 @@
+# Dependabot configuration.
+#
+# Groups minor + patch bumps into a single PR per ecosystem so CI can run
+# once instead of churning through 11 PRs only to close them stale. Major
+# bumps still come through individually for explicit review.
+#
+# Auto-merge behavior is implemented in
+# .github/workflows/dependabot-auto-merge.yml; Dependabot itself doesn't
+# merge — it just opens PRs the workflow can approve.
+version: 2
+updates:
+  # Root Next.js app
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+      security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+          - major
+    ignore:
+      # Let React 19 + Next 16 majors float through manual PRs.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: next
+        update-types: [version-update:semver-major]
+
+  # CLI sub-package
+  - package-ecosystem: npm
+    directory: /cli
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - cli
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+      security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+          - major
+
+  # GitHub Actions workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
