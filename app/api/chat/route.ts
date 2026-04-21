@@ -12,6 +12,7 @@ import {
 } from './constants';
 import { logger } from './logger';
 import { checkRateLimit } from './rate-limit';
+import { extractClientIp } from './client-ip';
 import { parseAndNormalizeResponse } from './response-normalizer';
 import { validateStructuredResponse } from './response-validator';
 import { detectInjection, isValidMessage, sanitizeInput } from './security';
@@ -240,7 +241,7 @@ function deriveRequestedImageCount(input: string | undefined): number {
 }
 
 export async function POST(req: Request) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = extractClientIp(req.headers);
   const rateCheck = checkRateLimit(ip);
   if (rateCheck.limited) {
     if (rateCheck.reason === 'daily') {
