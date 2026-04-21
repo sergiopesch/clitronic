@@ -73,7 +73,7 @@ function VoiceControlButton({
       aria-pressed={ariaPressed}
       onClick={onClick}
       disabled={disabled}
-      className={`group relative flex shrink-0 touch-manipulation select-none items-center justify-center rounded-full border bg-gradient-to-b text-center shadow-[0_18px_60px_rgba(34,211,238,0.18)] transition duration-300 ${
+      className={`group relative flex shrink-0 touch-manipulation items-center justify-center rounded-full border bg-gradient-to-b text-center shadow-[0_18px_60px_rgba(34,211,238,0.18)] transition duration-300 select-none ${
         isPrimary
           ? 'h-[clamp(6.5rem,30vw,8.5rem)] w-[clamp(6.5rem,30vw,8.5rem)]'
           : 'h-[clamp(3.875rem,18vw,5rem)] w-[clamp(3.875rem,18vw,5rem)]'
@@ -87,7 +87,9 @@ function VoiceControlButton({
       />
       <span
         className={`px-3 font-medium uppercase ${
-          isPrimary ? 'text-[11px] tracking-[0.12em] sm:text-xs' : 'text-[9px] tracking-[0.11em] sm:text-[10px]'
+          isPrimary
+            ? 'text-[11px] tracking-[0.12em] sm:text-xs'
+            : 'text-[9px] tracking-[0.11em] sm:text-[10px]'
         }`}
       >
         {label}

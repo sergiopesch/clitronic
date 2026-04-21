@@ -182,7 +182,7 @@ export function ConversationShell() {
               type="button"
               aria-label="Press to talk"
               onClick={handlePrimaryVoiceAction}
-              className="group relative h-[clamp(8.5rem,42vw,11rem)] w-[clamp(8.5rem,42vw,11rem)] touch-manipulation select-none rounded-full border border-cyan-300/25 bg-gradient-to-b from-cyan-400/20 to-cyan-500/10 shadow-[0_18px_60px_rgba(34,211,238,0.2)] transition duration-300 hover:scale-[1.02] hover:shadow-[0_24px_80px_rgba(34,211,238,0.28)]"
+              className="group relative h-[clamp(8.5rem,42vw,11rem)] w-[clamp(8.5rem,42vw,11rem)] touch-manipulation rounded-full border border-cyan-300/25 bg-gradient-to-b from-cyan-400/20 to-cyan-500/10 shadow-[0_18px_60px_rgba(34,211,238,0.2)] transition duration-300 select-none hover:scale-[1.02] hover:shadow-[0_24px_80px_rgba(34,211,238,0.28)]"
             >
               <span className="pointer-events-none absolute inset-0 rounded-full border border-cyan-300/20" />
               <span className="pointer-events-none absolute inset-4 rounded-full border border-cyan-200/20 transition-transform duration-300 group-hover:scale-[1.03]" />
