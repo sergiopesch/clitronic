@@ -315,6 +315,14 @@ export function useVoiceInteraction({
       }
 
       if (event.type === 'input_audio_buffer.speech_started') {
+        // A fresh user turn is beginning. Reset the finalization gate so
+        // that if a previous turn's `onFinalTranscript` hasn't resolved yet
+        // (it's an awaited fetch), the upcoming
+        // `input_audio_transcription.completed` event isn't silently
+        // dropped by the `if (isFinalizingTurnRef.current) return;` guard.
+        // The previous turn's in-flight fetch will still complete and
+        // update state; it just won't block the next turn from finalizing.
+        isFinalizingTurnRef.current = false;
         finalBufferRef.current = '';
         assistantBufferRef.current = '';
         lastFinalizedTranscriptRef.current = '';
@@ -581,8 +589,18 @@ export function useVoiceInteraction({
       const remoteStream = event.streams[0];
       if (!remoteStream) return;
       if (!remoteAudioRef.current) {
-        remoteAudioRef.current = new Audio();
-        remoteAudioRef.current.autoplay = true;
+        const audio = new Audio();
+        audio.autoplay = true;
+        // Keep the element in the DOM. Some browsers (notably Safari on iOS)
+        // treat detached <audio> elements inconsistently for autoplay and
+        // audio-route selection -- rendering it (but visually hidden)
+        // avoids those edge cases without affecting layout.
+        audio.setAttribute('aria-hidden', 'true');
+        audio.style.display = 'none';
+        if (typeof document !== 'undefined' && document.body) {
+          document.body.appendChild(audio);
+        }
+        remoteAudioRef.current = audio;
       }
       remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.muted = isMuted;
@@ -785,6 +803,9 @@ export function useVoiceInteraction({
       if (remoteAudioRef.current) {
         remoteAudioRef.current.pause();
         remoteAudioRef.current.srcObject = null;
+        // Remove the element we appended to document.body on ontrack so
+        // repeated sessions don't leave orphaned <audio> nodes behind.
+        remoteAudioRef.current.parentNode?.removeChild(remoteAudioRef.current);
         remoteAudioRef.current = null;
       }
       micAnalyserRef.current = null;
