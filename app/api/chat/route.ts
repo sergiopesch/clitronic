@@ -255,7 +255,7 @@ function deriveRequestedImageCount(input: string | undefined): number {
 
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  const rateCheck = checkRateLimit(ip);
+  const rateCheck = await checkRateLimit(ip);
   if (rateCheck.limited) {
     if (rateCheck.reason === 'daily') {
       return jsonResponse(DAILY_LIMIT_RESPONSE);
