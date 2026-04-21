@@ -438,6 +438,15 @@ export function useVoiceInteraction({
     [debugEnabled, finalizeTurn, onTurnStart]
   );
 
+  // Data channel is opened once per session but `handleRealtimeEvent` identity
+  // changes whenever `onFinalTranscript` / `onTurnStart` / `debugEnabled` do.
+  // Without this ref, `channel.onmessage` captures the first closure forever
+  // and keeps calling stale versions of the handler after parent re-renders.
+  const handleRealtimeEventRef = useRef(handleRealtimeEvent);
+  useEffect(() => {
+    handleRealtimeEventRef.current = handleRealtimeEvent;
+  }, [handleRealtimeEvent]);
+
   const startMeterLoop = useCallback(() => {
     if (meterTimerRef.current !== null) return;
     meterTimerRef.current = window.setInterval(() => {
@@ -596,7 +605,10 @@ export function useVoiceInteraction({
 
     channel.onmessage = (event) => {
       try {
-        handleRealtimeEvent(JSON.parse(event.data) as RealtimeEvent);
+        // Read the latest handler through a ref so that identity changes of
+        // handleRealtimeEvent (e.g. when onFinalTranscript is re-created by
+        // the parent) are picked up without needing to re-open the channel.
+        handleRealtimeEventRef.current(JSON.parse(event.data) as RealtimeEvent);
       } catch {
         // Ignore malformed events.
       }
@@ -691,7 +703,6 @@ export function useVoiceInteraction({
     attachRemoteAnalyser,
     debugEnabled,
     fetchWithTimeout,
-    handleRealtimeEvent,
     isMuted,
     isSupported,
     sendRealtimeEvent,
