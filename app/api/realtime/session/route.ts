@@ -1,31 +1,13 @@
 import { NextResponse } from 'next/server';
+import {
+  OPENAI_REALTIME_BETA_HEADER,
+  OPENAI_REALTIME_SESSIONS_URL,
+  OPENAI_REALTIME_SESSION_CONFIG,
+  OPENAI_REALTIME_SESSION_TIMEOUT_MS,
+} from '@/lib/ai/openai-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const OPENAI_REALTIME_SESSIONS_URL = 'https://api.openai.com/v1/realtime/sessions';
-const SESSION_REQUEST_TIMEOUT_MS = 12000;
-
-const REALTIME_SESSION_CONFIG = {
-  model: 'gpt-4o-realtime-preview',
-  modalities: ['text', 'audio'],
-  voice: 'alloy',
-  output_audio_format: 'pcm16',
-  instructions:
-    'You are Clitronic, a voice-first electronics assistant. Always understand and respond in English only. Keep replies concise and practical.',
-  turn_detection: {
-    type: 'server_vad',
-    threshold: 0.5,
-    prefix_padding_ms: 300,
-    silence_duration_ms: 550,
-    create_response: true,
-    interrupt_response: true,
-  },
-  input_audio_transcription: {
-    model: 'gpt-4o-mini-transcribe',
-    language: 'en',
-  },
-};
 
 export async function POST() {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -35,7 +17,7 @@ export async function POST() {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), SESSION_REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), OPENAI_REALTIME_SESSION_TIMEOUT_MS);
     let response: Response;
     try {
       response = await fetch(OPENAI_REALTIME_SESSIONS_URL, {
@@ -43,9 +25,9 @@ export async function POST() {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'OpenAI-Beta': 'realtime=v1',
+          'OpenAI-Beta': OPENAI_REALTIME_BETA_HEADER,
         },
-        body: JSON.stringify(REALTIME_SESSION_CONFIG),
+        body: JSON.stringify(OPENAI_REALTIME_SESSION_CONFIG),
         signal: controller.signal,
       });
     } finally {

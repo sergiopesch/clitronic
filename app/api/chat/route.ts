@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { OPENAI_CHAT_MAX_TOKENS, OPENAI_CHAT_MODEL } from '@/lib/ai/openai-config';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
 import {
@@ -313,7 +314,7 @@ export async function POST(req: Request) {
 
   try {
     const completion = await getClient().chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: OPENAI_CHAT_MODEL,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -334,7 +335,7 @@ export async function POST(req: Request) {
           : []),
       ],
       temperature: 0.4,
-      max_tokens: 1200,
+      max_tokens: OPENAI_CHAT_MAX_TOKENS,
     });
 
     const choice = completion.choices[0];

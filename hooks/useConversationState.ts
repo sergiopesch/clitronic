@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DAILY_LIMIT_DEFAULT, DAILY_LIMIT_MESSAGE } from '@/lib/ai/rate-limit';
-import type { StructuredResponse } from '@/lib/ai/response-schema';
+import type { StructuredResponse, UIBlock } from '@/lib/ai/response-schema';
 
 type ConversationEntry = {
   role: 'user' | 'assistant';
@@ -63,34 +63,64 @@ function clearDailyUsage(): void {
  * Summarize an assistant response for conversation history.
  * Instead of sending the full JSON blob, send a compact summary.
  */
-function summarizeAssistantResponse(structured: StructuredResponse): string {
-  const component = structured.ui?.component;
-  const data = structured.ui?.data as Record<string, unknown> | undefined;
+function summarizeItems(items: string[] | { name: string }[]): string[] {
+  return items
+    .map((item) => (typeof item === 'string' ? item : item.name))
+    .filter((value) => Boolean(value));
+}
 
-  if (structured.mode === 'text' || !component) {
+function summarizeUIBlock(ui: UIBlock): string {
+  const parts: string[] = [`[Showed ${ui.component}]`];
+
+  switch (ui.component) {
+    case 'specCard':
+      parts.push(ui.data.title);
+      break;
+    case 'comparisonCard': {
+      const itemNames = summarizeItems(ui.data.items);
+      if (itemNames.length > 0) parts.push(`Items: ${itemNames.join(', ')}`);
+      break;
+    }
+    case 'explanationCard':
+      parts.push(ui.data.title);
+      break;
+    case 'recommendationCard': {
+      const itemNames = summarizeItems(ui.data.items);
+      if (itemNames.length > 0) parts.push(`Items: ${itemNames.join(', ')}`);
+      break;
+    }
+    case 'troubleshootingCard':
+      parts.push(ui.data.issue);
+      break;
+    case 'calculationCard':
+      parts.push(ui.data.title);
+      break;
+    case 'pinoutCard':
+      parts.push(ui.data.component);
+      break;
+    case 'chartCard':
+      parts.push(ui.data.title);
+      break;
+    case 'wiringCard':
+      parts.push(ui.data.title);
+      break;
+    case 'imageBlock':
+      parts.push(ui.data.caption);
+      if (ui.data.searchQuery) {
+        parts.push(`(searched: ${ui.data.searchQuery})`);
+      }
+      break;
+  }
+
+  return parts.join(' — ');
+}
+
+function summarizeAssistantResponse(structured: StructuredResponse): string {
+  if (structured.mode === 'text' || !structured.ui) {
     return structured.text || '(responded with text)';
   }
 
-  const parts: string[] = [`[Showed ${component}]`];
-
-  if (data) {
-    const title = data.title || data.component || data.issue;
-    if (typeof title === 'string') parts.push(title);
-
-    if (data.items && Array.isArray(data.items)) {
-      const itemNames = data.items
-        .map((item: unknown) =>
-          typeof item === 'string' ? item : (item as Record<string, unknown>)?.name
-        )
-        .filter(Boolean);
-      if (itemNames.length > 0) parts.push(`Items: ${itemNames.join(', ')}`);
-    }
-
-    if (data.caption && typeof data.caption === 'string') parts.push(data.caption);
-    if (data.searchQuery && typeof data.searchQuery === 'string') {
-      parts.push(`(searched: ${data.searchQuery})`);
-    }
-  }
+  const parts = [summarizeUIBlock(structured.ui)];
 
   if (structured.text) parts.push(structured.text);
   return parts.join(' — ');

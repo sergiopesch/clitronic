@@ -50,12 +50,16 @@ No database. No auth. No persistence. Fast and stateless.
 ```bash
 git clone https://github.com/sergiopesch/clitronic.git
 cd clitronic
+nvm use
 npm install
 ```
 
-Create `.env.local`:
+Node `20.x` is the supported runtime for both the web app and the CLI. The repo includes `.nvmrc` and `engines.node`, so `nvm use` keeps local development aligned with CI.
+
+Create `.env.local` from `.env.example`:
 
 ```bash
+cp .env.example .env.local
 OPENAI_API_KEY=your_key_here
 BRAVE_API_KEY=your_key_here  # optional, upgrades image search
 ```
@@ -94,6 +98,28 @@ npm test             # Runtime schema/normalization tests
 npm run scaffold:component -- --name "Signal Meter" --kind chart
 ```
 
+## Provider Split
+
+The web app and CLI intentionally use different providers today.
+
+- **Web app**: OpenAI for structured UI generation, realtime voice, and transcription
+- **CLI**: Anthropic for terminal chat and image-identify flows
+
+That split is deliberate rather than accidental:
+
+- the web app depends on OpenAI Realtime plus the JSON-card response contract
+- the CLI is optimized for streaming terminal responses and local image inspection
+
+If you want to use the CLI as well:
+
+```bash
+cd cli
+nvm use
+npm install
+export ANTHROPIC_API_KEY=your_key_here
+npm run start -- --help
+```
+
 ## Architecture
 
 ```text
@@ -103,7 +129,7 @@ app/
 ├── api/chat/response-validator.ts  # Strict runtime response validation (zod)
 ├── api/chat/security.ts        # Input sanitization + injection detection
 ├── api/chat/rate-limit.ts      # In-memory per-IP limiter with cleanup
-├── api/image-search/route.ts   # Multi-provider image search (Brave + Wikimedia)
+├── api/image-search/route.ts   # Thin HTTP wrapper over image-search service
 ├── api/image-proxy/route.ts    # Safe image proxy for remote image tiles
 ├── api/realtime/session/route.ts # OpenAI Realtime session bootstrap
 ├── globals.css                 # Design tokens + keyframe animations
@@ -131,6 +157,7 @@ hooks/
 └── useVoiceInteraction.ts      # Realtime voice, transcripts, audio, turn handling
 lib/
 ├── ai/component-registry.ts    # Single source of truth for component names/aliases/types
+├── ai/openai-config.ts         # Shared OpenAI model + realtime config
 ├── ai/response-schema.ts       # TypeScript response contracts
 ├── ai/rate-limit.ts            # Shared rate-limit constants/messages
 ├── ai/system-prompt.ts         # Intent detection + response formatting

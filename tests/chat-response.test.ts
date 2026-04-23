@@ -66,8 +66,8 @@ test('accepts valid chart response after normalization and validation', () => {
       data: {
         title: 'Power Draw',
         bars: [
-          { label: 'ESP32', value: '240', unit: 'mA' },
-          { label: 'ESP8266', value: '170', unit: 'mA' },
+          { label: 'ESP32', value: 240, unit: 'mA' },
+          { label: 'ESP8266', value: 170, unit: 'mA' },
         ],
       },
     },
@@ -106,6 +106,44 @@ test('accepts optional voice payload with spoken summary', () => {
   const validated = validateStructuredResponse(payload);
   assert.ok(validated);
   assert.equal(validated?.voice?.spokenSummary, 'Set pin 13 to output, then verify LED polarity.');
+});
+
+test('rejects component payloads that are missing required fields', () => {
+  const invalidPayload = {
+    intent: 'calc',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'calculationCard',
+      data: {},
+    },
+    text: null,
+    behavior: null,
+  };
+
+  const validated = validateStructuredResponse(invalidPayload);
+  assert.equal(validated, null);
+});
+
+test('rejects mismatched component type declarations', () => {
+  const invalidPayload = {
+    intent: 'show_image',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'imageBlock',
+      data: {
+        imageMode: 'photo',
+        caption: 'Arduino Uno',
+        searchQuery: 'arduino uno',
+      },
+    },
+    text: null,
+    behavior: { animation: 'fadeIn', state: 'open' },
+  };
+
+  const validated = validateStructuredResponse(invalidPayload);
+  assert.equal(validated, null);
 });
 
 test('sanitizes internal reasoning text from visible response fields', () => {

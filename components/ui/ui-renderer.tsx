@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import type { StructuredResponse } from '@/lib/ai/response-schema';
 import { AnimateIn } from './animations';
 import { CardErrorBoundary } from './card-error-boundary';
 import { SpecCard } from './spec-card';
@@ -16,38 +15,38 @@ import { ChartCard } from './chart-card';
 import { WiringCard } from './wiring-card';
 import { ImageBlock } from './image-block';
 import { TextResponse } from './text-response';
-import type {
-  ComponentName,
-  SpecCardData,
-  ComparisonCardData,
-  ExplanationCardData,
-  RecommendationCardData,
-  TroubleshootingCardData,
-  CalculationCardData,
-  PinoutCardData,
-  ChartCardData,
-  WiringCardData,
-  ImageBlockData,
-} from '@/lib/ai/response-schema';
+import type { StructuredResponse, UIBlock } from '@/lib/ai/response-schema';
+
+const IS_DEV = process.env.NODE_ENV === 'development';
 
 interface UIRendererProps {
   response: StructuredResponse;
 }
 
-const IS_DEV = process.env.NODE_ENV === 'development';
-
-const CARD_RENDERERS: Record<ComponentName, (data: unknown) => ReactNode> = {
-  specCard: (data) => <SpecCard data={data as SpecCardData} />,
-  comparisonCard: (data) => <ComparisonCard data={data as ComparisonCardData} />,
-  explanationCard: (data) => <ExplanationCard data={data as ExplanationCardData} />,
-  recommendationCard: (data) => <RecommendationCard data={data as RecommendationCardData} />,
-  troubleshootingCard: (data) => <TroubleshootingCard data={data as TroubleshootingCardData} />,
-  calculationCard: (data) => <CalculationCard data={data as CalculationCardData} />,
-  pinoutCard: (data) => <PinoutCard data={data as PinoutCardData} />,
-  chartCard: (data) => <ChartCard data={data as ChartCardData} />,
-  wiringCard: (data) => <WiringCard data={data as WiringCardData} />,
-  imageBlock: (data) => <ImageBlock data={data as ImageBlockData} />,
-};
+function renderUIBlock(ui: UIBlock): ReactNode {
+  switch (ui.component) {
+    case 'specCard':
+      return <SpecCard data={ui.data} />;
+    case 'comparisonCard':
+      return <ComparisonCard data={ui.data} />;
+    case 'explanationCard':
+      return <ExplanationCard data={ui.data} />;
+    case 'recommendationCard':
+      return <RecommendationCard data={ui.data} />;
+    case 'troubleshootingCard':
+      return <TroubleshootingCard data={ui.data} />;
+    case 'calculationCard':
+      return <CalculationCard data={ui.data} />;
+    case 'pinoutCard':
+      return <PinoutCard data={ui.data} />;
+    case 'chartCard':
+      return <ChartCard data={ui.data} />;
+    case 'wiringCard':
+      return <WiringCard data={ui.data} />;
+    case 'imageBlock':
+      return <ImageBlock data={ui.data} />;
+  }
+}
 
 export function UIRenderer({ response }: UIRendererProps) {
   // Debug: log once per unique response
@@ -79,15 +78,7 @@ export function UIRenderer({ response }: UIRendererProps) {
   }
 
   const animation = response.behavior?.animation;
-  const component = response.ui.component;
-  const resolvedData = response.ui.data;
-
-  if (!resolvedData || typeof resolvedData !== 'object') {
-    if (IS_DEV) console.warn('[clitronic:ui] No data for component:', component, response.ui);
-    return null;
-  }
-
-  const rendered = CARD_RENDERERS[component]?.(resolvedData);
+  const rendered = renderUIBlock(response.ui);
 
   // If switch didn't match, keep visual area empty.
   if (!rendered) return null;

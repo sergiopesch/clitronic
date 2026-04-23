@@ -1,7 +1,27 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  OPENAI_REALTIME_AUDIO_FORMAT,
+  OPENAI_REALTIME_BETA_HEADER,
+  OPENAI_REALTIME_DATA_CHANNEL_TIMEOUT_MS,
+  OPENAI_REALTIME_MODALITIES,
+  OPENAI_REALTIME_REPLY_INSTRUCTIONS,
+  OPENAI_REALTIME_SDP_TIMEOUT_MS,
+  OPENAI_REALTIME_SDP_URL,
+  OPENAI_REALTIME_SERVER_VAD_CONFIG,
+  OPENAI_REALTIME_SESSION_TIMEOUT_MS,
+  OPENAI_REALTIME_TRANSCRIPTION_MODEL,
+  OPENAI_REALTIME_VOICE,
+} from '@/lib/ai/openai-config';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
+import {
+  buildTeardownVoiceDebugInfo,
+  createInitialVoiceDebugInfo,
+  createVoiceTeardownSnapshot,
+  type VoiceDebugInfo,
+} from './voice-realtime-state';
+export type { VoiceDebugInfo } from './voice-realtime-state';
 
 export type VoiceState =
   | 'idle'
@@ -69,34 +89,6 @@ const ASSISTANT_AUDIO_DELTA_EVENTS = new Set([
 
 const ASSISTANT_AUDIO_DONE_EVENTS = new Set(['response.audio.done', 'response.output_audio.done']);
 
-const REALTIME_REPLY_INSTRUCTIONS =
-  'You are Clitronic, a voice-first electronics assistant. Always answer in English only, even if the user mixes languages. Reply in plain spoken language, 1-2 short sentences, practical and concise. Prioritize safety warnings first when relevant. If the user asks to show, see, picture, image, or photo of something, say that you are showing it on screen now. Only answer electronics/hardware topics; for off-topic requests, briefly say you can only help with electronics.';
-const REALTIME_SESSION_TIMEOUT_MS = 12000;
-const REALTIME_SDP_TIMEOUT_MS = 15000;
-const DATA_CHANNEL_TIMEOUT_MS = 10000;
-
-const SERVER_VAD_CONFIG = {
-  type: 'server_vad',
-  threshold: 0.5,
-  prefix_padding_ms: 300,
-  silence_duration_ms: 550,
-  create_response: true,
-  interrupt_response: true,
-} as const;
-
-export type VoiceDebugInfo = {
-  transport: 'openai-realtime-webrtc';
-  sessionReady: boolean;
-  pcConnectionState: RTCPeerConnectionState | 'none';
-  iceConnectionState: RTCIceConnectionState | 'none';
-  dataChannelState: RTCDataChannelState | 'none';
-  receivedEventCount: number;
-  sentEventCount: number;
-  lastReceivedEvent: string | null;
-  lastEvents: string[];
-  lastSentEvent: string | null;
-};
-
 function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
@@ -132,18 +124,7 @@ export function useVoiceInteraction({
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
   const [sessionReady, setSessionReady] = useState(false);
-  const [debug, setDebug] = useState<VoiceDebugInfo>({
-    transport: 'openai-realtime-webrtc',
-    sessionReady: false,
-    pcConnectionState: 'none',
-    iceConnectionState: 'none',
-    dataChannelState: 'none',
-    receivedEventCount: 0,
-    sentEventCount: 0,
-    lastReceivedEvent: null,
-    lastEvents: [],
-    lastSentEvent: null,
-  });
+  const [debug, setDebug] = useState<VoiceDebugInfo>(createInitialVoiceDebugInfo);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -515,6 +496,58 @@ export function useVoiceInteraction({
     [ensureAudioContext, startMeterLoop]
   );
 
+  const teardownRealtimeSession = useCallback(
+    ({ resetDebugCounters = false }: { resetDebugCounters?: boolean } = {}) => {
+      stopMeterLoop();
+
+      dataChannelRef.current?.close();
+      dataChannelRef.current = null;
+
+      pcRef.current?.close();
+      pcRef.current = null;
+
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      audioTrackRef.current = null;
+
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.pause();
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current = null;
+      }
+
+      micAnalyserRef.current = null;
+      remoteAnalyserRef.current = null;
+      micDataRef.current = null;
+      remoteDataRef.current = null;
+
+      if (audioContextRef.current) {
+        void audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+
+      assistantBufferRef.current = '';
+      finalBufferRef.current = '';
+      lastFinalizedTranscriptRef.current = '';
+      responseInProgressRef.current = false;
+
+      smoothedInputRef.current = 0;
+      smoothedOutputRef.current = 0;
+      const clearedState = createVoiceTeardownSnapshot();
+      setInputLevel(0);
+      setOutputLevel(0);
+      setPartialTranscript(clearedState.partialTranscript);
+      setFinalTranscript(clearedState.finalTranscript);
+      setAssistantPartialTranscript(clearedState.assistantPartialTranscript);
+      setAssistantFinalTranscript(clearedState.assistantFinalTranscript);
+      setIsSpeaking(clearedState.isSpeaking);
+      setSessionReady(clearedState.sessionReady);
+
+      setDebug((prev) => buildTeardownVoiceDebugInfo(prev, { resetDebugCounters }));
+    },
+    [stopMeterLoop]
+  );
+
   const ensureRealtimeConnection = useCallback(async () => {
     if (!isSupported) return false;
     if (pcRef.current && dataChannelRef.current?.readyState === 'open') {
@@ -541,7 +574,7 @@ export function useVoiceInteraction({
     const sessionRes = await fetchWithTimeout(
       '/api/realtime/session',
       { method: 'POST' },
-      REALTIME_SESSION_TIMEOUT_MS
+      OPENAI_REALTIME_SESSION_TIMEOUT_MS
     );
     if (!sessionRes.ok) {
       throw new Error('Could not create realtime session.');
@@ -607,7 +640,7 @@ export function useVoiceInteraction({
         setSessionReady(false);
         setDebug((prev) => ({ ...prev, sessionReady: false }));
         reject(new Error('Realtime data channel timed out.'));
-      }, DATA_CHANNEL_TIMEOUT_MS);
+      }, OPENAI_REALTIME_DATA_CHANNEL_TIMEOUT_MS);
       channel.onopen = () => {
         window.clearTimeout(timeoutId);
         setSessionReady(true);
@@ -645,17 +678,17 @@ export function useVoiceInteraction({
     await pc.setLocalDescription(offer);
 
     const sdpRes = await fetchWithTimeout(
-      'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
+      OPENAI_REALTIME_SDP_URL,
       {
         method: 'POST',
         body: offer.sdp,
         headers: {
           Authorization: `Bearer ${ephemeralKey}`,
           'Content-Type': 'application/sdp',
-          'OpenAI-Beta': 'realtime=v1',
+          'OpenAI-Beta': OPENAI_REALTIME_BETA_HEADER,
         },
       },
-      REALTIME_SDP_TIMEOUT_MS
+      OPENAI_REALTIME_SDP_TIMEOUT_MS
     );
 
     if (!sdpRes.ok) {
@@ -673,13 +706,13 @@ export function useVoiceInteraction({
     sendRealtimeEvent({
       type: 'session.update',
       session: {
-        modalities: ['text', 'audio'],
-        voice: 'alloy',
-        output_audio_format: 'pcm16',
-        instructions: REALTIME_REPLY_INSTRUCTIONS,
-        turn_detection: SERVER_VAD_CONFIG,
+        modalities: OPENAI_REALTIME_MODALITIES,
+        voice: OPENAI_REALTIME_VOICE,
+        output_audio_format: OPENAI_REALTIME_AUDIO_FORMAT,
+        instructions: OPENAI_REALTIME_REPLY_INSTRUCTIONS,
+        turn_detection: OPENAI_REALTIME_SERVER_VAD_CONFIG,
         input_audio_transcription: {
-          model: 'gpt-4o-mini-transcribe',
+          model: OPENAI_REALTIME_TRANSCRIPTION_MODEL,
           language: 'en',
         },
       },
@@ -732,12 +765,19 @@ export function useVoiceInteraction({
       track.enabled = true;
       setVoiceState('listening');
     } catch {
+      teardownRealtimeSession();
       setVoiceState('error');
       setError('Could not start voice capture.');
       setSessionReady(false);
       setDebug((prev) => ({ ...prev, sessionReady: false }));
     }
-  }, [ensureRealtimeConnection, interruptAssistant, isSupported, sendRealtimeEvent]);
+  }, [
+    ensureRealtimeConnection,
+    interruptAssistant,
+    isSupported,
+    sendRealtimeEvent,
+    teardownRealtimeSession,
+  ]);
 
   const stopCapture = useCallback(() => {
     startCancelledRef.current = true;
@@ -774,46 +814,10 @@ export function useVoiceInteraction({
 
   useEffect(() => {
     return () => {
-      stopMeterLoop();
-      dataChannelRef.current?.close();
-      dataChannelRef.current = null;
-      pcRef.current?.close();
-      pcRef.current = null;
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      audioTrackRef.current = null;
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.pause();
-        remoteAudioRef.current.srcObject = null;
-        remoteAudioRef.current = null;
-      }
-      micAnalyserRef.current = null;
-      remoteAnalyserRef.current = null;
-      micDataRef.current = null;
-      remoteDataRef.current = null;
-      if (audioContextRef.current) {
-        void audioContextRef.current.close().catch(() => {});
-        audioContextRef.current = null;
-      }
-      setInputLevel(0);
-      setOutputLevel(0);
-      setSessionReady(false);
-      responseInProgressRef.current = false;
+      teardownRealtimeSession({ resetDebugCounters: true });
       startCancelledRef.current = false;
-      setDebug((prev) => ({
-        ...prev,
-        sessionReady: false,
-        pcConnectionState: 'none',
-        iceConnectionState: 'none',
-        dataChannelState: 'none',
-        receivedEventCount: 0,
-        sentEventCount: 0,
-        lastReceivedEvent: null,
-        lastSentEvent: null,
-        lastEvents: [],
-      }));
     };
-  }, [stopMeterLoop]);
+  }, [teardownRealtimeSession]);
 
   return {
     isSupported,

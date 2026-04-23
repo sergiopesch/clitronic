@@ -1,12 +1,7 @@
-import type { RegisteredComponentName } from './component-registry';
-
 export type UIMode = 'ui' | 'text';
 
 export type AnimationType = 'fadeIn' | 'slideUp' | 'expand';
 export type BehaviorState = 'open' | 'collapsed';
-
-export type ComponentName = RegisteredComponentName;
-
 export type UIType = 'card' | 'chart' | 'text' | 'image';
 
 export interface SpecCardData {
@@ -77,35 +72,53 @@ export interface WiringCardData {
 
 export interface ImageBlockData {
   imageMode: 'diagram' | 'photo';
-  // diagram mode
   diagramType?: string;
   labels?: Record<string, string>;
-  // photo mode
   searchQuery?: string;
   imageCount?: number;
-  // shared
   caption: string;
   description?: string;
   notes?: string[];
 }
 
-export type CardData =
-  | SpecCardData
-  | ComparisonCardData
-  | ExplanationCardData
-  | RecommendationCardData
-  | TroubleshootingCardData
-  | CalculationCardData
-  | PinoutCardData
-  | ChartCardData
-  | WiringCardData
-  | ImageBlockData;
-
-export interface UIBlock {
-  type: UIType;
-  component: ComponentName;
-  data: CardData;
+export interface ComponentDataMap {
+  specCard: SpecCardData;
+  comparisonCard: ComparisonCardData;
+  explanationCard: ExplanationCardData;
+  recommendationCard: RecommendationCardData;
+  troubleshootingCard: TroubleshootingCardData;
+  calculationCard: CalculationCardData;
+  pinoutCard: PinoutCardData;
+  chartCard: ChartCardData;
+  wiringCard: WiringCardData;
+  imageBlock: ImageBlockData;
 }
+
+export interface ComponentUITypeMap {
+  specCard: 'card';
+  comparisonCard: 'card';
+  explanationCard: 'card';
+  recommendationCard: 'card';
+  troubleshootingCard: 'card';
+  calculationCard: 'card';
+  pinoutCard: 'card';
+  chartCard: 'chart';
+  wiringCard: 'card';
+  imageBlock: 'image';
+}
+
+export type ComponentName = keyof ComponentDataMap;
+export type CardData = ComponentDataMap[ComponentName];
+
+export type UIBlockFor<TComponent extends ComponentName> = {
+  type: ComponentUITypeMap[TComponent];
+  component: TComponent;
+  data: ComponentDataMap[TComponent];
+};
+
+export type UIBlock = {
+  [TComponent in ComponentName]: UIBlockFor<TComponent>;
+}[ComponentName];
 
 export interface ResponseBehavior {
   animation: AnimationType;
@@ -122,11 +135,24 @@ export interface VoicePayload {
   canInterrupt?: boolean;
 }
 
-export interface StructuredResponse {
+interface StructuredResponseBase {
   intent: string;
-  mode: UIMode;
-  ui: UIBlock | null;
-  text: string | null;
   behavior: ResponseBehavior | null;
   voice?: VoicePayload | null;
 }
+
+export interface TextStructuredResponse extends StructuredResponseBase {
+  mode: 'text';
+  ui: null;
+  text: string;
+}
+
+export type UIStructuredResponse = {
+  [TComponent in ComponentName]: StructuredResponseBase & {
+    mode: 'ui';
+    ui: UIBlockFor<TComponent>;
+    text: string | null;
+  };
+}[ComponentName];
+
+export type StructuredResponse = TextStructuredResponse | UIStructuredResponse;
