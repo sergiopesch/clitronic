@@ -98,6 +98,8 @@ npm test             # Runtime schema/normalization tests
 npm run scaffold:component -- --name "Signal Meter" --kind chart
 ```
 
+Security disclosures: see [SECURITY.md](SECURITY.md).
+
 ## Provider Split
 
 The web app and CLI intentionally use different providers today.

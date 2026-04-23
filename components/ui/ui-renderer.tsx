@@ -14,6 +14,7 @@ import { PinoutCard } from './pinout-card';
 import { ChartCard } from './chart-card';
 import { WiringCard } from './wiring-card';
 import { ImageBlock } from './image-block';
+import { getVisibleFallbackText, RenderFallback } from './render-fallback';
 import { TextResponse } from './text-response';
 import type { StructuredResponse, UIBlock } from '@/lib/ai/response-schema';
 
@@ -61,15 +62,12 @@ export function UIRenderer({ response }: UIRendererProps) {
     }
   }, [response]);
 
-  const fallbackText = response.voice?.spokenSummary ?? response.text;
+  const fallbackText = getVisibleFallbackText(response);
   if (!response.ui) {
-    if (!fallbackText?.trim()) {
-      if (IS_DEV) console.warn('[clitronic:ui] No ui block in response');
-      return null;
-    }
+    if (IS_DEV) console.warn('[clitronic:ui] No ui block in response');
 
     return (
-      <CardErrorBoundary fallback={null}>
+      <CardErrorBoundary fallback={<RenderFallback message={fallbackText} />}>
         <AnimateIn animation={response.behavior?.animation ?? 'fadeIn'}>
           <TextResponse key={fallbackText} text={fallbackText} />
         </AnimateIn>
@@ -80,11 +78,13 @@ export function UIRenderer({ response }: UIRendererProps) {
   const animation = response.behavior?.animation;
   const rendered = renderUIBlock(response.ui);
 
-  // If switch didn't match, keep visual area empty.
-  if (!rendered) return null;
+  if (!rendered) {
+    if (IS_DEV) console.warn('[clitronic:ui] Unsupported ui component:', response.ui.component);
+    return <RenderFallback message={fallbackText} />;
+  }
 
   return (
-    <CardErrorBoundary fallback={null}>
+    <CardErrorBoundary fallback={<RenderFallback message={fallbackText} />}>
       <AnimateIn animation={animation}>{rendered}</AnimateIn>
     </CardErrorBoundary>
   );

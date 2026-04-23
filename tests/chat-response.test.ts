@@ -146,6 +146,79 @@ test('rejects mismatched component type declarations', () => {
   assert.equal(validated, null);
 });
 
+test('rejects text mode responses without visible text', () => {
+  const invalidPayload = {
+    intent: 'explain_pwm',
+    mode: 'text',
+    ui: null,
+    text: null,
+    behavior: { animation: 'fadeIn', state: 'open' },
+  };
+
+  const validated = validateStructuredResponse(invalidPayload);
+  assert.equal(validated, null);
+});
+
+test('rejects image responses that omit a caption', () => {
+  const invalidPayload = {
+    intent: 'show_image',
+    mode: 'ui',
+    ui: {
+      type: 'image',
+      component: 'imageBlock',
+      data: {
+        imageMode: 'photo',
+        searchQuery: 'arduino uno',
+      },
+    },
+    text: 'Arduino Uno board',
+    behavior: { animation: 'fadeIn', state: 'open' },
+  };
+
+  const validated = validateStructuredResponse(invalidPayload);
+  assert.equal(validated, null);
+});
+
+test('rejects pinout responses with unsupported pin types', () => {
+  const invalidPayload = {
+    intent: 'show_pinout',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'pinoutCard',
+      data: {
+        component: 'ATmega328P',
+        pins: [{ number: 1, label: 'VCC', type: 'voltage' }],
+      },
+    },
+    text: 'Pin 1 is VCC.',
+    behavior: { animation: 'fadeIn', state: 'open' },
+  };
+
+  const validated = validateStructuredResponse(invalidPayload);
+  assert.equal(validated, null);
+});
+
+test('rejects chart responses with non-finite values', () => {
+  const invalidPayload = {
+    intent: 'compare_power',
+    mode: 'ui',
+    ui: {
+      type: 'chart',
+      component: 'chartCard',
+      data: {
+        title: 'Power Draw',
+        bars: [{ label: 'ESP32', value: Number.NaN, unit: 'mA' }],
+      },
+    },
+    text: 'ESP32 power draw comparison.',
+    behavior: { animation: 'slideUp', state: 'open' },
+  };
+
+  const validated = validateStructuredResponse(invalidPayload);
+  assert.equal(validated, null);
+});
+
 test('sanitizes internal reasoning text from visible response fields', () => {
   const payload = {
     intent: 'explain_pwm',
