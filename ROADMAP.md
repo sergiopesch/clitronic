@@ -8,12 +8,35 @@ Voice-first electronics companion with:
 - live user captions while speaking
 - assistant speech mirrored on-screen word by word
 - structured UI cards for explanations, troubleshooting, images, comparisons, wiring, charts, and calculations
+- typed prompt fallback on the welcome screen and during active sessions
+- context-aware follow-up chips and local reopening of previous visual answers
+- consistent card headers, safety callouts, copy actions, and progressive disclosure for long procedural cards
 - context-aware image follow-ups like `show me one`
 - multi-provider image search with Brave + Wikimedia fallback
 
 ---
 
-## Recently Shipped — Realtime Voice
+## Recently Shipped — UI/UX Polish
+
+The current pass refined the app from a working voice demo into a more complete workshop tool.
+
+### Landed
+
+- Text composer added alongside voice interaction.
+- Mic mute now controls local microphone capture rather than assistant audio playback.
+- Recent turns can reopen previous structured card responses locally.
+- Follow-up actions adapt to the current response card type.
+- Safety callouts are standardized across card types.
+- Cards share a consistent header/count/action system.
+- Wiring and troubleshooting cards collapse long step lists after the first five items while keeping warnings visible.
+
+### Follow-up polish ideas
+
+- browser-level screenshot coverage for representative card states
+- richer empty/error states for unavailable voice or exhausted daily quota
+- export/share actions for useful visual cards
+
+## Previously Shipped — Realtime Voice
 
 Clitronic can now be used hands-free while soldering, wiring, or probing a board.
 

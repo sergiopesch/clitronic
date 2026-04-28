@@ -19,3 +19,8 @@ cli/package-lock.json
 # Generated
 *.min.js
 *.min.css
+*.jsonl
+*.sh
+autoresearch/*.json
+autoresearch/accepted_run.txt
+autoresearch/runs/

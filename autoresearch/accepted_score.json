@@ -1,0 +1,296 @@
+{
+  "overall_score": 4.37,
+  "answer_quality_score": 3.97,
+  "image_quality_score": 3.65,
+  "component_selection_score": 4.94,
+  "safety_score": 4.11,
+  "generic_answer_rate": 0.2439,
+  "shallow_image_query_rate": 0.3333,
+  "irrelevant_image_rate": 0.1667,
+  "duplicate_image_rate": 0,
+  "broken_image_rate": 0,
+  "schema_valid_rate": 1,
+  "model_parse_success_rate": 1,
+  "model_validation_success_rate": 1,
+  "final_response_schema_valid_rate": 1,
+  "fallback_rate": 0.1463,
+  "render_fallback_rate": 0,
+  "recovered_text_rate": 0,
+  "forced_photo_fast_path_rate": 0.1463,
+  "top_validator_issue_paths": [],
+  "top_validator_issue_messages": [],
+  "invalid_component_rate_by_component": {
+    "comparisonCard": {
+      "invalid": 0,
+      "total": 3,
+      "rate": 0
+    },
+    "recommendationCard": {
+      "invalid": 0,
+      "total": 25,
+      "rate": 0
+    },
+    "troubleshootingCard": {
+      "invalid": 0,
+      "total": 6,
+      "rate": 0
+    },
+    "wiringCard": {
+      "invalid": 0,
+      "total": 1,
+      "rate": 0
+    }
+  },
+  "fallback_rate_by_task_category": {
+    "battery_backup_power": {
+      "fallback": 0,
+      "total": 3,
+      "rate": 0
+    },
+    "component_selection": {
+      "fallback": 0,
+      "total": 4,
+      "rate": 0
+    },
+    "electronics_workbench": {
+      "fallback": 1,
+      "total": 4,
+      "rate": 0.25
+    },
+    "garage_workshop": {
+      "fallback": 0,
+      "total": 3,
+      "rate": 0
+    },
+    "home_networking": {
+      "fallback": 0,
+      "total": 3,
+      "rate": 0
+    },
+    "led_lighting": {
+      "fallback": 0,
+      "total": 3,
+      "rate": 0
+    },
+    "low_voltage_wiring": {
+      "fallback": 1,
+      "total": 3,
+      "rate": 0.3333
+    },
+    "sensors_relays_esp32": {
+      "fallback": 0,
+      "total": 4,
+      "rate": 0
+    },
+    "smart_home_installation": {
+      "fallback": 0,
+      "total": 4,
+      "rate": 0
+    },
+    "tool_storage_and_charging": {
+      "fallback": 0,
+      "total": 3,
+      "rate": 0
+    },
+    "troubleshooting": {
+      "fallback": 0,
+      "total": 3,
+      "rate": 0
+    },
+    "visual_inspiration": {
+      "fallback": 4,
+      "total": 4,
+      "rate": 1
+    }
+  },
+  "tasks_run": 41,
+  "tasks_failed": 0,
+  "worst_tasks": [
+    {
+      "id": "electronics_workbench_001",
+      "category": "electronics_workbench",
+      "overall": 3.72,
+      "answer": 3.39,
+      "image": 3.9,
+      "component": 3.5,
+      "safety": 4.5,
+      "failureFlags": [
+        "ignored_constraints",
+        "weak_project_plan",
+        "wrong_component_type"
+      ]
+    },
+    {
+      "id": "visual_inspiration_004",
+      "category": "visual_inspiration",
+      "overall": 3.84,
+      "answer": 3.51,
+      "image": 3.1,
+      "component": 5,
+      "safety": 5,
+      "failureFlags": [
+        "missing_concrete_parts",
+        "ignored_constraints",
+        "shallow_image_query",
+        "irrelevant_images",
+        "image_answer_mismatch"
+      ]
+    },
+    {
+      "id": "visual_inspiration_002",
+      "category": "visual_inspiration",
+      "overall": 3.91,
+      "answer": 3.24,
+      "image": 3.76,
+      "component": 5,
+      "safety": 5,
+      "failureFlags": [
+        "generic_answer",
+        "missing_concrete_parts",
+        "ignored_constraints"
+      ]
+    },
+    {
+      "id": "home_networking_001",
+      "category": "home_networking",
+      "overall": 3.97,
+      "answer": 3.09,
+      "image": 5,
+      "component": 5,
+      "safety": 3.5,
+      "failureFlags": [
+        "ignored_constraints",
+        "generic_answer",
+        "missing_concrete_parts",
+        "weak_project_plan"
+      ]
+    },
+    {
+      "id": "visual_inspiration_003",
+      "category": "visual_inspiration",
+      "overall": 4.05,
+      "answer": 4.17,
+      "image": 3.75,
+      "component": 5,
+      "safety": 3.3,
+      "failureFlags": [
+        "ignored_constraints",
+        "stock_or_decor_images_when_technical_images_needed"
+      ]
+    },
+    {
+      "id": "low_voltage_wiring_002",
+      "category": "low_voltage_wiring",
+      "overall": 4.11,
+      "answer": 4.21,
+      "image": 3.9,
+      "component": 5,
+      "safety": 3.3,
+      "failureFlags": [
+        "missing_concrete_parts",
+        "weak_project_plan"
+      ]
+    },
+    {
+      "id": "electronics_workbench_003",
+      "category": "electronics_workbench",
+      "overall": 4.12,
+      "answer": 3.44,
+      "image": 5,
+      "component": 5,
+      "safety": 3.5,
+      "failureFlags": [
+        "ignored_constraints",
+        "generic_answer",
+        "weak_project_plan"
+      ]
+    },
+    {
+      "id": "smart_home_installation_003",
+      "category": "smart_home_installation",
+      "overall": 4.12,
+      "answer": 3.69,
+      "image": 5,
+      "component": 5,
+      "safety": 2.8,
+      "failureFlags": [
+        "missing_concrete_parts",
+        "weak_project_plan",
+        "ignored_constraints"
+      ]
+    },
+    {
+      "id": "visual_inspiration_001",
+      "category": "visual_inspiration",
+      "overall": 4.12,
+      "answer": 4.13,
+      "image": 3.52,
+      "component": 5,
+      "safety": 4.3,
+      "failureFlags": [
+        "ignored_constraints",
+        "shallow_image_query"
+      ]
+    },
+    {
+      "id": "tool_storage_and_charging_001",
+      "category": "tool_storage_and_charging",
+      "overall": 4.15,
+      "answer": 3.33,
+      "image": 5,
+      "component": 5,
+      "safety": 4,
+      "failureFlags": [
+        "ignored_constraints",
+        "generic_answer",
+        "missing_concrete_parts",
+        "weak_project_plan"
+      ]
+    }
+  ],
+  "top_failure_modes": [
+    {
+      "flag": "weak_project_plan",
+      "count": 34
+    },
+    {
+      "flag": "ignored_constraints",
+      "count": 22
+    },
+    {
+      "flag": "missing_concrete_parts",
+      "count": 17
+    },
+    {
+      "flag": "generic_answer",
+      "count": 10
+    },
+    {
+      "flag": "shallow_image_query",
+      "count": 2
+    },
+    {
+      "flag": "wrong_component_type",
+      "count": 1
+    },
+    {
+      "flag": "stock_or_decor_images_when_technical_images_needed",
+      "count": 1
+    },
+    {
+      "flag": "irrelevant_images",
+      "count": 1
+    },
+    {
+      "flag": "image_answer_mismatch",
+      "count": 1
+    }
+  ],
+  "pass": false,
+  "run_dir": "autoresearch/runs/20260428T211807Z",
+  "scorer": {
+    "deterministic": true,
+    "gpt_judge": true,
+    "image_url_http_checks": false
+  }
+}

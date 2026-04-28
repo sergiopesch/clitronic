@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# AutoResearch generated outputs
+autoresearch/runs/
+autoresearch/latest_score.json
+autoresearch/results.jsonl

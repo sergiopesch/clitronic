@@ -2,6 +2,18 @@ import { z } from 'zod';
 import { COMPONENT_TYPES } from '@/lib/ai/component-registry';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 
+export interface ValidationDiagnosticIssue {
+  path: string;
+  message: string;
+  code: string;
+}
+
+export interface StructuredResponseValidationDiagnostics {
+  success: boolean;
+  data: StructuredResponse | null;
+  issues: ValidationDiagnosticIssue[];
+}
+
 const behaviorSchema = z.object({
   animation: z.enum(['fadeIn', 'slideUp', 'expand']),
   state: z.enum(['open', 'collapsed']),
@@ -234,4 +246,27 @@ const structuredResponseSchema = z
 export function validateStructuredResponse(payload: unknown): StructuredResponse | null {
   const parsed = structuredResponseSchema.safeParse(payload);
   return parsed.success ? (parsed.data as StructuredResponse) : null;
+}
+
+export function validateStructuredResponseWithDiagnostics(
+  payload: unknown
+): StructuredResponseValidationDiagnostics {
+  const parsed = structuredResponseSchema.safeParse(payload);
+  if (parsed.success) {
+    return {
+      success: true,
+      data: parsed.data as StructuredResponse,
+      issues: [],
+    };
+  }
+
+  return {
+    success: false,
+    data: null,
+    issues: parsed.error.issues.map((issue) => ({
+      path: issue.path.length > 0 ? issue.path.join('.') : '(root)',
+      message: issue.message,
+      code: issue.code,
+    })),
+  };
 }

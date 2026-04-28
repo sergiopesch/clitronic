@@ -1,12 +1,31 @@
 'use client';
 
+import { CardHeader, CountBadge } from './card-layout';
+import { extractSafetyNotes, SafetyCallout } from './safety-callout';
 import type { RecommendationCardData } from '@/lib/ai/response-schema';
 
 export function RecommendationCard({ data }: { data: RecommendationCardData }) {
+  const items = data.items ?? [];
+  const safetyNotes = extractSafetyNotes([
+    ...items.map((item) => item.reason),
+    ...(data.highlights ?? []),
+  ]);
+
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
+      <CardHeader
+        eyebrow="Recommendations"
+        title="Recommended options"
+        meta={
+          items.length > 0 && (
+            <CountBadge>
+              {items.length} option{items.length !== 1 ? 's' : ''}
+            </CountBadge>
+          )
+        }
+      />
       <div className="divide-border divide-y">
-        {(data.items ?? []).map((item, i) => (
+        {items.map((item, i) => (
           <div
             key={`${item.name}-${i}`}
             className={`animate-fade-in-up px-4 py-4 stagger-${Math.min(i + 1, 6)} sm:px-5`}
@@ -36,6 +55,7 @@ export function RecommendationCard({ data }: { data: RecommendationCardData }) {
           </ul>
         </div>
       )}
+      <SafetyCallout notes={safetyNotes} />
     </div>
   );
 }

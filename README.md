@@ -2,6 +2,8 @@
 
 Your voice-first electronics companion. Ask about circuits, components, microcontrollers, and maker hardware, then get live captions, spoken responses, and instant visual cards.
 
+![Clitronic voice-first electronics assistant](./public/readme-hero.png)
+
 ## What It Does
 
 Clitronic turns natural language questions into rich, animated UI cards. It is not a chatbot UI with a transcript dump. It is a dynamic UI engine for electronics with realtime voice layered on top.
@@ -14,11 +16,13 @@ Ask "What resistor for a red LED on 5V?" and get a calculation card with the for
 
 ## Latest Update
 
-- Realtime voice is now the primary interaction path.
-- User speech appears live while speaking instead of waiting for the full turn to finish.
-- Assistant speech is mirrored on-screen word by word at a slower listening-friendly pace.
-- Text fallbacks no longer disappear silently. If a card is not available, the spoken summary/text still renders visibly.
-- Image follow-ups like "show me one" now resolve from recent context instead of collapsing into generic searches.
+- Realtime voice remains the primary interaction path, with text input available from the welcome screen and during active sessions.
+- The mute control now mutes the user's microphone track, not assistant playback.
+- Recent turns can reopen previous structured visual answers without another model call.
+- Follow-up chips suggest useful next actions based on the rendered card type.
+- Safety notes are surfaced consistently across electronics cards without weakening schema validation.
+- Visual cards now share consistent headers, count badges, copy actions, and progressive disclosure for long wiring/troubleshooting lists.
+- Image follow-ups like "show me one" resolve from recent context instead of collapsing into generic searches.
 
 ### 10 Visual Components
 
@@ -143,6 +147,9 @@ components/
 └── ui/                         # 10 visual card components + renderer
     ├── ui-renderer.tsx         # Routes JSON → component via registry map
     ├── animations.tsx          # AnimateIn wrapper
+    ├── card-layout.tsx         # Shared card headers, count badges, disclosure controls
+    ├── copy-button.tsx         # Clipboard actions for formulas/results/steps
+    ├── safety-callout.tsx      # Consistent safety note presentation
     ├── spec-card.tsx
     ├── comparison-card.tsx
     ├── explanation-card.tsx
@@ -156,6 +163,7 @@ components/
     └── text-response.tsx       # Word-by-word spoken-text fallback
 hooks/
 ├── useConversationState.ts     # Structured response fetch + history context
+├── usePrefersReducedMotion.ts  # Motion preference hook for accessible animation
 └── useVoiceInteraction.ts      # Realtime voice, transcripts, audio, turn handling
 lib/
 ├── ai/component-registry.ts    # Single source of truth for component names/aliases/types
@@ -165,6 +173,20 @@ lib/
 ├── ai/system-prompt.ts         # Intent detection + response formatting
 └── ai/transcript-utils.ts      # Light cleanup for speech transcripts
 ```
+
+## UI And UX Notes
+
+The current app experience is optimized around a voice-first workshop workflow:
+
+- the welcome screen supports either push-to-talk or typed prompts
+- the bottom control band keeps text input, voice capture, and mic mute in one predictable place
+- active voice states use explicit cancel/stop behavior instead of separate competing controls
+- response cards use shared headers via `components/ui/card-layout.tsx`
+- long wiring and troubleshooting cards show the first five steps/checks, then allow expansion
+- safety callouts remain visible above collapsed content
+- calculation and wiring cards include copy actions for formulas, results, and steps
+
+See [docs/ui-ux-polish.md](./docs/ui-ux-polish.md) for the interaction patterns and design constraints behind the current card system.
 
 ## How It Works
 

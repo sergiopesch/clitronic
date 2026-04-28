@@ -1,19 +1,32 @@
 'use client';
 
+import { CardHeader, CountBadge } from './card-layout';
+import { extractSafetyNotes, SafetyCallout } from './safety-callout';
 import type { ExplanationCardData } from '@/lib/ai/response-schema';
 
 export function ExplanationCard({ data }: { data: ExplanationCardData }) {
+  const keyPoints = data.keyPoints ?? [];
+  const safetyNotes = extractSafetyNotes([data.summary, ...keyPoints]);
+
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-4 py-4 sm:px-5">
-        <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
-        <p className="text-text-secondary mt-2 text-[13px] leading-relaxed sm:text-sm">
-          {data.summary}
-        </p>
+      <CardHeader
+        eyebrow="Explanation"
+        title={data.title}
+        meta={
+          keyPoints.length > 0 && (
+            <CountBadge>
+              {keyPoints.length} point{keyPoints.length !== 1 ? 's' : ''}
+            </CountBadge>
+          )
+        }
+      />
+      <div className="border-border border-b px-4 py-3 sm:px-5">
+        <p className="text-text-secondary text-[13px] leading-relaxed sm:text-sm">{data.summary}</p>
       </div>
 
       <div className="divide-border space-y-0 divide-y">
-        {(data.keyPoints ?? []).map((point, i) => (
+        {keyPoints.map((point, i) => (
           <div
             key={`${point}-${i}`}
             className={`animate-fade-in-up flex gap-3.5 px-4 py-3.5 stagger-${Math.min(i + 1, 6)} sm:px-5`}
@@ -25,6 +38,7 @@ export function ExplanationCard({ data }: { data: ExplanationCardData }) {
           </div>
         ))}
       </div>
+      <SafetyCallout notes={safetyNotes} />
     </div>
   );
 }

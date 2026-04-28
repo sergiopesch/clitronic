@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
-  OPENAI_REALTIME_BETA_HEADER,
-  OPENAI_REALTIME_SESSIONS_URL,
-  OPENAI_REALTIME_SESSION_CONFIG,
+  OPENAI_REALTIME_CLIENT_SECRET_CONFIG,
+  OPENAI_REALTIME_CLIENT_SECRETS_URL,
   OPENAI_REALTIME_SESSION_TIMEOUT_MS,
 } from '@/lib/ai/openai-config';
 
@@ -20,14 +19,13 @@ export async function POST() {
     const timeoutId = setTimeout(() => controller.abort(), OPENAI_REALTIME_SESSION_TIMEOUT_MS);
     let response: Response;
     try {
-      response = await fetch(OPENAI_REALTIME_SESSIONS_URL, {
+      response = await fetch(OPENAI_REALTIME_CLIENT_SECRETS_URL, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'OpenAI-Beta': OPENAI_REALTIME_BETA_HEADER,
         },
-        body: JSON.stringify(OPENAI_REALTIME_SESSION_CONFIG),
+        body: JSON.stringify(OPENAI_REALTIME_CLIENT_SECRET_CONFIG),
         signal: controller.signal,
       });
     } finally {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DAILY_LIMIT_DEFAULT, DAILY_LIMIT_MESSAGE } from '@/lib/ai/rate-limit';
 import type { StructuredResponse, UIBlock } from '@/lib/ai/response-schema';
 
-type ConversationEntry = {
+export type ConversationEntry = {
   role: 'user' | 'assistant';
   content: string;
   structured?: StructuredResponse;
@@ -252,6 +252,19 @@ export function useConversationState() {
     setError(null);
   }, []);
 
+  const showHistoryResponse = useCallback(
+    (historyIndex: number) => {
+      const entry = history[historyIndex];
+      if (entry?.role !== 'assistant' || !entry.structured) return false;
+
+      setError(null);
+      setCurrentResponse(entry.structured);
+      setResponseKey((k) => k + 1);
+      return true;
+    },
+    [history]
+  );
+
   const resetDailyUsage = useCallback(() => {
     clearDailyUsage();
     setIsDailyLimitReached(false);
@@ -269,6 +282,7 @@ export function useConversationState() {
   return {
     isLoading,
     error,
+    history,
     responseKey,
     isDailyLimitReached,
     displayedResponse: currentResponse,
@@ -277,6 +291,7 @@ export function useConversationState() {
     resetDailyUsage,
     cancelActiveRequest,
     clearDisplayedResponse,
+    showHistoryResponse,
     submit,
     reset,
   };

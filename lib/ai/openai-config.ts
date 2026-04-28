@@ -1,15 +1,14 @@
 export const OPENAI_CHAT_MODEL = 'gpt-4o-mini';
 export const OPENAI_CHAT_MAX_TOKENS = 1200;
 
-export const OPENAI_REALTIME_MODEL = 'gpt-4o-realtime-preview';
+export const OPENAI_REALTIME_MODEL = 'gpt-realtime-1.5';
 export const OPENAI_REALTIME_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
-export const OPENAI_REALTIME_VOICE = 'alloy';
-export const OPENAI_REALTIME_MODALITIES = ['text', 'audio'] as const;
-export const OPENAI_REALTIME_AUDIO_FORMAT = 'pcm16';
-export const OPENAI_REALTIME_BETA_HEADER = 'realtime=v1';
+export const OPENAI_REALTIME_VOICE = 'marin';
+export const OPENAI_REALTIME_OUTPUT_MODALITIES = ['audio'] as const;
 export const OPENAI_REALTIME_TRANSPORT = 'openai-realtime-webrtc';
-export const OPENAI_REALTIME_SESSIONS_URL = 'https://api.openai.com/v1/realtime/sessions';
-export const OPENAI_REALTIME_SDP_URL = `https://api.openai.com/v1/realtime?model=${OPENAI_REALTIME_MODEL}`;
+export const OPENAI_REALTIME_CLIENT_SECRETS_URL =
+  'https://api.openai.com/v1/realtime/client_secrets';
+export const OPENAI_REALTIME_SDP_URL = 'https://api.openai.com/v1/realtime/calls';
 
 export const OPENAI_REALTIME_SESSION_TIMEOUT_MS = 12_000;
 export const OPENAI_REALTIME_SDP_TIMEOUT_MS = 15_000;
@@ -31,14 +30,37 @@ export const OPENAI_REALTIME_SERVER_VAD_CONFIG = {
 } as const;
 
 export const OPENAI_REALTIME_SESSION_CONFIG = {
+  type: 'realtime',
   model: OPENAI_REALTIME_MODEL,
-  modalities: OPENAI_REALTIME_MODALITIES,
-  voice: OPENAI_REALTIME_VOICE,
-  output_audio_format: OPENAI_REALTIME_AUDIO_FORMAT,
+  output_modalities: OPENAI_REALTIME_OUTPUT_MODALITIES,
   instructions: OPENAI_REALTIME_SESSION_INSTRUCTIONS,
-  turn_detection: OPENAI_REALTIME_SERVER_VAD_CONFIG,
-  input_audio_transcription: {
-    model: OPENAI_REALTIME_TRANSCRIPTION_MODEL,
-    language: 'en',
+  audio: {
+    input: {
+      format: {
+        type: 'audio/pcm',
+        rate: 24000,
+      },
+      turn_detection: OPENAI_REALTIME_SERVER_VAD_CONFIG,
+      transcription: {
+        model: OPENAI_REALTIME_TRANSCRIPTION_MODEL,
+        language: 'en',
+      },
+    },
+    output: {
+      format: {
+        type: 'audio/pcm',
+        rate: 24000,
+      },
+      voice: OPENAI_REALTIME_VOICE,
+    },
   },
+} as const;
+
+export const OPENAI_REALTIME_CLIENT_SECRET_CONFIG = {
+  session: OPENAI_REALTIME_SESSION_CONFIG,
+} as const;
+
+export const OPENAI_REALTIME_SESSION_UPDATE_CONFIG = {
+  ...OPENAI_REALTIME_SESSION_CONFIG,
+  instructions: OPENAI_REALTIME_REPLY_INSTRUCTIONS,
 } as const;

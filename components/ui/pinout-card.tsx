@@ -1,5 +1,6 @@
 'use client';
 
+import { CardHeader, CountBadge } from './card-layout';
 import type { PinoutCardData } from '@/lib/ai/response-schema';
 
 const PIN_COLORS: Record<string, string> = {
@@ -29,12 +30,18 @@ export function PinoutCard({ data }: { data: PinoutCardData }) {
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-4 py-4 sm:px-5">
-        <h3 className="text-accent text-base font-semibold sm:text-lg">{data.component}</h3>
-        {data.description && (
-          <p className="text-text-muted mt-1 text-[13px] sm:text-sm">{data.description}</p>
-        )}
-      </div>
+      <CardHeader
+        eyebrow="Pinout"
+        title={data.component}
+        subtitle={data.description}
+        meta={
+          totalPins > 0 && (
+            <CountBadge>
+              {totalPins} pin{totalPins !== 1 ? 's' : ''}
+            </CountBadge>
+          )
+        }
+      />
 
       {totalPins === 0 && (
         <div className="text-text-muted px-4 py-8 text-center text-sm sm:px-5">

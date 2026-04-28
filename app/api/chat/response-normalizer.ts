@@ -97,8 +97,35 @@ function normalizeResponse(parsed: Record<string, unknown>): Record<string, unkn
     }
   }
 
+  if (parsed.ui && typeof parsed.ui === 'object') {
+    const ui = parsed.ui as Record<string, unknown>;
+    const data =
+      ui.data && typeof ui.data === 'object' ? (ui.data as Record<string, unknown>) : null;
+    if (ui.component === 'troubleshootingCard' && data && typeof data.issue !== 'string') {
+      data.issue = typeof parsed.intent === 'string' ? parsed.intent : 'Troubleshooting checks';
+    }
+  }
+
   if (!VALID_MODES.has(parsed.mode as string)) {
     parsed.mode = parsed.ui ? 'ui' : 'text';
+  }
+
+  if (typeof parsed.intent !== 'string' || !parsed.intent.trim()) {
+    const ui = parsed.ui && typeof parsed.ui === 'object' ? parsed.ui : null;
+    const component = ui ? (ui as Record<string, unknown>).component : null;
+    parsed.intent = typeof component === 'string' && component.trim() ? component : 'quick_answer';
+  }
+
+  if (parsed.text === undefined) {
+    parsed.text = null;
+  }
+
+  if (parsed.behavior === undefined) {
+    parsed.behavior = null;
+  }
+
+  if (parsed.ui === undefined && parsed.mode === 'text') {
+    parsed.ui = null;
   }
 
   const textContent = typeof parsed.text === 'string' ? parsed.text : '';

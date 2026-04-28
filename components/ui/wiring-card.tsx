@@ -1,6 +1,12 @@
 'use client';
 
+import { useState } from 'react';
+import { CardHeader, CountBadge, DisclosureToggle } from './card-layout';
+import { CopyButton } from './copy-button';
+import { SafetyCallout } from './safety-callout';
 import type { WiringCardData } from '@/lib/ai/response-schema';
+
+const COLLAPSED_STEP_LIMIT = 5;
 
 const WIRE_COLORS: Record<string, string> = {
   red: '#f87171',
@@ -47,14 +53,41 @@ function getNodeAccent(name: string): { bg: string; border: string; text: string
   return { bg: 'rgba(34,211,238,0.08)', border: 'rgba(34,211,238,0.15)', text: '#22d3ee' };
 }
 
+function buildWiringCopyText(data: WiringCardData): string {
+  const lines = [data.title];
+  if (data.description) lines.push(data.description);
+  if (data.warnings?.length) {
+    lines.push('', 'Check first:');
+    data.warnings.forEach((warning) => lines.push(`- ${warning}`));
+  }
+  if (data.steps?.length) {
+    lines.push('', 'Steps:');
+    data.steps.forEach((step, index) => {
+      const wire = step.wire ? ` using ${step.wire}` : '';
+      const note = step.note ? ` (${step.note})` : '';
+      lines.push(`${index + 1}. ${step.from} -> ${step.to}${wire}${note}`);
+    });
+  }
+  return lines.join('\n');
+}
+
 export function WiringCard({ data }: { data: WiringCardData }) {
-  const totalSteps = data.steps?.length ?? 0;
+  const [expanded, setExpanded] = useState(false);
+  const steps = data.steps ?? [];
+  const totalSteps = steps.length;
+  const shouldCollapse = totalSteps > COLLAPSED_STEP_LIMIT;
+  const visibleSteps = shouldCollapse && !expanded ? steps.slice(0, COLLAPSED_STEP_LIMIT) : steps;
+  const hiddenStepCount = Math.max(totalSteps - COLLAPSED_STEP_LIMIT, 0);
+  const copyText = buildWiringCopyText(data);
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      {/* Header */}
-      <div className="px-4 py-4 sm:px-5">
-        <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap sm:items-center">
+      <CardHeader
+        eyebrow="Wiring"
+        title={data.title}
+        subtitle={data.description}
+        className="border-b-0"
+        icon={
           <div className="bg-accent/10 border-accent/20 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-accent">
               <path
@@ -65,25 +98,48 @@ export function WiringCard({ data }: { data: WiringCardData }) {
               />
             </svg>
           </div>
-          <div>
-            <h3 className="text-text-primary text-[13px] font-semibold sm:text-base">
-              {data.title}
-            </h3>
-            {data.description && (
-              <p className="text-text-muted mt-0.5 text-[11px] sm:text-xs">{data.description}</p>
-            )}
-          </div>
-          {totalSteps > 0 && (
-            <div className="text-text-muted ml-auto font-mono text-[10px] sm:pt-0.5">
+        }
+        meta={
+          totalSteps > 0 && (
+            <CountBadge>
               {totalSteps} step{totalSteps !== 1 ? 's' : ''}
-            </div>
-          )}
-        </div>
-      </div>
+            </CountBadge>
+          )
+        }
+        action={<CopyButton text={copyText} label="Copy steps" />}
+      />
+
+      {/* Warnings */}
+      {data.warnings && data.warnings.length > 0 && (
+        <SafetyCallout>
+          <div className="space-y-1.5">
+            {data.warnings.map((w, i) => (
+              <div key={`${w}-${i}`} className="text-warning/90 flex items-start gap-2 text-xs">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="mt-0.5 shrink-0"
+                >
+                  <path
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>{w}</span>
+              </div>
+            ))}
+          </div>
+        </SafetyCallout>
+      )}
 
       {/* Steps — each is a visual card */}
       <div className="space-y-0">
-        {data.steps?.map((step, i) => {
+        {visibleSteps.map((step, i) => {
           const wireColor = getWireColor(step.wire);
           const fromAccent = getNodeAccent(step.from);
           const toAccent = getNodeAccent(step.to);
@@ -188,33 +244,13 @@ export function WiringCard({ data }: { data: WiringCardData }) {
         })}
       </div>
 
-      {/* Warnings */}
-      {data.warnings && data.warnings.length > 0 && (
-        <div className="border-warning/20 bg-warning/[0.04] border-t px-4 py-3 sm:px-5">
-          <div className="space-y-1.5">
-            {data.warnings.map((w, i) => (
-              <div key={`${w}-${i}`} className="text-warning/90 flex items-start gap-2 text-xs">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="mt-0.5 shrink-0"
-                >
-                  <path
-                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span>{w}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <DisclosureToggle
+        expanded={expanded}
+        hiddenCount={hiddenStepCount}
+        itemSingular="step"
+        itemPlural="steps"
+        onClick={() => setExpanded((current) => !current)}
+      />
     </div>
   );
 }

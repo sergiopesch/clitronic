@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 function getWordDelay(token: string): number {
   const baseDelay = 185;
@@ -12,11 +13,12 @@ function getWordDelay(token: string): number {
 }
 
 export function TextResponse({ text }: { text: string }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
   const tokens = useMemo(() => text.match(/\S+\s*/g) ?? [], [text]);
   const [visibleWords, setVisibleWords] = useState(0);
 
   useEffect(() => {
-    if (tokens.length === 0) return;
+    if (tokens.length === 0 || prefersReducedMotion) return;
 
     let cancelled = false;
     let timeoutId: number | null = null;
@@ -36,10 +38,11 @@ export function TextResponse({ text }: { text: string }) {
       cancelled = true;
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
-  }, [tokens]);
+  }, [prefersReducedMotion, tokens]);
 
-  const displayed = tokens.slice(0, visibleWords).join('');
-  const done = visibleWords >= tokens.length;
+  const visibleCount = prefersReducedMotion ? tokens.length : visibleWords;
+  const displayed = tokens.slice(0, visibleCount).join('');
+  const done = visibleCount >= tokens.length;
 
   return (
     <div

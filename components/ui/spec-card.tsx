@@ -1,23 +1,31 @@
 'use client';
 
 import { useState } from 'react';
+import { CardHeader, CountBadge } from './card-layout';
 import type { SpecCardData } from '@/lib/ai/response-schema';
 
 export function SpecCard({ data }: { data: SpecCardData }) {
   const [expanded, setExpanded] = useState(false);
+  const keySpecs = data.keySpecs ?? [];
   const hasDetails = data.optionalDetails && data.optionalDetails.length > 0;
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-4 py-4 sm:px-5">
-        <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
-        {data.subtitle && (
-          <p className="text-text-muted mt-1 text-[13px] sm:text-sm">{data.subtitle}</p>
-        )}
-      </div>
+      <CardHeader
+        eyebrow="Specs"
+        title={data.title}
+        subtitle={data.subtitle}
+        meta={
+          keySpecs.length > 0 && (
+            <CountBadge>
+              {keySpecs.length} spec{keySpecs.length !== 1 ? 's' : ''}
+            </CountBadge>
+          )
+        }
+      />
 
       <div className="bg-border grid gap-px sm:grid-cols-2">
-        {(data.keySpecs ?? []).map((spec, i) => (
+        {keySpecs.map((spec, i) => (
           <div
             key={spec.label}
             className={`bg-surface-1/80 animate-fade-in-up px-4 py-3 stagger-${Math.min(i + 1, 6)} sm:px-5`}
@@ -33,6 +41,7 @@ export function SpecCard({ data }: { data: SpecCardData }) {
       {hasDetails && (
         <>
           <button
+            type="button"
             onClick={() => setExpanded(!expanded)}
             className="border-border text-accent hover:bg-surface-2/50 flex w-full items-center justify-center gap-1 border-t px-4 py-2.5 text-[11px] transition sm:px-5 sm:text-xs"
           >

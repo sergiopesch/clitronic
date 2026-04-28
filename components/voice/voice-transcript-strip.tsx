@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 interface VoiceTranscriptStripProps {
   userText: string;
@@ -74,6 +75,7 @@ function StreamLine({
 type StreamPace = 'user' | 'agent';
 
 function useProgressiveText(source: string, streaming: boolean, pace: StreamPace) {
+  const prefersReducedMotion = usePrefersReducedMotion();
   const [visibleWords, setVisibleWords] = useState(0);
 
   const finalWordTokens = useMemo(() => source.match(/\S+\s*/g) ?? [], [source]);
@@ -83,7 +85,7 @@ function useProgressiveText(source: string, streaming: boolean, pace: StreamPace
   const targetWordCount = streaming ? committedWordTokens.length : finalWordTokens.length;
 
   useEffect(() => {
-    if (pace === 'user') return;
+    if (pace === 'user' || prefersReducedMotion) return;
 
     if (!source.trim()) {
       const id = window.requestAnimationFrame(() => {
@@ -111,9 +113,10 @@ function useProgressiveText(source: string, streaming: boolean, pace: StreamPace
     }, delay);
 
     return () => window.clearTimeout(id);
-  }, [pace, source, targetWordCount, visibleWords]);
+  }, [pace, prefersReducedMotion, source, targetWordCount, visibleWords]);
 
   if (pace === 'user') return source;
+  if (prefersReducedMotion) return source;
 
   const visibleText = finalWordTokens.slice(0, visibleWords).join('');
   if (!streaming) return visibleText;
@@ -148,7 +151,7 @@ export function VoiceTranscriptStrip({
       className={`relative w-full overflow-hidden transition-all duration-400 ease-out ${
         collapsed
           ? 'max-h-0 translate-y-1 opacity-0 blur-[2px]'
-          : 'blur-0 max-h-40 translate-y-0 opacity-100'
+          : 'blur-0 max-h-56 translate-y-0 overflow-y-auto opacity-100'
       } ${stripTone}`}
     >
       <div className="from-accent/8 via-accent/0 pointer-events-none absolute inset-0 bg-gradient-to-r to-transparent opacity-70" />

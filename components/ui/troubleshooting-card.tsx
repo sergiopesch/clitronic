@@ -1,10 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { CardHeader, CountBadge, DisclosureToggle } from './card-layout';
+import { extractSafetyNotes, SafetyCallout } from './safety-callout';
 import type { TroubleshootingCardData } from '@/lib/ai/response-schema';
+
+const COLLAPSED_CHECK_LIMIT = 5;
 
 export function TroubleshootingCard({ data }: { data: TroubleshootingCardData }) {
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [expanded, setExpanded] = useState(false);
 
   const toggle = (index: number) => {
     setChecked((prev) => {
@@ -17,20 +22,28 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
 
   const steps = data.steps ?? [];
   const tips = data.tips ?? [];
+  const shouldCollapse = steps.length > COLLAPSED_CHECK_LIMIT;
+  const visibleSteps = shouldCollapse && !expanded ? steps.slice(0, COLLAPSED_CHECK_LIMIT) : steps;
+  const hiddenCheckCount = Math.max(steps.length - COLLAPSED_CHECK_LIMIT, 0);
+  const safetyNotes = extractSafetyNotes([
+    data.issue,
+    ...steps.flatMap((step) => [step.label, step.detail]),
+    ...tips,
+  ]);
   const progress = steps.length > 0 ? Math.round((checked.size / steps.length) * 100) : 0;
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-4 py-4 sm:px-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-warning text-[11px] tracking-wider uppercase">Troubleshooting</div>
-            <h3 className="text-text-primary mt-1 text-[15px] font-semibold sm:text-lg">
-              {data.issue}
-            </h3>
-          </div>
-          {/* Progress ring */}
-          <div className="relative flex h-10 w-10 items-center justify-center">
+      <CardHeader
+        eyebrow="Troubleshooting"
+        title={data.issue}
+        meta={
+          <CountBadge>
+            {steps.length} check{steps.length !== 1 ? 's' : ''}
+          </CountBadge>
+        }
+        action={
+          <div className="relative flex h-10 w-10 items-center justify-center" aria-hidden="true">
             <svg width="36" height="36" viewBox="0 0 36 36">
               <circle
                 cx="18"
@@ -58,14 +71,18 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
               {checked.size}/{steps.length}
             </span>
           </div>
-        </div>
-      </div>
+        }
+      />
+
+      <SafetyCallout notes={safetyNotes} />
 
       <div className="divide-border divide-y">
-        {steps.map((step, i) => (
+        {visibleSteps.map((step, i) => (
           <button
             key={`${step.label}-${i}`}
+            type="button"
             onClick={() => toggle(i)}
+            aria-pressed={checked.has(i)}
             className={`hover:bg-surface-2/40 animate-fade-in-up flex w-full items-start gap-3.5 px-4 py-3.5 text-left transition-colors stagger-${Math.min(i + 1, 6)} sm:px-5`}
           >
             <span
@@ -99,6 +116,14 @@ export function TroubleshootingCard({ data }: { data: TroubleshootingCardData })
           </button>
         ))}
       </div>
+
+      <DisclosureToggle
+        expanded={expanded}
+        hiddenCount={hiddenCheckCount}
+        itemSingular="check"
+        itemPlural="checks"
+        onClick={() => setExpanded((current) => !current)}
+      />
 
       {tips.length > 0 && (
         <div className="border-border bg-accent/[0.03] border-t px-4 py-4 sm:px-5">

@@ -1,5 +1,6 @@
 'use client';
 
+import { CardHeader, CountBadge } from './card-layout';
 import type { ChartCardData } from '@/lib/ai/response-schema';
 
 const BAR_COLORS: Record<string, { bar: string; bg: string }> = {
@@ -15,12 +16,18 @@ export function ChartCard({ data }: { data: ChartCardData }) {
 
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
-      <div className="border-border border-b px-4 py-4 sm:px-5">
-        <h3 className="text-accent text-base font-semibold sm:text-lg">{data.title}</h3>
-        {data.subtitle && (
-          <p className="text-text-muted mt-1 text-[13px] sm:text-sm">{data.subtitle}</p>
-        )}
-      </div>
+      <CardHeader
+        eyebrow="Chart"
+        title={data.title}
+        subtitle={data.subtitle}
+        meta={
+          bars.length > 0 && (
+            <CountBadge>
+              {bars.length} item{bars.length !== 1 ? 's' : ''}
+            </CountBadge>
+          )
+        }
+      />
 
       <div className="space-y-3 px-4 py-4 sm:px-5 sm:py-5">
         {bars.map((bar, i) => {

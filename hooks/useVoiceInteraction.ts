@@ -1,18 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import {
-  OPENAI_REALTIME_AUDIO_FORMAT,
-  OPENAI_REALTIME_BETA_HEADER,
   OPENAI_REALTIME_DATA_CHANNEL_TIMEOUT_MS,
-  OPENAI_REALTIME_MODALITIES,
-  OPENAI_REALTIME_REPLY_INSTRUCTIONS,
   OPENAI_REALTIME_SDP_TIMEOUT_MS,
   OPENAI_REALTIME_SDP_URL,
-  OPENAI_REALTIME_SERVER_VAD_CONFIG,
+  OPENAI_REALTIME_SESSION_UPDATE_CONFIG,
   OPENAI_REALTIME_SESSION_TIMEOUT_MS,
-  OPENAI_REALTIME_TRANSCRIPTION_MODEL,
-  OPENAI_REALTIME_VOICE,
 } from '@/lib/ai/openai-config';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
 import {
@@ -41,6 +36,7 @@ type UseVoiceInteractionOptions = {
 };
 
 type RealtimeSessionResponse = {
+  value?: string;
   client_secret?: {
     value?: string;
   };
@@ -120,7 +116,7 @@ export function useVoiceInteraction({
   const [error, setError] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMicMuted, setIsMicMutedState] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
   const [sessionReady, setSessionReady] = useState(false);
@@ -156,15 +152,6 @@ export function useVoiceInteraction({
   useEffect(() => {
     setHasMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.muted = isMuted;
-    }
-    if (isMuted && isSpeaking) {
-      setIsSpeaking(false);
-    }
-  }, [isMuted, isSpeaking]);
 
   const finalizeTurn = useCallback(
     async (transcriptOverride?: string) => {
@@ -248,6 +235,38 @@ export function useVoiceInteraction({
       channel.send(JSON.stringify(payload));
     },
     [debugEnabled]
+  );
+
+  const setIsMuted = useCallback<Dispatch<SetStateAction<boolean>>>(
+    (nextValue) => {
+      setIsMicMutedState((previousValue) => {
+        const nextMuted =
+          typeof nextValue === 'function'
+            ? (nextValue as (value: boolean) => boolean)(previousValue)
+            : nextValue;
+
+        const track = audioTrackRef.current;
+        if (nextMuted) {
+          if (track) track.enabled = false;
+          sendRealtimeEvent({ type: 'input_audio_buffer.clear' });
+          finalBufferRef.current = '';
+          lastFinalizedTranscriptRef.current = '';
+          smoothedInputRef.current = 0;
+          setInputLevel(0);
+          setPartialTranscript('');
+          setFinalTranscript('');
+          setVoiceState((prev) =>
+            prev === 'listening' || prev === 'capturing' || prev === 'transcribing' ? 'idle' : prev
+          );
+        } else if (track && dataChannelRef.current?.readyState === 'open') {
+          track.enabled = true;
+          setVoiceState((prev) => (prev === 'idle' || prev === 'error' ? 'listening' : prev));
+        }
+
+        return nextMuted;
+      });
+    },
+    [sendRealtimeEvent]
   );
 
   const interruptAssistant = useCallback(() => {
@@ -431,9 +450,7 @@ export function useVoiceInteraction({
       const rawInput =
         micAnalyser && micData && micTrackEnabled ? readNormalizedLevel(micAnalyser, micData) : 0;
       const rawOutput =
-        remoteAnalyser && remoteData && !isMuted
-          ? readNormalizedLevel(remoteAnalyser, remoteData)
-          : 0;
+        remoteAnalyser && remoteData ? readNormalizedLevel(remoteAnalyser, remoteData) : 0;
 
       smoothedInputRef.current = smoothedInputRef.current * 0.65 + rawInput * 0.35;
       smoothedOutputRef.current = smoothedOutputRef.current * 0.6 + rawOutput * 0.4;
@@ -444,7 +461,7 @@ export function useVoiceInteraction({
       setInputLevel((prev) => (Math.abs(prev - nextInput) > 0.012 ? nextInput : prev));
       setOutputLevel((prev) => (Math.abs(prev - nextOutput) > 0.012 ? nextOutput : prev));
     }, 66);
-  }, [isMuted]);
+  }, []);
 
   const stopMeterLoop = useCallback(() => {
     if (meterTimerRef.current !== null) {
@@ -580,7 +597,7 @@ export function useVoiceInteraction({
       throw new Error('Could not create realtime session.');
     }
     const sessionData = (await sessionRes.json()) as RealtimeSessionResponse;
-    const ephemeralKey = sessionData.client_secret?.value;
+    const ephemeralKey = sessionData.value ?? sessionData.client_secret?.value;
     if (!ephemeralKey) {
       throw new Error('Realtime session is missing ephemeral key.');
     }
@@ -618,7 +635,7 @@ export function useVoiceInteraction({
         remoteAudioRef.current.autoplay = true;
       }
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.muted = isMuted;
+      remoteAudioRef.current.muted = false;
       void remoteAudioRef.current.play().catch(() => {});
       void attachRemoteAnalyser(remoteStream);
     };
@@ -685,7 +702,6 @@ export function useVoiceInteraction({
         headers: {
           Authorization: `Bearer ${ephemeralKey}`,
           'Content-Type': 'application/sdp',
-          'OpenAI-Beta': OPENAI_REALTIME_BETA_HEADER,
         },
       },
       OPENAI_REALTIME_SDP_TIMEOUT_MS
@@ -705,17 +721,7 @@ export function useVoiceInteraction({
 
     sendRealtimeEvent({
       type: 'session.update',
-      session: {
-        modalities: OPENAI_REALTIME_MODALITIES,
-        voice: OPENAI_REALTIME_VOICE,
-        output_audio_format: OPENAI_REALTIME_AUDIO_FORMAT,
-        instructions: OPENAI_REALTIME_REPLY_INSTRUCTIONS,
-        turn_detection: OPENAI_REALTIME_SERVER_VAD_CONFIG,
-        input_audio_transcription: {
-          model: OPENAI_REALTIME_TRANSCRIPTION_MODEL,
-          language: 'en',
-        },
-      },
+      session: OPENAI_REALTIME_SESSION_UPDATE_CONFIG,
     });
 
     return true;
@@ -725,7 +731,6 @@ export function useVoiceInteraction({
     debugEnabled,
     fetchWithTimeout,
     handleRealtimeEvent,
-    isMuted,
     isSupported,
     sendRealtimeEvent,
   ]);
@@ -762,8 +767,8 @@ export function useVoiceInteraction({
       setOutputLevel(0);
       sendRealtimeEvent({ type: 'input_audio_buffer.clear' });
       interruptAssistant();
-      track.enabled = true;
-      setVoiceState('listening');
+      track.enabled = !isMicMuted;
+      setVoiceState(isMicMuted ? 'idle' : 'listening');
     } catch {
       teardownRealtimeSession();
       setVoiceState('error');
@@ -774,6 +779,7 @@ export function useVoiceInteraction({
   }, [
     ensureRealtimeConnection,
     interruptAssistant,
+    isMicMuted,
     isSupported,
     sendRealtimeEvent,
     teardownRealtimeSession,
@@ -824,7 +830,7 @@ export function useVoiceInteraction({
     sessionReady,
     voiceState,
     isSpeaking,
-    isMuted,
+    isMuted: isMicMuted,
     setIsMuted,
     partialTranscript,
     finalTranscript,

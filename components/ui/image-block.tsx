@@ -90,13 +90,11 @@ function normalizeImageUrl(url?: string | null): string | null {
 }
 
 const SEARCH_MESSAGES = [
-  'Scanning the interwebs...',
-  'Asking the electrons nicely...',
-  'Rummaging through datasheets...',
-  'Almost got it, hold my capacitor...',
-  'Checking every pixel...',
-  'Decoding image frequencies...',
-  'Soldering together some results...',
+  'Searching electronics image sources...',
+  'Checking component names and labels...',
+  'Filtering low-confidence matches...',
+  'Verifying image format and source...',
+  'Preparing visual reference...',
 ];
 
 function PhotoRenderer({ searchQuery, imageCount, caption, description }: PhotoRendererProps) {
@@ -243,7 +241,7 @@ function PhotoRenderer({ searchQuery, imageCount, caption, description }: PhotoR
       <div className="border-border bg-surface-2/40 flex h-32 w-full items-center justify-center rounded-xl border sm:h-40">
         <div className="text-text-muted text-center text-sm">
           <div className="mb-1 text-xl opacity-30">{'{ ? }'}</div>
-          <p className="text-xs">{"Couldn't find a good image for this one."}</p>
+          <p className="text-xs">No confident image match found.</p>
         </div>
       </div>
     );

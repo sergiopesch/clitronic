@@ -82,6 +82,146 @@ test('accepts valid chart response after normalization and validation', () => {
   assert.equal(validated?.ui?.component, 'chartCard');
 });
 
+test('normalizes missing nullable top-level fields on valid ui responses', () => {
+  const raw = JSON.stringify({
+    intent: 'bench_plan',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'recommendationCard',
+      data: {
+        items: [
+          {
+            name: 'Bench power zone',
+            reason: 'Use a current-limited bench supply and labeled outlets for projects.',
+          },
+        ],
+        highlights: ['Keep power, soldering, storage, and test gear in separate zones.'],
+      },
+    },
+  });
+
+  const normalized = parseAndNormalizeResponse(raw);
+  assert.ok(normalized);
+  assert.equal(normalized.text, null);
+  assert.equal(normalized.behavior, null);
+
+  const validated = validateStructuredResponse(normalized);
+  assert.ok(validated);
+  assert.equal(validated?.ui?.component, 'recommendationCard');
+});
+
+test('normalizes missing intent from otherwise valid ui responses', () => {
+  const raw = JSON.stringify({
+    mode: 'ui',
+    ui: {
+      type: 'image',
+      component: 'imageBlock',
+      data: {
+        imageMode: 'photo',
+        searchQuery: 'diy electronics workbench',
+        caption: 'DIY electronics workbench',
+      },
+    },
+  });
+
+  const normalized = parseAndNormalizeResponse(raw);
+  assert.ok(normalized);
+  assert.equal(normalized.intent, 'imageBlock');
+  assert.ok(validateStructuredResponse(normalized));
+});
+
+test('normalizes missing troubleshooting issue from intent', () => {
+  const raw = JSON.stringify({
+    intent: 'reed switch noise',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'troubleshootingCard',
+      data: {
+        steps: [{ label: 'Cable', detail: 'Route the reed switch cable away from mains.' }],
+        tips: ['Use pull-up and debounce.'],
+      },
+    },
+  });
+
+  const normalized = parseAndNormalizeResponse(raw);
+  assert.ok(normalized);
+  const validated = validateStructuredResponse(normalized);
+  assert.ok(validated);
+  assert.equal((validated?.ui?.data as { issue?: string }).issue, 'reed switch noise');
+});
+
+test('normalization preserves existing valid top-level text and behavior fields', () => {
+  const raw = JSON.stringify({
+    intent: 'explain_pwm',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'explanationCard',
+      data: {
+        title: 'PWM basics',
+        summary: 'PWM varies average power by changing duty cycle.',
+        keyPoints: ['Higher duty cycle means more average on-time.'],
+      },
+    },
+    text: 'PWM varies average power by changing duty cycle.',
+    behavior: { animation: 'fadeIn', state: 'open' },
+  });
+
+  const normalized = parseAndNormalizeResponse(raw);
+  assert.ok(normalized);
+  assert.equal(normalized.text, 'PWM varies average power by changing duty cycle.');
+  assert.deepEqual(normalized.behavior, { animation: 'fadeIn', state: 'open' });
+});
+
+test('normalization does not hide invalid nested ui data', () => {
+  const raw = JSON.stringify({
+    intent: 'bad_recommendation',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'recommendationCard',
+      data: {
+        items: [],
+        highlights: [],
+      },
+    },
+  });
+
+  const normalized = parseAndNormalizeResponse(raw);
+  assert.ok(normalized);
+  assert.equal(normalized.text, null);
+  assert.equal(normalized.behavior, null);
+  assert.equal(validateStructuredResponse(normalized), null);
+});
+
+test('normalization leaves text mode without text invalid', () => {
+  const raw = JSON.stringify({
+    intent: 'quick_answer',
+    mode: 'text',
+  });
+
+  const normalized = parseAndNormalizeResponse(raw);
+  assert.ok(normalized);
+  assert.equal(normalized.ui, null);
+  assert.equal(normalized.text, null);
+  assert.equal(validateStructuredResponse(normalized), null);
+});
+
+test('normalization leaves ui mode without ui invalid', () => {
+  const raw = JSON.stringify({
+    intent: 'show_plan',
+    mode: 'ui',
+  });
+
+  const normalized = parseAndNormalizeResponse(raw);
+  assert.ok(normalized);
+  assert.equal(normalized.text, null);
+  assert.equal(normalized.behavior, null);
+  assert.equal(validateStructuredResponse(normalized), null);
+});
+
 test('accepts optional voice payload with spoken summary', () => {
   const payload = {
     intent: 'troubleshoot_led',

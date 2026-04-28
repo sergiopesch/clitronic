@@ -9,6 +9,7 @@ import {
   tuneQueryForIntent,
 } from './query';
 import { mergeAndRank, searchParallel } from './providers';
+import { writeAutoresearchTrace } from '@/lib/autoresearch/trace';
 import type { ImageSearchResponse } from './types';
 
 const CONFIDENCE_THRESHOLD = 2;
@@ -39,6 +40,13 @@ export async function searchImages({
   const curated = getCuratedProfile(intentSource);
   const intent = curated?.intent ?? detectImageIntent(intentSource);
   const tunedQuery = curated?.preferredQuery ?? tuneQueryForIntent(query, intent);
+  writeAutoresearchTrace('image_search_query_created', {
+    rawQueryLength: rawQuery.length,
+    preprocessedQuery: query,
+    tunedQuery,
+    intent,
+    curatedProfile: curated?.id ?? null,
+  });
   const excludeKeys = normalizeExcludedUrlKeys(excludeUrls);
   const cacheKey = buildCacheKey(tunedQuery, intent, requestedCount, excludeKeys);
 
@@ -50,8 +58,21 @@ export async function searchImages({
   const curatedContext = curated
     ? `${contextText} ${curated.relevanceTokens.join(' ')}`.trim()
     : contextText;
+  writeAutoresearchTrace('image_search_started', {
+    tunedQuery,
+    intent,
+    requestedCount,
+    excludedCount: excludeKeys.length,
+    hasBraveKey: Boolean(braveKey),
+  });
   const round1 = await searchParallel(tunedQuery, braveKey, intent, curatedContext);
   const round1Candidates = filterExcluded(round1, excludeKeys);
+  writeAutoresearchTrace('image_candidates_ranked', {
+    tunedQuery,
+    intent,
+    candidateCount: round1Candidates.length,
+    topScore: round1Candidates[0]?.score ?? null,
+  });
   const topRound1 = round1Candidates[0] ?? null;
 
   if (topRound1 && topRound1.score >= CONFIDENCE_THRESHOLD) {
@@ -61,6 +82,11 @@ export async function searchImages({
       queryUsed: tunedQuery,
       images: toImageCandidates(round1Candidates, requestedCount),
     };
+    writeAutoresearchTrace('image_candidates_returned', {
+      queryUsed: payload.queryUsed,
+      confident: payload.confident,
+      candidateCount: payload.images?.length ?? 0,
+    });
     setImageCache(cacheKey, payload);
     return payload;
   }
@@ -79,6 +105,17 @@ export async function searchImages({
           queryUsed: best.score >= (topRound1?.score ?? -Infinity) ? retryQuery : tunedQuery,
           images: toImageCandidates(merged, requestedCount),
         };
+        writeAutoresearchTrace('image_candidates_ranked', {
+          tunedQuery: retryQuery,
+          intent,
+          candidateCount: merged.length,
+          topScore: best.score,
+        });
+        writeAutoresearchTrace('image_candidates_returned', {
+          queryUsed: payload.queryUsed,
+          confident: payload.confident,
+          candidateCount: payload.images?.length ?? 0,
+        });
         setImageCache(cacheKey, payload);
         return payload;
       }
@@ -92,11 +129,21 @@ export async function searchImages({
       queryUsed: tunedQuery,
       images: toImageCandidates(round1Candidates, requestedCount),
     };
+    writeAutoresearchTrace('image_candidates_returned', {
+      queryUsed: payload.queryUsed,
+      confident: payload.confident,
+      candidateCount: payload.images?.length ?? 0,
+    });
     setImageCache(cacheKey, payload);
     return payload;
   }
 
   const payload: ImageSearchResponse = { url: null, confident: false, queryUsed: tunedQuery };
+  writeAutoresearchTrace('image_candidates_returned', {
+    queryUsed: payload.queryUsed,
+    confident: payload.confident,
+    candidateCount: 0,
+  });
   setImageCache(cacheKey, payload);
   return payload;
 }

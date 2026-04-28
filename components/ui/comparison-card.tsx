@@ -1,20 +1,42 @@
 'use client';
 
+import { CardHeader, CountBadge } from './card-layout';
 import type { ComparisonCardData } from '@/lib/ai/response-schema';
 
 export function ComparisonCard({ data }: { data: ComparisonCardData }) {
+  const items = data.items ?? [];
+  const attributes = data.attributes ?? [];
+  const title =
+    items.length > 3
+      ? `${items.slice(0, 3).join(' vs ')} + ${items.length - 3} more`
+      : items.length > 0
+        ? items.join(' vs ')
+        : 'Comparison';
+
   return (
     <div className="border-border bg-surface-1/80 overflow-hidden rounded-2xl border backdrop-blur-sm">
+      <CardHeader
+        eyebrow="Comparison"
+        title={title}
+        meta={
+          attributes.length > 0 && (
+            <CountBadge>
+              {attributes.length} attribute{attributes.length !== 1 ? 's' : ''}
+            </CountBadge>
+          )
+        }
+      />
+
       {/* Mobile layout: stacked rows to avoid horizontal overflow */}
       <div className="divide-border divide-y sm:hidden">
-        {(data.attributes ?? []).map((attr, i) => (
+        {attributes.map((attr, i) => (
           <div
             key={`${attr.name}-mobile-${i}`}
             className={`animate-fade-in-up px-4 py-3.5 stagger-${Math.min(i + 1, 6)}`}
           >
             <div className="text-text-muted text-[11px] tracking-wider uppercase">{attr.name}</div>
             <div className="mt-2 space-y-1.5">
-              {(data.items ?? []).map((item, idx) => (
+              {items.map((item, idx) => (
                 <div
                   key={`${attr.name}-${item}-mobile-${idx}`}
                   className="bg-surface-2/50 border-border/60 rounded-lg border px-2.5 py-2"
@@ -36,7 +58,7 @@ export function ComparisonCard({ data }: { data: ComparisonCardData }) {
           {/* Header row with item names */}
           <div className="border-border flex border-b">
             <div className="w-2/5 px-4 py-3 sm:px-5" />
-            {(data.items ?? []).map((item) => (
+            {items.map((item) => (
               <div
                 key={item}
                 className="text-accent flex-1 px-3 py-3 text-center text-xs font-semibold break-words sm:px-4 sm:text-sm"
@@ -48,7 +70,7 @@ export function ComparisonCard({ data }: { data: ComparisonCardData }) {
 
           {/* Attribute rows */}
           <div className="divide-border divide-y">
-            {(data.attributes ?? []).map((attr, i) => (
+            {attributes.map((attr, i) => (
               <div
                 key={`${attr.name}-${i}`}
                 className={`animate-fade-in-up flex stagger-${Math.min(i + 1, 6)}`}
