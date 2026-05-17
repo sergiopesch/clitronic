@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const IMAGE_TIMEOUT_MS = 5000;
 const MIN_IMAGE_BYTES = 128;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const TRUSTED_IMAGE_HOSTS = ['upload.wikimedia.org'];
 const TRUSTED_IMAGE_HOST_SUFFIXES = ['.search.brave.com'];
 
@@ -35,6 +36,7 @@ export async function GET(req: Request) {
         Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       },
       cache: 'no-store',
+      redirect: 'error',
     });
 
     if (!upstream.ok) {
@@ -42,7 +44,16 @@ export async function GET(req: Request) {
     }
 
     const upstreamType = (upstream.headers.get('content-type') || '').toLowerCase();
-    const bytes = await upstream.arrayBuffer();
+    const contentLength = Number(upstream.headers.get('content-length') || '0');
+    if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: 'Image payload too large.' }, { status: 413 });
+    }
+
+    const bytes = await readImageBytes(upstream);
+    if (!bytes) {
+      return NextResponse.json({ error: 'Image payload too large.' }, { status: 413 });
+    }
+
     if (bytes.byteLength < MIN_IMAGE_BYTES) {
       return NextResponse.json({ error: 'Image payload too small.' }, { status: 502 });
     }
@@ -78,6 +89,39 @@ function inferImageTypeFromPath(pathname: string): string | null {
   if (lower.endsWith('.gif')) return 'gif';
   if (lower.endsWith('.avif')) return 'avif';
   return null;
+}
+
+async function readImageBytes(response: Response): Promise<ArrayBuffer | null> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const bytes = await response.arrayBuffer();
+    return bytes.byteLength > MAX_IMAGE_BYTES ? null : bytes;
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    total += value.byteLength;
+    if (total > MAX_IMAGE_BYTES) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return combined.buffer;
 }
 
 export function normalizeHostname(hostname: string): string {

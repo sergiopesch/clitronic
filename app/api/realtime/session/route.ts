@@ -4,11 +4,22 @@ import {
   OPENAI_REALTIME_CLIENT_SECRETS_URL,
   OPENAI_REALTIME_SESSION_TIMEOUT_MS,
 } from '@/lib/ai/openai-config';
+import { extractClientIp } from '@/app/api/chat/client-ip';
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/app/api/chat/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+export async function POST(req: Request) {
+  const ip = extractClientIp(req.headers);
+  const rateCheck = checkRateLimit(ip, RATE_LIMIT_PRESETS.realtimeSession);
+  if (rateCheck.limited) {
+    return NextResponse.json(
+      { error: 'Too many voice sessions. Please wait a moment.' },
+      { status: 429 }
+    );
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: 'OPENAI_API_KEY is not configured.' }, { status: 500 });
