@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { OPENAI_CHAT_MAX_TOKENS, OPENAI_CHAT_MODEL } from '@/lib/ai/openai-config';
+import { COMPONENT_NAMES } from '@/lib/ai/component-registry';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
@@ -29,6 +30,61 @@ function getClient() {
   if (!_openai) _openai = new OpenAI();
   return _openai;
 }
+
+const CHAT_RESPONSE_FORMAT = {
+  type: 'json_schema',
+  json_schema: {
+    name: 'clitronic_response',
+    strict: false,
+    schema: {
+      type: 'object',
+      properties: {
+        intent: { type: 'string' },
+        mode: { enum: ['ui', 'text'] },
+        ui: {
+          anyOf: [
+            {
+              type: 'object',
+              properties: {
+                type: { enum: ['card', 'chart', 'image'] },
+                component: { enum: COMPONENT_NAMES },
+                data: { type: 'object' },
+              },
+              required: ['type', 'component', 'data'],
+            },
+            { type: 'null' },
+          ],
+        },
+        text: { type: ['string', 'null'] },
+        behavior: {
+          anyOf: [
+            {
+              type: 'object',
+              properties: {
+                animation: { enum: ['fadeIn', 'slideUp', 'expand'] },
+                state: { enum: ['open', 'collapsed'] },
+              },
+              required: ['animation', 'state'],
+            },
+            { type: 'null' },
+          ],
+        },
+        voice: {
+          anyOf: [
+            {
+              type: 'object',
+              properties: {
+                spokenSummary: { type: ['string', 'null'] },
+              },
+            },
+            { type: 'null' },
+          ],
+        },
+      },
+      required: ['intent', 'mode', 'ui', 'text', 'behavior'],
+    },
+  },
+} as const;
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(payload), {
@@ -388,6 +444,296 @@ function isDesignPlanRequest(source: string | undefined): boolean {
   );
 }
 
+const LOW_SIGNAL_LABEL_WORDS = new Set([
+  'answer',
+  'basics',
+  'card',
+  'circuit',
+  'circuits',
+  'component',
+  'components',
+  'details',
+  'device',
+  'devices',
+  'electronics',
+  'electronic',
+  'guide',
+  'hardware',
+  'image',
+  'information',
+  'item',
+  'module',
+  'modules',
+  'option',
+  'overview',
+  'photo',
+  'response',
+  'setup',
+  'system',
+  'thing',
+  'visual',
+  'wiring',
+]);
+
+const SUBJECT_PATTERNS: Array<[RegExp, string]> = [
+  [/\bled\b.*\bresistor\b|\bresistor\b.*\bled\b/i, 'LED resistor'],
+  [/\besp32-cam\b/i, 'ESP32-CAM'],
+  [/\besp32\b/i, 'ESP32'],
+  [/\besp8266\b/i, 'ESP8266'],
+  [/\barduino\s+uno\b/i, 'Arduino Uno'],
+  [/\braspberry\s+pi\s+pico\s+w\b/i, 'Raspberry Pi Pico W'],
+  [/\braspberry\s+pi\s+pico\b|\bpico\b/i, 'Raspberry Pi Pico'],
+  [/\batmega328p\b/i, 'ATmega328P'],
+  [/\bne555\b|\b555\s+timer\b/i, '555 timer'],
+  [/\bbreadboard\b/i, 'Breadboard'],
+  [/\bmultimeter\b/i, 'Multimeter'],
+  [/\boscilloscope\b/i, 'Oscilloscope'],
+  [/\bbench\s+power\s+supply\b/i, 'Bench power supply'],
+  [/\bsoldering\s+(?:iron|station)\b/i, 'Soldering station'],
+  [/\bvoltage\s+divider\b/i, 'Voltage divider'],
+  [/\bpwm\b/i, 'PWM'],
+  [/\bmosfet\b/i, 'MOSFET'],
+  [/\brelay\b/i, 'Relay'],
+  [/\breed\s+switch\b/i, 'Reed switch'],
+  [/\btilt\s+sensor\b/i, 'Tilt sensor'],
+  [/\baccelerometer\b/i, 'Accelerometer'],
+  [/\boptical\s+sensor\b/i, 'Optical sensor'],
+  [/\bhc[-\s]?sr04\b|\bultrasonic\s+sensor\b/i, 'HC-SR04 ultrasonic sensor'],
+  [/\bmpu[-\s]?6050\b|\bimu\b/i, 'MPU-6050 IMU'],
+  [/\bnema\s*17\b|\bstepper\s+motor\b/i, 'NEMA 17 stepper motor'],
+  [/\bsg90\b|\bmicro\s+servo\b|\bservo\s+motor\b/i, 'SG90 micro servo'],
+  [/\bl298n\b|\bmotor\s+driver\b/i, 'L298N motor driver'],
+  [/\bpca9685\b|\bservo\s+driver\b/i, 'PCA9685 servo driver'],
+  [/\bvl53l0x\b|\btime[-\s]?of[-\s]?flight\b|\btof\s+sensor\b/i, 'VL53L0X ToF sensor'],
+];
+
+function titleCaseSubject(value: string): string {
+  const acronyms = new Set([
+    'adc',
+    'api',
+    'awg',
+    'bms',
+    'dc',
+    'gpio',
+    'i2c',
+    'ic',
+    'iot',
+    'led',
+    'mosfet',
+    'pcb',
+    'pwm',
+    'spi',
+    'uart',
+    'usb',
+  ]);
+  return value
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((word) => {
+      const normalized = word.toLowerCase();
+      if (acronyms.has(normalized)) return normalized.toUpperCase();
+      if (/^[A-Z0-9-]{3,}$/.test(word)) return word;
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    })
+    .join(' ');
+}
+
+function cleanSubjectCandidate(value: string): string {
+  return value
+    .replace(/[?!.,;:]+$/g, '')
+    .replace(/\b(?:please|thanks|thank you)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isLowSignalLabel(value: string | undefined | null): boolean {
+  if (!value || !value.trim()) return true;
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return true;
+  if (/^option\s*\d+$/.test(normalized) || /^item\s*\d+$/.test(normalized)) return true;
+
+  const words = normalized.split(/\s+/);
+  return words.length <= 4 && words.every((word) => LOW_SIGNAL_LABEL_WORDS.has(word));
+}
+
+function normalizeOptionLabel(value: string): string | null {
+  const cleaned = cleanSubjectCandidate(
+    value
+      .replace(/^(?:compare|between|use|choose|pick|recommend|one of)\s+/i, '')
+      .replace(/^(?:a|an|the|and|or)\s+/i, '')
+      .replace(/\b(?:which|should|i|we|use|is|better|best|option)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+  );
+  if (!cleaned || cleaned.length < 2 || cleaned.length > 48) return null;
+  if (/^(?:and|or|vs|versus)$/i.test(cleaned)) return null;
+  return titleCaseSubject(cleaned);
+}
+
+export function extractNamedOptions(source: string | undefined): string[] {
+  const value = (source || '').trim();
+  if (!value) return [];
+
+  let candidate = value;
+  const compareMatch = value.match(/\bcompare\s+(.+)/i);
+  if (compareMatch?.[1]) candidate = compareMatch[1];
+
+  const betweenMatch = value.match(/\bbetween\s+(.+)/i);
+  if (betweenMatch?.[1]) candidate = betweenMatch[1];
+
+  const shouldUseMatch = value.match(/\bshould\s+i\s+use\s+(.+)/i);
+  if (shouldUseMatch?.[1]) candidate = shouldUseMatch[1];
+
+  const parts = candidate
+    .replace(/\bversus\b/gi, ' vs ')
+    .split(/\s+vs\.?\s+|,\s*|\s+or\s+|\s+and\s+/i)
+    .map(normalizeOptionLabel)
+    .filter((item): item is string => Boolean(item));
+
+  return [...new Set(parts)].slice(0, 5);
+}
+
+export function deriveDisplaySubject(source: string | undefined): string | null {
+  const value = (source || '').trim();
+  if (!value) return null;
+
+  const options = extractNamedOptions(value);
+  if (options.length >= 2) return options.join(' vs ');
+
+  for (const [pattern, subject] of SUBJECT_PATTERNS) {
+    if (pattern.test(value)) return subject;
+  }
+
+  const photoQuery = derivePhotoQuery(value);
+  if (photoQuery) return titleCaseSubject(photoQuery);
+
+  const cleaned = cleanSubjectCandidate(
+    value
+      .replace(
+        /\b(?:what|which|how|why|when|where|can|could|would|should|do|does|is|are|the|a|an|me|about|for|with|to|of|show|tell|explain|compare|wire|connect|calculate|recommend|help|design|make|build|use|need|want)\b/gi,
+        ' '
+      )
+      .replace(/\s+/g, ' ')
+  );
+
+  if (!cleaned || isLowSignalLabel(cleaned)) return null;
+  return titleCaseSubject(cleaned.split(/\s+/).slice(0, 6).join(' '));
+}
+
+function withAlignedComparisonValues(
+  attributes: Array<{ name: string; values: string[] }>,
+  itemCount: number
+) {
+  return attributes.map((attribute) => {
+    const values = attribute.values.slice(0, itemCount);
+    while (values.length < itemCount) values.push('-');
+    return { ...attribute, values };
+  });
+}
+
+export function stabilizeStructuredResponseForRequest<T extends StructuredResponse>(
+  payload: T,
+  source: string | undefined
+): StructuredResponse {
+  if (payload.mode !== 'ui' || !payload.ui) return payload;
+
+  const subject = deriveDisplaySubject(source);
+  const options = extractNamedOptions(source);
+
+  switch (payload.ui.component) {
+    case 'specCard':
+      if (subject && isLowSignalLabel(payload.ui.data.title)) {
+        return {
+          ...payload,
+          ui: { ...payload.ui, data: { ...payload.ui.data, title: subject } },
+        };
+      }
+      break;
+    case 'explanationCard':
+      if (subject && isLowSignalLabel(payload.ui.data.title)) {
+        return {
+          ...payload,
+          ui: { ...payload.ui, data: { ...payload.ui.data, title: subject } },
+        };
+      }
+      break;
+    case 'calculationCard':
+      if (subject && isLowSignalLabel(payload.ui.data.title)) {
+        return {
+          ...payload,
+          ui: { ...payload.ui, data: { ...payload.ui.data, title: subject } },
+        };
+      }
+      break;
+    case 'pinoutCard':
+      if (subject && isLowSignalLabel(payload.ui.data.component)) {
+        return {
+          ...payload,
+          ui: { ...payload.ui, data: { ...payload.ui.data, component: subject } },
+        };
+      }
+      break;
+    case 'troubleshootingCard':
+      if (subject && isLowSignalLabel(payload.ui.data.issue)) {
+        return {
+          ...payload,
+          ui: {
+            ...payload.ui,
+            data: { ...payload.ui.data, issue: `${subject} troubleshooting` },
+          },
+        };
+      }
+      break;
+    case 'wiringCard':
+      if (subject && isLowSignalLabel(payload.ui.data.title)) {
+        return {
+          ...payload,
+          ui: { ...payload.ui, data: { ...payload.ui.data, title: `${subject} wiring` } },
+        };
+      }
+      break;
+    case 'imageBlock': {
+      if (!subject) break;
+      const nextData = { ...payload.ui.data };
+      if (isLowSignalLabel(nextData.caption)) nextData.caption = subject;
+      if (nextData.imageMode === 'photo' && isLowSignalLabel(nextData.searchQuery)) {
+        nextData.searchQuery = subject.toLowerCase();
+      }
+      return { ...payload, ui: { ...payload.ui, data: nextData } };
+    }
+    case 'comparisonCard': {
+      const items =
+        options.length >= 2 &&
+        (payload.ui.data.items.some((item) => isLowSignalLabel(item)) ||
+          isNamedChoiceRequest(source) ||
+          /\bcompare\b/i.test(source || ''))
+          ? options
+          : payload.ui.data.items;
+      return {
+        ...payload,
+        ui: {
+          ...payload.ui,
+          data: {
+            ...payload.ui.data,
+            items,
+            attributes: withAlignedComparisonValues(payload.ui.data.attributes, items.length),
+            useCases: payload.ui.data.useCases?.map((useCase, index) => ({
+              ...useCase,
+              item: isLowSignalLabel(useCase.item) ? (items[index] ?? useCase.item) : useCase.item,
+            })),
+          },
+        },
+      };
+    }
+  }
+
+  return payload;
+}
+
 export function refineStructuredResponseForRequest<T extends StructuredResponse>(
   payload: T,
   source: string | undefined
@@ -716,7 +1062,7 @@ export async function POST(req: Request) {
   try {
     const completion = await getClient().chat.completions.create({
       model: OPENAI_CHAT_MODEL,
-      response_format: { type: 'json_object' },
+      response_format: CHAT_RESPONSE_FORMAT,
       messages: [
         {
           role: 'system',
@@ -735,7 +1081,7 @@ export async function POST(req: Request) {
             ]
           : []),
       ],
-      temperature: 0.4,
+      temperature: 0.2,
       max_tokens: OPENAI_CHAT_MAX_TOKENS,
     });
 
@@ -846,7 +1192,10 @@ export async function POST(req: Request) {
       return jsonResponse(withAutoresearchDiagnostics(augmented, diagnostics, 'forced_photo'));
     }
 
-    const refined = refineStructuredResponseForRequest(validated, requestSource);
+    const refined = stabilizeStructuredResponseForRequest(
+      refineStructuredResponseForRequest(validated, requestSource),
+      requestSource
+    );
 
     if (
       requestedImageCount > 1 &&
