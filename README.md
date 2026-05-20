@@ -58,7 +58,7 @@ nvm use
 npm install
 ```
 
-Node `20.x` is the supported runtime for both the web app and the CLI. The repo includes `.nvmrc` and `engines.node`, so `nvm use` keeps local development aligned with CI.
+Node `24.x` is the supported runtime for both the web app and the CLI. The repo includes `.nvmrc`, `.node-version`, and `engines.node`, so local development stays aligned with CI and Vercel.
 
 Create `.env.local` from `.env.example`:
 

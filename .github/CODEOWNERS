@@ -9,8 +9,8 @@
 
 # CI / infra changes
 /.github/                       @sergiopesch
-/vercel.json                    @sergiopesch
 /.nvmrc                         @sergiopesch
+/.node-version                  @sergiopesch
 
 # CLI sub-package
 /cli/                           @sergiopesch
