@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { DAILY_LIMIT_DEFAULT, DAILY_LIMIT_MESSAGE } from '@/lib/ai/rate-limit';
 import type { StructuredResponse, UIBlock } from '@/lib/ai/response-schema';
 
@@ -132,12 +132,10 @@ export function useConversationState() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [responseKey, setResponseKey] = useState(0);
-  const [isDailyLimitReached, setIsDailyLimitReached] = useState(false);
+  const [isDailyLimitReached, setIsDailyLimitReached] = useState(
+    () => getDailyUsage().count >= DAILY_LIMIT_DEFAULT
+  );
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    setIsDailyLimitReached(getDailyUsage().count >= DAILY_LIMIT_DEFAULT);
-  }, []);
 
   const showDailyLimitResponse = useCallback(() => {
     const limitResponse = buildDailyLimitResponse();

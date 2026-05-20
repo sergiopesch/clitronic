@@ -39,5 +39,12 @@ else
   run_check build npm run build
 fi
 
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+  node -e "const fs=require('fs'); fs.appendFileSync(process.argv[1], JSON.stringify({name:'quality_harness', status:1, skipped:true, reason:'OPENAI_API_KEY is required for credentialed AutoResearch quality evaluation', ts:new Date().toISOString()})+'\\n')" "$RUN_DIR/checks.jsonl"
+  echo "OPENAI_API_KEY is required for credentialed AutoResearch quality evaluation." >&2
+  echo "Preflight checks passed; skipping model-backed scoring to avoid recording an invalid fallback-only run." >&2
+  exit 1
+fi
+
 npx tsx autoresearch/run_quality_harness.ts
 npx tsx autoresearch/score_quality.ts

@@ -874,6 +874,166 @@ function maybeBuildPhotoFallback(
   };
 }
 
+const LED_FORWARD_VOLTAGE_BY_COLOR: Array<[RegExp, { label: string; voltage: number }]> = [
+  [/\bred\b/i, { label: 'Red LED', voltage: 2 }],
+  [/\b(?:green|yellow|amber|orange)\b/i, { label: 'Green/yellow LED', voltage: 2.2 }],
+  [/\b(?:blue|white|cool white|warm white)\b/i, { label: 'Blue/white LED', voltage: 3.2 }],
+  [/\bir\b|\binfrared\b/i, { label: 'IR LED', voltage: 1.3 }],
+];
+
+const STANDARD_RESISTORS = [
+  10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68, 82, 100, 120, 150, 180, 220, 270, 330, 390, 470, 560,
+  680, 820, 1000, 1200, 1500, 1800, 2200, 2700, 3300, 3900, 4700, 5600, 6800, 8200, 10000,
+];
+
+function formatOhms(value: number): string {
+  if (value >= 1000) return `${Number((value / 1000).toFixed(1))} kΩ`;
+  return `${Math.round(value)} Ω`;
+}
+
+function parseSupplyVoltage(source: string): number | null {
+  const match = source.match(/\b(\d+(?:\.\d+)?)\s*v(?:olts?)?\b/i);
+  if (!match?.[1]) return null;
+  const voltage = Number(match[1]);
+  return Number.isFinite(voltage) && voltage > 0 ? voltage : null;
+}
+
+function parseLedCurrentMa(source: string): number {
+  const match = source.match(/\b(\d+(?:\.\d+)?)\s*mA\b/i);
+  if (!match?.[1]) return 20;
+  const current = Number(match[1]);
+  return Number.isFinite(current) && current > 0 ? current : 20;
+}
+
+function deriveLedForwardVoltage(source: string): { label: string; voltage: number } {
+  for (const [pattern, value] of LED_FORWARD_VOLTAGE_BY_COLOR) {
+    if (pattern.test(source)) return value;
+  }
+  return { label: 'Typical indicator LED', voltage: 2 };
+}
+
+function nearestHigherStandardResistor(ohms: number): number {
+  return STANDARD_RESISTORS.find((value) => value >= ohms) ?? Math.ceil(ohms);
+}
+
+export function maybeBuildLedResistorFallback(
+  source: string | undefined,
+  inputMode: 'text' | 'voice'
+): StructuredResponse | null {
+  const value = source || '';
+  if (!/\bled\b/i.test(value) || !/\b(resistors?|ohms?|current limit)\b/i.test(value)) {
+    return null;
+  }
+
+  const supplyVoltage = parseSupplyVoltage(value);
+  if (!supplyVoltage) return null;
+
+  const led = deriveLedForwardVoltage(value);
+  if (supplyVoltage <= led.voltage) return null;
+
+  const currentMa = parseLedCurrentMa(value);
+  const currentA = currentMa / 1000;
+  const idealOhms = (supplyVoltage - led.voltage) / currentA;
+  const standardOhms = nearestHigherStandardResistor(idealOhms);
+  const powerWatts = (supplyVoltage - led.voltage) * currentA;
+
+  return {
+    intent: 'led_resistor_calculation',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'calculationCard',
+      data: {
+        title: 'LED resistor',
+        formula: 'R = (Vsupply - Vf) / I',
+        inputs: [
+          { label: 'Supply', value: `${supplyVoltage} V` },
+          { label: 'LED forward voltage', value: `${led.voltage} V (${led.label})` },
+          { label: 'Target current', value: `${currentMa} mA` },
+          { label: 'Calculated resistance', value: formatOhms(idealOhms) },
+        ],
+        result: {
+          label: 'Recommended resistor',
+          value: formatOhms(standardOhms),
+          note: `Use at least a 1/4 W resistor; estimated resistor power is ${powerWatts.toFixed(2)} W. Pick the next higher value if you want it dimmer or safer.`,
+        },
+      },
+    },
+    text: null,
+    behavior: {
+      animation: 'slideUp',
+      state: 'open',
+    },
+    voice:
+      inputMode === 'voice'
+        ? {
+            spokenSummary: `Use about ${formatOhms(standardOhms)} in series with the LED.`,
+          }
+        : null,
+  };
+}
+
+export function maybeBuildMainsSafetyFallback(
+  source: string | undefined,
+  inputMode: 'text' | 'voice'
+): StructuredResponse | null {
+  const value = source || '';
+  const mentionsMains =
+    /\b(mains|outlets?|wall power|in-wall|line voltage|120\s*v|240\s*v|smart switches?|smart relay|breaker|electrical box)\b/i.test(
+      value
+    );
+  const asksForWork =
+    /\b(wire|wiring|install|replace|connect|hook up|myself|diy|electrician|safe|code)\b/i.test(
+      value
+    );
+  if (!mentionsMains || !asksForWork) return null;
+
+  return {
+    intent: 'mains_safety_planning',
+    mode: 'ui',
+    ui: {
+      type: 'card',
+      component: 'recommendationCard',
+      data: {
+        items: [
+          {
+            name: 'Use a licensed electrician',
+            reason:
+              'Mains and in-wall wiring must follow local electrical code and can create shock, fire, or insurance risk if done incorrectly.',
+          },
+          {
+            name: 'Verify compatibility before buying parts',
+            reason:
+              'Check neutral availability, box depth/fill, load type, switch rating, grounding, and whether the device is listed for your region.',
+          },
+          {
+            name: 'Keep low-voltage controls isolated',
+            reason:
+              'Use rated enclosures, strain relief, physical separation, and listed relay or smart-switch hardware instead of mixing bare mains and low-voltage wiring.',
+          },
+        ],
+        highlights: [
+          'Do not work live; use lockout/isolation and a rated tester.',
+          'Do not follow step-by-step mains wiring advice from a chat tool.',
+          'For planning, take photos of the existing box and labels, then have a licensed professional confirm line, load, neutral, ground, ratings, and local code requirements.',
+        ],
+      },
+    },
+    text: null,
+    behavior: {
+      animation: 'slideUp',
+      state: 'collapsed',
+    },
+    voice:
+      inputMode === 'voice'
+        ? {
+            spokenSummary:
+              'Use a licensed electrician for mains wiring. I can help plan questions and parts, but not step-by-step live wiring.',
+          }
+        : null,
+  };
+}
+
 function buildRecommendationFallbackFromRequest(
   source: string | undefined,
   inputMode: 'text' | 'voice'
@@ -1041,6 +1201,17 @@ export async function POST(req: Request) {
   }
 
   const diagnostics = createAutoresearchDiagnostics();
+  const ledResistorResponse = maybeBuildLedResistorFallback(requestSource, inputMode);
+  if (ledResistorResponse) {
+    const augmented = augmentSafetyGuidance(ledResistorResponse, requestSource);
+    return jsonResponse(withAutoresearchDiagnostics(augmented, diagnostics, 'none'));
+  }
+
+  const mainsSafetyResponse = maybeBuildMainsSafetyFallback(requestSource, inputMode);
+  if (mainsSafetyResponse) {
+    const augmented = augmentSafetyGuidance(mainsSafetyResponse, requestSource);
+    return jsonResponse(withAutoresearchDiagnostics(augmented, diagnostics, 'none'));
+  }
 
   // Fast path: explicit "show me/photo/image" requests can skip LLM generation
   // and return a renderable image card immediately.

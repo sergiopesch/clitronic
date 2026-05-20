@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import {
   OPENAI_REALTIME_DATA_CHANNEL_TIMEOUT_MS,
@@ -85,6 +85,18 @@ const ASSISTANT_AUDIO_DELTA_EVENTS = new Set([
 
 const ASSISTANT_AUDIO_DONE_EVENTS = new Set(['response.audio.done', 'response.output_audio.done']);
 
+function subscribeToClientSnapshot() {
+  return () => {};
+}
+
+function getClientSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
 function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
@@ -114,7 +126,6 @@ export function useVoiceInteraction({
   const [assistantPartialTranscript, setAssistantPartialTranscript] = useState('');
   const [assistantFinalTranscript, setAssistantFinalTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [hasMounted, setHasMounted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMicMuted, setIsMicMutedState] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
@@ -141,6 +152,11 @@ export function useVoiceInteraction({
   const smoothedOutputRef = useRef(0);
   const responseInProgressRef = useRef(false);
   const startCancelledRef = useRef(false);
+  const hasMounted = useSyncExternalStore(
+    subscribeToClientSnapshot,
+    getClientSnapshot,
+    getServerSnapshot
+  );
 
   const isSupported =
     hasMounted &&
@@ -148,10 +164,6 @@ export function useVoiceInteraction({
     typeof navigator !== 'undefined' &&
     typeof RTCPeerConnection !== 'undefined' &&
     Boolean(navigator.mediaDevices?.getUserMedia);
-
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
 
   const finalizeTurn = useCallback(
     async (transcriptOverride?: string) => {
