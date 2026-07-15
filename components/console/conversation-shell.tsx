@@ -8,6 +8,10 @@ import { VoiceOrb } from '@/components/voice/voice-orb';
 import { VoiceTranscriptStrip } from '@/components/voice/voice-transcript-strip';
 import { useConversationState } from '@/hooks/useConversationState';
 import { useVoiceInteraction } from '@/hooks/useVoiceInteraction';
+import {
+  resolveDraftAfterSubmission,
+  selectRecentAssistantIndexes,
+} from '@/hooks/conversation-request-state';
 import type { ConversationEntry } from '@/hooks/useConversationState';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 
@@ -121,7 +125,7 @@ function describeAssistantEntry(entry: ConversationEntry): string {
   }
 }
 
-function buildPreviousTurns(history: ConversationEntry[]) {
+function buildPreviousTurns(history: ConversationEntry[], displayedAssistantIndex: number | null) {
   const turns: { user: string; assistant: string; assistantIndex: number }[] = [];
 
   for (let i = 0; i < history.length - 1; i += 2) {
@@ -135,17 +139,25 @@ function buildPreviousTurns(history: ConversationEntry[]) {
     });
   }
 
-  return turns.slice(0, -1).slice(-2);
+  const recentIndexes = new Set(
+    selectRecentAssistantIndexes(
+      turns.map((turn) => turn.assistantIndex),
+      displayedAssistantIndex
+    )
+  );
+  return turns.filter((turn) => recentIndexes.has(turn.assistantIndex));
 }
 
 function RecentTurns({
   history,
+  displayedAssistantIndex,
   onSelect,
 }: {
   history: ConversationEntry[];
+  displayedAssistantIndex: number | null;
   onSelect: (assistantIndex: number) => void;
 }) {
-  const turns = buildPreviousTurns(history);
+  const turns = buildPreviousTurns(history, displayedAssistantIndex);
   if (turns.length === 0) return null;
 
   return (
@@ -217,7 +229,10 @@ function buildFollowUpActions(response: StructuredResponse | null): FollowUpActi
 
   if (!response.ui) {
     return [
-      { label: 'Show visual', prompt: `Show a visual card for ${subject}` },
+      {
+        label: 'Key points',
+        prompt: 'Turn the previous answer into a concise explanation card with key points.',
+      },
       { label: 'Explain simpler', prompt: `Explain ${subject} more simply` },
       { label: 'Safety check', prompt: `Give me the safety checks for ${subject}` },
     ];
@@ -314,6 +329,7 @@ export function ConversationShell() {
   const {
     submit,
     displayedResponse,
+    displayedAssistantIndex,
     responseKey,
     history: conversationHistory,
     isLoading: isRenderingCard,
@@ -327,8 +343,8 @@ export function ConversationShell() {
   } = useConversationState();
 
   const handleFinalTranscript = useCallback(
-    async ({ raw, cleaned }: { raw: string; cleaned: string }) => {
-      await submit({
+    ({ raw, cleaned }: { raw: string; cleaned: string }) => {
+      return submit({
         text: cleaned,
         inputMode: 'voice',
         transcriptMeta: { raw, cleaned },
@@ -353,6 +369,7 @@ export function ConversationShell() {
     assistantPartialTranscript,
     assistantFinalTranscript,
     error: voiceError,
+    speechWarning,
     inputLevel,
     outputLevel,
     startCapture,
@@ -378,8 +395,8 @@ export function ConversationShell() {
     displayedResponse &&
     (displayedResponse.ui ||
       displayedResponse.intent === 'rate_limit' ||
-      (!assistantStreamText.trim() &&
-        (displayedResponse.text || displayedResponse.voice?.spokenSummary)))
+      displayedResponse.text ||
+      displayedResponse.voice?.spokenSummary)
   );
   const showSimpleIdle =
     !voiceError &&
@@ -391,14 +408,16 @@ export function ConversationShell() {
   const activeVoiceState = !['idle', 'error'].includes(voiceState);
 
   const submitTextPrompt = useCallback(
-    (text: string) => {
+    async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isRenderingCard) return;
       setHasStartedSession(true);
+      setTextDraft(trimmed);
       cancelActiveRequest();
       cancelCapture();
-      setTextDraft('');
-      void submit({ text: trimmed, inputMode: 'text' });
+      const response = await submit({ text: trimmed, inputMode: 'text' });
+      const wasAnswered = response !== null && response.intent !== 'rate_limit';
+      setTextDraft((current) => resolveDraftAfterSubmission(current, trimmed, wasAnswered));
     },
     [cancelActiveRequest, cancelCapture, isRenderingCard, submit]
   );
@@ -425,7 +444,7 @@ export function ConversationShell() {
   };
 
   const handleTextSubmit = useCallback(() => {
-    submitTextPrompt(textDraft);
+    void submitTextPrompt(textDraft);
   }, [submitTextPrompt, textDraft]);
 
   const handleSelectPreviousTurn = useCallback(
@@ -492,24 +511,23 @@ export function ConversationShell() {
 
   return (
     <main className="bg-surface-0 relative flex min-h-[var(--vvh)] flex-col overflow-x-clip sm:min-h-[100dvh]">
+      <h1 className="sr-only">Clitronic electronics companion</h1>
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="bg-accent/[0.03] absolute top-1/3 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
       </div>
 
-      <header
-        className={`relative z-10 flex items-center px-4 py-3 pt-[max(env(safe-area-inset-top),12px)] transition-opacity duration-200 sm:px-6 ${
-          showWelcome ? 'pointer-events-none opacity-0' : 'opacity-100'
-        }`}
-      >
-        <button
-          type="button"
-          onClick={resetConversation}
-          aria-label="Home"
-          className="max-w-[130px] opacity-85 transition hover:opacity-100 sm:max-w-none"
-        >
-          <Logo scale={0.56} className="h-auto w-full sm:w-auto" />
-        </button>
-      </header>
+      {!showWelcome && (
+        <header className="relative z-10 flex items-center px-4 py-3 pt-[max(env(safe-area-inset-top),12px)] sm:px-6">
+          <button
+            type="button"
+            onClick={resetConversation}
+            aria-label="Home"
+            className="max-w-[130px] opacity-85 transition hover:opacity-100 sm:max-w-none"
+          >
+            <Logo scale={0.56} className="h-auto w-full sm:w-auto" />
+          </button>
+        </header>
+      )}
 
       <div
         className={`relative z-10 flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto px-4 ${contentBottomPaddingClass} ${contentLayoutClass} sm:px-6`}
@@ -564,11 +582,20 @@ export function ConversationShell() {
         )}
 
         {!showWelcome && !showVoiceTranscriptStrip && (
-          <RecentTurns history={conversationHistory} onSelect={handleSelectPreviousTurn} />
+          <RecentTurns
+            history={conversationHistory}
+            displayedAssistantIndex={displayedAssistantIndex}
+            onSelect={handleSelectPreviousTurn}
+          />
         )}
 
         {!showWelcome && isRenderingCard && !shouldRenderResponseCard && (
-          <div className="text-text-muted mb-3 w-full max-w-3xl rounded-xl border border-cyan-300/20 bg-cyan-500/[0.06] px-4 py-2 text-xs">
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="text-text-muted mb-3 w-full max-w-3xl rounded-xl border border-cyan-300/20 bg-cyan-500/[0.06] px-4 py-2 text-xs"
+          >
             Building visual response...
           </div>
         )}
@@ -585,7 +612,10 @@ export function ConversationShell() {
         )}
 
         {!showWelcome && conversationError && (
-          <div className="border-error/20 bg-error/5 text-error mb-3 w-full max-w-3xl rounded-xl border px-4 py-3 text-sm">
+          <div
+            role="alert"
+            className="border-error/20 bg-error/5 text-error mb-3 w-full max-w-3xl rounded-xl border px-4 py-3 text-sm"
+          >
             {conversationError}
           </div>
         )}
@@ -598,16 +628,30 @@ export function ConversationShell() {
 
         {voiceError && (
           <div className="animate-fade-in-up flex w-full max-w-2xl flex-col items-center gap-4">
-            <div className="border-error/20 bg-error/5 text-error rounded-xl border px-5 py-4 text-center text-sm">
+            <div
+              role="alert"
+              className="border-error/20 bg-error/5 text-error rounded-xl border px-5 py-4 text-center text-sm"
+            >
               {voiceError}
             </div>
-            <button
-              type="button"
-              onClick={resetConversation}
-              className="text-text-muted hover:text-text-primary text-xs transition"
-            >
-              Try again
-            </button>
+            {voiceState === 'error' && (
+              <button
+                type="button"
+                onClick={handlePrimaryVoiceAction}
+                className="text-text-muted hover:text-text-primary text-xs transition"
+              >
+                Retry voice
+              </button>
+            )}
+          </div>
+        )}
+
+        {speechWarning && (
+          <div
+            role="status"
+            className="border-warning/20 bg-warning/5 text-warning mb-3 w-full max-w-3xl rounded-xl border px-4 py-3 text-sm"
+          >
+            {speechWarning}
           </div>
         )}
       </div>

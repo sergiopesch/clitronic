@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current State (v0.2)
+## Current State
 
 Voice-first electronics companion with:
 
@@ -13,6 +13,23 @@ Voice-first electronics companion with:
 - consistent card headers, safety callouts, copy actions, and progressive disclosure for long procedural cards
 - context-aware image follow-ups like `show me one`
 - multi-provider image search with Brave + Wikimedia fallback
+- one validated semantic response shared by cards, history, captions, and exact speech
+- item-correlated Realtime transcription with stale-turn rejection and atomic barge-in cancellation
+- scene-aware image retrieval with validated provider, proxy, retry, and cache boundaries
+
+---
+
+## Recently Shipped — Unified Interaction and Visual Engine
+
+### Landed
+
+- Realtime owns microphone transport, VAD, and transcription only; `/api/chat` owns the semantic answer.
+- Shared server/browser validation prevents unchecked responses from reaching usage, history, speech, or rendering.
+- Exact bounded TTS is projected from the same validated response displayed in the visual card.
+- Turn ownership rejects stale transcripts, duplicate completions, superseded requests, and late audio.
+- The image engine distinguishes confident, possible, empty, and unavailable presentation states.
+- Compound workbench and network scenes stay scene-level while focused component searches remain precise.
+- Provider payloads, remote URLs, DNS resolution, media signatures, retries, reserves, and caches have explicit boundaries.
 
 ---
 
@@ -70,7 +87,7 @@ Deeper understanding of multi-turn conversations with richer image and diagram c
 ### v0.3 Technical Approach
 
 - Expand response schema to support `cards: []` array for multi-card responses
-- Integrate an image generation model (e.g., DALL-E, Stable Diffusion) for custom circuit diagrams
+- Integrate a currently supported image-generation model for custom circuit diagrams
 - Canvas-based overlay renderer for annotated component images
 - Session-level context extraction: parse mentioned components, voltages, and connections into a structured "project state"
 - New `suggestions` field in response schema for follow-up prompts

@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  POST,
   deriveDisplaySubject,
   derivePhotoQuery,
   derivePhotoQueryFromContext,
   extractNamedOptions,
+  isPhotoRequest,
   refineStructuredResponseForRequest,
   stabilizeStructuredResponseForRequest,
 } from '@/app/api/chat/route';
@@ -51,6 +53,58 @@ test('derivePhotoQueryFromContext resolves vague follow-up requests from history
 test('derivePhotoQuery returns null for low-signal requests without context', () => {
   assert.equal(derivePhotoQuery('show me one'), null);
   assert.equal(derivePhotoQueryFromContext('show me one', []), null);
+});
+
+test('real technical scenes remain visual without hijacking wiring instructions', () => {
+  assert.equal(
+    isPhotoRequest(
+      'Show me real low-voltage wiring panels with Ethernet patch panels and clean routing.'
+    ),
+    true
+  );
+  assert.equal(isPhotoRequest('Show me how to wire a low-voltage panel.'), false);
+  assert.equal(isPhotoRequest('Wire an ESP32 to a relay module.'), false);
+  assert.equal(isPhotoRequest('Show me real network closets and include a wiring diagram.'), false);
+  assert.equal(
+    isPhotoRequest('Show me a real electronics workbench circuit for charging a LiPo.'),
+    false
+  );
+  assert.equal(isPhotoRequest('Show me images of patch-panel wiring.'), true);
+  assert.equal(
+    isPhotoRequest('Turn the previous answer into a concise explanation card with key points.'),
+    false
+  );
+});
+
+test('chat route resolves a natural real-scene request without an image keyword', async () => {
+  const response = await POST(
+    new Request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-real-ip': '198.51.100.201',
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'user',
+            content:
+              'Show me real low-voltage wiring panels with Ethernet patch panels, PoE switch, cable labels, and clean routing.',
+          },
+        ],
+        inputMode: 'text',
+      }),
+    })
+  );
+  const payload = (await response.json()) as {
+    intent?: string;
+    ui?: { component?: string; data?: { searchQuery?: string } };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.intent, 'show_image');
+  assert.equal(payload.ui?.component, 'imageBlock');
+  assert.equal(payload.ui?.data?.searchQuery, 'patch panel poe switch cable labels service loops');
 });
 
 test('extractNamedOptions resolves common comparison phrasing', () => {

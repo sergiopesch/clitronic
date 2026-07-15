@@ -76,9 +76,9 @@ export function CardHeader({
             {eyebrow && (
               <div className="text-accent/75 text-[10px] tracking-wider uppercase">{eyebrow}</div>
             )}
-            <h3 className="text-text-primary text-[15px] leading-snug font-semibold break-words sm:text-lg">
+            <h2 className="text-text-primary text-[15px] leading-snug font-semibold break-words sm:text-lg">
               {title}
-            </h3>
+            </h2>
             {subtitle && (
               <p className="text-text-muted mt-1 text-[12px] leading-relaxed sm:text-sm">
                 {subtitle}

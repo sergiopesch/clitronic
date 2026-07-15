@@ -12,8 +12,9 @@
  *   left-most `x-forwarded-for` entry, since proxies append to it so the
  *   left-most value is the closest-to-client hop.
  *
- * This is a rate-limit key, not an auth or audit identity. We return
- * `'unknown'` if no header looks usable; upstream code must be OK with that.
+ * This is a best-effort abuse-control input, not an auth or durable audit
+ * identity. We return `'unknown'` if no header looks usable; upstream code
+ * must be OK with that.
  */
 export function extractClientIp(headers: Headers): string {
   // Vercel-specific, set by the edge and not forwarded from the client.

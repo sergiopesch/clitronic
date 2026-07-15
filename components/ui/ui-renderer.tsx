@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { AnimateIn } from './animations';
 import { CardErrorBoundary } from './card-error-boundary';
@@ -49,7 +49,7 @@ function renderUIBlock(ui: UIBlock): ReactNode {
   }
 }
 
-export function UIRenderer({ response }: UIRendererProps) {
+export const UIRenderer = memo(function UIRenderer({ response }: UIRendererProps) {
   // Debug: log once per unique response
   const lastLogRef = useRef<string>('');
   useEffect(() => {
@@ -88,4 +88,4 @@ export function UIRenderer({ response }: UIRendererProps) {
       <AnimateIn animation={animation}>{rendered}</AnimateIn>
     </CardErrorBoundary>
   );
-}
+});

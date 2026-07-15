@@ -1,6 +1,7 @@
 'use client';
 
 import type { VoiceState } from '@/hooks/useVoiceInteraction';
+import { canToggleVoiceMute } from '@/hooks/voice-realtime-state';
 
 interface VoiceDockProps {
   isSupported: boolean;
@@ -126,8 +127,7 @@ export function VoiceDock({
 
   const primaryDisabled = isLocked;
   const primaryActive = !isLocked && !['idle', 'error'].includes(voiceState);
-  const canMuteMic =
-    !isLocked && !['idle', 'error', 'requesting_mic', 'connecting_realtime'].includes(voiceState);
+  const canMuteMic = canToggleVoiceMute(voiceState, isMuted, isLocked);
 
   return (
     <div

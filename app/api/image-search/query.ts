@@ -1,6 +1,51 @@
 import { CURATED_PROFILES } from './profiles';
 import type { CuratedProfile, ImageIntent, ScoredImage } from './types';
 
+const ELECTRONICS_WORKBENCH_SCENE: CuratedProfile = {
+  id: 'electronics-workbench-scene',
+  intent: 'tool',
+  aliases: [],
+  preferredQuery: 'electronics workbench',
+  relevanceTokens: [
+    'electronics',
+    'workbench',
+    'oscilloscope',
+    'soldering',
+    'breadboard',
+    'pegboard',
+  ],
+};
+
+const NETWORK_PATCH_PANEL_SCENE: CuratedProfile = {
+  id: 'network-patch-panel-scene',
+  intent: 'connector',
+  aliases: [],
+  preferredQuery: 'network patch panel',
+  relevanceTokens: ['network', 'patch', 'panel', 'ethernet', 'poe', 'cable'],
+};
+
+/**
+ * Multi-object scenes need a retrieval query for the whole environment. Letting a
+ * single component alias win turns an ESP32 bench into a jumper-wire product shot.
+ */
+export function getSceneProfile(input: string): CuratedProfile | null {
+  const value = input.toLowerCase();
+  const hasWorkbenchAnchor =
+    /\b(oscilloscope|soldering station|bench psu|bench power supply)\b/.test(value);
+  const hasWorkbenchContext =
+    /\b(pegboard|component drawers?|breadboards?|jumper wires?|electronics workbenches?|electronics benches?)\b/.test(
+      value
+    );
+  if (hasWorkbenchAnchor && hasWorkbenchContext) return ELECTRONICS_WORKBENCH_SCENE;
+
+  const hasPatchPanel = /\bpatch panels?\b/.test(value);
+  const hasNetworkContext =
+    /\b(poe|ethernet|network closets?|structured media|cable labels?|service loops?)\b/.test(value);
+  if (hasPatchPanel && hasNetworkContext) return NETWORK_PATCH_PANEL_SCENE;
+
+  return null;
+}
+
 export function simplifyQuery(query: string): string {
   return query
     .replace(/\b(v\d+|r\d+|rev\s*\d+|kit|breakout|closeup|high\s*resolution|photo)\b/gi, '')
@@ -13,13 +58,16 @@ export function preprocessImageQuery(query: string): string {
     .replace(/\b(show|me|a|an|the|please)\b/gi, ' ')
     .replace(/\b(photo|photos|picture|pictures|image|images|pic|pics)\s+of\b/gi, ' ')
     .replace(/\b(photo|photos|picture|pictures|image|images|pic|pics)\b/gi, ' ')
-    .replace(/\bwhat\s+does\s+\w+\s+look\s+like\b/gi, ' ')
+    .replace(/\bwhat\s+(?:does|do)\b/gi, ' ')
+    .replace(/\blooks?\s+like\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
   const lower = stripped.toLowerCase();
   const includesBoardLike =
-    /\b(board|module|dev kit|development kit|development board|microcontroller)\b/i.test(stripped);
+    /\b(boards?|modules?|dev kit|development kit|development board|microcontroller)\b/i.test(
+      stripped
+    );
   if (/\b(arduino|esp32|esp8266|raspberry pi|pico|nodemcu|teensy)\b/i.test(stripped)) {
     return includesBoardLike ? stripped : `${stripped} board`;
   }
@@ -111,7 +159,11 @@ export function getCuratedProfile(input: string): CuratedProfile | null {
     for (const alias of profile.aliases) {
       const normalizedAlias = alias.toLowerCase().trim();
       if (!normalizedAlias) continue;
-      if (!lower.includes(normalizedAlias)) continue;
+      const escapedAlias = normalizedAlias
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\s+/g, '\\s+');
+      const aliasPattern = new RegExp(`(?:^|[^a-z0-9])${escapedAlias}(?=$|[^a-z0-9])`, 'i');
+      if (!aliasPattern.test(lower)) continue;
       const isExact = lower === normalizedAlias;
       const score = normalizedAlias.length + (isExact ? 30 : 0);
       if (score > bestScore) {
@@ -148,14 +200,13 @@ export function normalizeExcludedUrlKeys(rawExcludeParams: string[]): string[] {
     const key = normalizeUrlKey(value);
     if (key) keys.add(key);
   }
-  return [...keys].slice(0, 12);
+  return [...keys].sort().slice(0, 12);
 }
 
 export function filterExcluded(results: ScoredImage[], excludeKeys: string[]): ScoredImage[] {
   if (excludeKeys.length === 0) return results;
   const excluded = new Set(excludeKeys);
-  const filtered = results.filter((item) => !excluded.has(normalizeUrlKey(item.url)));
-  return filtered.length > 0 ? filtered : results;
+  return results.filter((item) => !excluded.has(normalizeUrlKey(item.url)));
 }
 
 export function toImageCandidates(results: ScoredImage[], count: number) {

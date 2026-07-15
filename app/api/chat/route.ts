@@ -1,11 +1,17 @@
-import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { OPENAI_CHAT_MAX_TOKENS, OPENAI_CHAT_MODEL } from '@/lib/ai/openai-config';
+import { validateStructuredResponseWithDiagnostics } from '@/lib/ai/response-contract';
+import {
+  createOpenAIClient,
+  createOpenAISafetyIdentifier,
+  getOpenAIServiceFailure,
+  isOpenAICredentialError,
+  OpenAIConfigurationError,
+} from '@/lib/ai/openai-server';
 import { COMPONENT_NAMES } from '@/lib/ai/component-registry';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
-import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
 import { writeAutoresearchTrace } from '@/lib/autoresearch/trace';
+import { isTrustedBrowserRequest } from '@/app/api/request-security';
 import {
   DAILY_LIMIT_RESPONSE,
   FALLBACK_TEXT_RESPONSE,
@@ -18,18 +24,18 @@ import { logger } from './logger';
 import { checkRateLimit } from './rate-limit';
 import { extractClientIp } from './client-ip';
 import { parseAndNormalizeResponse } from './response-normalizer';
-import { validateStructuredResponseWithDiagnostics } from './response-validator';
-import { detectInjection, isValidMessage, sanitizeInput } from './security';
+import {
+  buildUntrustedConversationRequest,
+  detectInjection,
+  isValidConversation,
+  sanitizeInput,
+} from './security';
 import type { ChatRequestBody } from './types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-let _openai: OpenAI | null = null;
-function getClient() {
-  if (!_openai) _openai = new OpenAI();
-  return _openai;
-}
+const MAX_REQUEST_BODY_BYTES = 128 * 1024;
 
 const CHAT_RESPONSE_FORMAT = {
   type: 'json_schema',
@@ -87,10 +93,86 @@ const CHAT_RESPONSE_FORMAT = {
 } as const;
 
 function jsonResponse(payload: unknown, init?: ResponseInit): Response {
+  const headers = new Headers(init?.headers);
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  headers.set('Cache-Control', 'no-store');
   return new Response(JSON.stringify(payload), {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers,
   });
+}
+
+async function readChatRequestBody(
+  req: Request
+): Promise<{ body: ChatRequestBody; error?: never } | { body?: never; error: Response }> {
+  const mediaType = req.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (mediaType !== 'application/json') {
+    return {
+      error: jsonResponse({ error: 'Content-Type must be application/json.' }, { status: 415 }),
+    };
+  }
+
+  const declaredLength = req.headers.get('content-length');
+  if (declaredLength) {
+    const parsedLength = Number(declaredLength);
+    if (Number.isFinite(parsedLength) && parsedLength > MAX_REQUEST_BODY_BYTES) {
+      return {
+        error: jsonResponse({ error: 'Request body is too large.' }, { status: 413 }),
+      };
+    }
+  }
+
+  if (!req.body) {
+    return { error: jsonResponse({ error: 'Invalid JSON request.' }, { status: 400 }) };
+  }
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_REQUEST_BODY_BYTES) {
+        try {
+          await reader.cancel('request body too large');
+        } catch {
+          // The size boundary is already enforced even if the source cannot be cancelled.
+        }
+        return {
+          error: jsonResponse({ error: 'Request body is too large.' }, { status: 413 }),
+        };
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    const aborted = req.signal.aborted || (error instanceof Error && error.name === 'AbortError');
+    return {
+      error: jsonResponse(
+        { error: aborted ? 'Request cancelled.' : 'Unable to read request body.' },
+        { status: aborted ? 499 : 400 }
+      ),
+    };
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('request body must be an object');
+    }
+    return { body: parsed as ChatRequestBody };
+  } catch {
+    return { error: jsonResponse({ error: 'Invalid JSON request.' }, { status: 400 }) };
+  }
 }
 
 type FallbackKind =
@@ -346,6 +428,8 @@ const PHOTO_REQUEST_HINTS =
   /\b(show|pictures?|photos?|images?|see|looks?\s+like|look\s+like|what\s+does\s+.+\s+look\s+like)\b/i;
 const EXPLICIT_PHOTO_REQUEST_HINTS = /\b(pictures?|photos?|images?)\b/i;
 const NOT_PHOTO_HINTS = /\b(pinout|pins|wiring|wire|connect|schematic|diagram|circuit)\b/i;
+const REAL_TECHNICAL_SCENE_HINTS =
+  /\b(low-voltage wiring panels?|structured media panels?|network closets?|patch panels?|electronics workbenches?|electronics benches?|prototyping stations?)\b/i;
 const MULTI_IMAGE_HINTS =
   /\b(few|several|multiple|more|many|options|variants|images|photos|pictures)\b/i;
 const PHOTO_QUERY_PHRASES =
@@ -836,8 +920,7 @@ function maybeBuildPhotoFallback(
 ) {
   const source = (preferredTranscript || userText || '').trim();
   if (!source) return null;
-  if (!PHOTO_REQUEST_HINTS.test(source)) return null;
-  if (NOT_PHOTO_HINTS.test(source) && !EXPLICIT_PHOTO_REQUEST_HINTS.test(source)) return null;
+  if (!isPhotoRequest(source)) return null;
 
   const searchQuery = derivePhotoQueryFromContext(source, historyMessages);
   if (!searchQuery) return null;
@@ -872,6 +955,23 @@ function maybeBuildPhotoFallback(
           }
         : null,
   };
+}
+
+export function isPhotoRequest(source: string): boolean {
+  if (!PHOTO_REQUEST_HINTS.test(source)) return false;
+
+  const explicitlyRequestsMedia = EXPLICIT_PHOTO_REQUEST_HINTS.test(source);
+  const sceneRemainder = source.replace(REAL_TECHNICAL_SCENE_HINTS, ' ');
+  const requestsInstructionsOutsideScene =
+    NOT_PHOTO_HINTS.test(sceneRemainder) ||
+    /\b(how to|steps?|instructions?)\b/i.test(sceneRemainder);
+  const requestsRealTechnicalScene =
+    /\bshow\b/i.test(source) &&
+    /\breal\b/i.test(source) &&
+    REAL_TECHNICAL_SCENE_HINTS.test(source) &&
+    !requestsInstructionsOutsideScene;
+
+  return !NOT_PHOTO_HINTS.test(source) || explicitlyRequestsMedia || requestsRealTechnicalScene;
 }
 
 const LED_FORWARD_VOLTAGE_BY_COLOR: Array<[RegExp, { label: string; voltage: number }]> = [
@@ -1132,50 +1232,36 @@ function deriveRequestedImageCount(input: string | undefined): number {
 }
 
 export async function POST(req: Request) {
+  if (!isTrustedBrowserRequest(req)) {
+    return jsonResponse({ error: 'Cross-site requests are not allowed.' }, { status: 403 });
+  }
+
   const ip = extractClientIp(req.headers);
   const rateCheck = checkRateLimit(ip);
   if (rateCheck.limited) {
     if (rateCheck.reason === 'daily') {
       return jsonResponse(DAILY_LIMIT_RESPONSE);
     }
-    return NextResponse.json(
-      { error: 'Too many requests. Please wait a moment.' },
-      { status: 429 }
-    );
+    return jsonResponse({ error: 'Too many requests. Please wait a moment.' }, { status: 429 });
   }
 
-  let body: ChatRequestBody;
-
-  try {
-    body = (await req.json()) as ChatRequestBody;
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request.' }, { status: 400 });
-  }
+  const parsedRequest = await readChatRequestBody(req);
+  if (parsedRequest.error) return parsedRequest.error;
+  const body = parsedRequest.body;
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
-    return NextResponse.json({ error: 'No messages provided.' }, { status: 400 });
+    return jsonResponse({ error: 'No messages provided.' }, { status: 400 });
   }
 
-  const messages = body.messages.filter(isValidMessage);
-  if (messages.length === 0) {
-    return NextResponse.json({ error: 'No valid messages.' }, { status: 400 });
+  if (!isValidConversation(body.messages)) {
+    return jsonResponse(
+      { error: 'Messages must alternate user and assistant roles and end with a user message.' },
+      { status: 400 }
+    );
   }
+  const messages = body.messages;
 
   const inputMode = body.inputMode === 'voice' ? 'voice' : 'text';
-  const cleanedTranscriptMeta =
-    inputMode === 'voice'
-      ? {
-          raw:
-            typeof body.transcriptMeta?.raw === 'string'
-              ? sanitizeInput(body.transcriptMeta.raw.slice(0, MAX_CONTENT_LENGTH))
-              : undefined,
-          cleaned:
-            typeof body.transcriptMeta?.cleaned === 'string'
-              ? cleanTranscriptLight(body.transcriptMeta.cleaned.slice(0, MAX_CONTENT_LENGTH))
-              : undefined,
-        }
-      : undefined;
-
   const trimmed = messages.slice(-MAX_MESSAGES).map((msg) => ({
     ...msg,
     content: sanitizeInput(msg.content.slice(0, MAX_CONTENT_LENGTH)),
@@ -1183,22 +1269,29 @@ export async function POST(req: Request) {
   writeAutoresearchTrace('chat_request_received', {
     messageCount: trimmed.length,
     inputMode,
-    hasVoiceTranscript: Boolean(cleanedTranscriptMeta?.cleaned),
+    hasVoiceTranscript:
+      inputMode === 'voice' &&
+      typeof body.transcriptMeta?.cleaned === 'string' &&
+      body.transcriptMeta.cleaned.trim().length > 0,
   });
 
-  const lastUserMsg = trimmed.filter((m) => m.role === 'user').pop();
-  const requestSource = cleanedTranscriptMeta?.cleaned || lastUserMsg?.content;
+  if (trimmed.some((message) => detectInjection(message.content))) {
+    return jsonResponse(OFF_TOPIC_RESPONSE);
+  }
+
+  const lastUserMsg = trimmed.at(-1);
+  const priorUserContext = trimmed.slice(0, -1).filter((message) => message.role === 'user');
+  // The client already sends the cleaned transcript as the final user message.
+  // transcriptMeta is untrusted diagnostic context and must never gain system-role authority.
+  const requestSource = lastUserMsg?.content;
   const requestedImageCount = deriveRequestedImageCount(requestSource);
   const forcedPhotoResponse = maybeBuildPhotoFallback(
     lastUserMsg?.content,
-    cleanedTranscriptMeta?.cleaned,
+    undefined,
     inputMode,
     requestedImageCount,
-    trimmed.slice(0, -1)
+    priorUserContext
   );
-  if (lastUserMsg && detectInjection(lastUserMsg.content)) {
-    return jsonResponse(OFF_TOPIC_RESPONSE);
-  }
 
   const diagnostics = createAutoresearchDiagnostics();
   const ledResistorResponse = maybeBuildLedResistorFallback(requestSource, inputMode);
@@ -1231,36 +1324,33 @@ export async function POST(req: Request) {
   }
 
   try {
-    const completion = await getClient().chat.completions.create({
-      model: OPENAI_CHAT_MODEL,
-      response_format: CHAT_RESPONSE_FORMAT,
-      messages: [
-        {
-          role: 'system',
-          content: inputMode === 'voice' ? `${SYSTEM_PROMPT}${VOICE_PROMPT_RULES}` : SYSTEM_PROMPT,
-        },
-        ...trimmed.map((msg) => ({
-          role: msg.role as 'user' | 'assistant',
-          content: msg.content,
-        })),
-        ...(cleanedTranscriptMeta?.cleaned
-          ? [
-              {
-                role: 'system' as const,
-                content: `Voice transcript meta (for interpretation only): ${JSON.stringify(cleanedTranscriptMeta)}`,
-              },
-            ]
-          : []),
-      ],
-      temperature: 0.2,
-      max_tokens: OPENAI_CHAT_MAX_TOKENS,
-    });
+    const completion = await createOpenAIClient().chat.completions.create(
+      {
+        model: OPENAI_CHAT_MODEL,
+        response_format: CHAT_RESPONSE_FORMAT,
+        messages: [
+          {
+            role: 'system',
+            content:
+              inputMode === 'voice' ? `${SYSTEM_PROMPT}${VOICE_PROMPT_RULES}` : SYSTEM_PROMPT,
+          },
+          {
+            role: 'user',
+            content: buildUntrustedConversationRequest(trimmed),
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: OPENAI_CHAT_MAX_TOKENS,
+        safety_identifier: createOpenAISafetyIdentifier(ip),
+      },
+      { signal: req.signal }
+    );
 
     const choice = completion.choices[0];
     const content = choice?.message?.content;
     diagnostics.raw_model_output_present = Boolean(content);
     if (!content) {
-      return NextResponse.json(
+      return jsonResponse(
         withAutoresearchDiagnostics({ error: 'No response from model.' }, diagnostics, 'error'),
         { status: 502 }
       );
@@ -1321,7 +1411,7 @@ export async function POST(req: Request) {
           undefined,
           inputMode,
           requestedImageCount,
-          trimmed.slice(0, -1)
+          priorUserContext
         );
         if (recoveredPhoto) {
           logger.warn('[clitronic] Recovering invalid image response with photo fallback');
@@ -1380,16 +1470,64 @@ export async function POST(req: Request) {
 
     const safetyAugmented = augmentSafetyGuidance(refined, requestSource);
     const sanitized = sanitizeVisibleResponse(safetyAugmented);
+    const finalValidation = validateStructuredResponseWithDiagnostics(sanitized);
+    if (!finalValidation.data) {
+      logger.warn('[clitronic] Final transformed response failed validation');
+      writeAutoresearchTrace('response_final_validation_failed', {
+        issues: finalValidation.issues,
+      });
+      return jsonResponse(
+        withAutoresearchDiagnostics(RENDER_FALLBACK_TEXT_RESPONSE, diagnostics, 'render_fallback')
+      );
+    }
+    const finalPayload = finalValidation.data;
     writeAutoresearchTrace('ui_component_selected', {
-      component: sanitized.ui?.component ?? null,
-      mode: sanitized.mode,
-      intent: sanitized.intent,
+      component: finalPayload.ui?.component ?? null,
+      mode: finalPayload.mode,
+      intent: finalPayload.intent,
     });
-    logger.debug('[clitronic] Validated output:', JSON.stringify(sanitized).substring(0, 500));
-    return jsonResponse(withAutoresearchDiagnostics(sanitized, diagnostics, 'none'));
+    logger.debug('[clitronic] Validated output:', JSON.stringify(finalPayload).substring(0, 500));
+    return jsonResponse(withAutoresearchDiagnostics(finalPayload, diagnostics, 'none'));
   } catch (error) {
+    if (
+      req.signal.aborted ||
+      (error instanceof Error &&
+        (error.name === 'AbortError' || error.name === 'APIUserAbortError'))
+    ) {
+      return new Response(null, {
+        status: 499,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    if (error instanceof OpenAIConfigurationError) {
+      return jsonResponse(
+        withAutoresearchDiagnostics(
+          { error: 'OPENAI_API_KEY is not configured.' },
+          diagnostics,
+          'error'
+        ),
+        { status: 503 }
+      );
+    }
+    if (isOpenAICredentialError(error)) {
+      return jsonResponse(
+        withAutoresearchDiagnostics(
+          { error: 'OpenAI rejected the configured server credential.' },
+          diagnostics,
+          'error'
+        ),
+        { status: 502 }
+      );
+    }
+    const serviceFailure = getOpenAIServiceFailure(error);
+    if (serviceFailure) {
+      return jsonResponse(
+        withAutoresearchDiagnostics({ error: serviceFailure.message }, diagnostics, 'error'),
+        { status: serviceFailure.status }
+      );
+    }
     logger.error('Chat API error:', error);
-    return NextResponse.json(
+    return jsonResponse(
       withAutoresearchDiagnostics(
         { error: 'Failed to generate response. Please try again.' },
         diagnostics,

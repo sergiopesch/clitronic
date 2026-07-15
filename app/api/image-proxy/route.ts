@@ -1,6 +1,10 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { NextResponse } from 'next/server';
+import { extractClientIp } from '../chat/client-ip';
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '../chat/rate-limit';
+import { isTrustedBrowserRequest } from '../request-security';
+import { isProxyableImageUrl, isTrustedImageHostname } from '@/lib/images/image-url-policy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,10 +12,34 @@ export const dynamic = 'force-dynamic';
 const IMAGE_TIMEOUT_MS = 5000;
 const MIN_IMAGE_BYTES = 128;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const TRUSTED_IMAGE_HOSTS = ['upload.wikimedia.org'];
-const TRUSTED_IMAGE_HOST_SUFFIXES = ['.search.brave.com'];
+const DECLARED_RASTER_MIME_TYPES = new Set([
+  'application/octet-stream',
+  'image/avif',
+  'image/gif',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+]);
+
+function noStoreJson(payload: unknown, status: number) {
+  return NextResponse.json(payload, {
+    status,
+    headers: { 'Cache-Control': 'no-store' },
+  });
+}
 
 export async function GET(req: Request) {
+  if (!isTrustedBrowserRequest(req)) {
+    return noStoreJson({ error: 'Cross-site requests are not allowed.' }, 403);
+  }
+
+  const ip = extractClientIp(req.headers);
+  const rateCheck = checkRateLimit(ip, RATE_LIMIT_PRESETS.imageProxy);
+  if (rateCheck.limited) {
+    return noStoreJson({ error: 'Too many image requests. Please wait a moment.' }, 429);
+  }
+
   const { searchParams } = new URL(req.url);
   const rawUrl = searchParams.get('url')?.trim();
   if (!rawUrl) {
@@ -30,10 +58,11 @@ export async function GET(req: Request) {
   }
 
   try {
+    const timeoutSignal = AbortSignal.timeout(IMAGE_TIMEOUT_MS);
     const upstream = await fetch(target.toString(), {
-      signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+      signal: AbortSignal.any([req.signal, timeoutSignal]),
       headers: {
-        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        Accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif,*/*;q=0.1',
       },
       cache: 'no-store',
       redirect: 'error',
@@ -43,9 +72,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Upstream fetch failed.' }, { status: 502 });
     }
 
-    const upstreamType = (upstream.headers.get('content-type') || '').toLowerCase();
+    const upstreamType = (upstream.headers.get('content-type') || '')
+      .split(';', 1)[0]
+      ?.trim()
+      .toLowerCase();
+    if (upstreamType && !DECLARED_RASTER_MIME_TYPES.has(upstreamType)) {
+      await upstream.body?.cancel();
+      return NextResponse.json({ error: 'Unsupported image content type.' }, { status: 415 });
+    }
     const contentLength = Number(upstream.headers.get('content-length') || '0');
     if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+      await upstream.body?.cancel().catch(() => {});
       return NextResponse.json({ error: 'Image payload too large.' }, { status: 413 });
     }
 
@@ -58,36 +95,68 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Image payload too small.' }, { status: 502 });
     }
 
-    const fallbackType = inferImageTypeFromPath(target.pathname);
-    const resolvedType = upstreamType.startsWith('image/')
-      ? upstreamType
-      : fallbackType
-        ? `image/${fallbackType}`
-        : null;
-
+    const resolvedType = detectRasterImageMimeType(bytes);
     if (!resolvedType) {
       return NextResponse.json({ error: 'Unsupported image content type.' }, { status: 415 });
+    }
+    const normalizedUpstreamType = upstreamType === 'image/jpg' ? 'image/jpeg' : upstreamType;
+    if (
+      normalizedUpstreamType &&
+      normalizedUpstreamType !== 'application/octet-stream' &&
+      normalizedUpstreamType !== resolvedType
+    ) {
+      return NextResponse.json(
+        { error: 'Image content did not match its declared type.' },
+        { status: 415 }
+      );
     }
 
     return new Response(bytes, {
       status: 200,
       headers: {
         'Content-Type': resolvedType,
+        'X-Content-Type-Options': 'nosniff',
         'Cache-Control': 'public, max-age=300, stale-while-revalidate=900',
       },
     });
   } catch {
+    if (req.signal.aborted) {
+      return new Response(null, { status: 499, headers: { 'Cache-Control': 'no-store' } });
+    }
     return NextResponse.json({ error: 'Failed to proxy image.' }, { status: 502 });
   }
 }
 
-function inferImageTypeFromPath(pathname: string): string | null {
-  const lower = pathname.toLowerCase();
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'jpeg';
-  if (lower.endsWith('.png')) return 'png';
-  if (lower.endsWith('.webp')) return 'webp';
-  if (lower.endsWith('.gif')) return 'gif';
-  if (lower.endsWith('.avif')) return 'avif';
+function ascii(bytes: Uint8Array, start: number, length: number): string {
+  return String.fromCharCode(...bytes.slice(start, start + length));
+}
+
+export function detectRasterImageMimeType(input: ArrayBuffer | Uint8Array): string | null {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    ascii(bytes, 1, 3) === 'PNG' &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (bytes.length >= 6 && ['GIF87a', 'GIF89a'].includes(ascii(bytes, 0, 6))) {
+    return 'image/gif';
+  }
+  if (bytes.length >= 12 && ascii(bytes, 0, 4) === 'RIFF' && ascii(bytes, 8, 4) === 'WEBP') {
+    return 'image/webp';
+  }
+  if (bytes.length >= 12 && ascii(bytes, 4, 4) === 'ftyp') {
+    const brands = ascii(bytes, 8, Math.min(bytes.length - 8, 56));
+    if (brands.includes('avif') || brands.includes('avis')) return 'image/avif';
+  }
   return null;
 }
 
@@ -133,13 +202,7 @@ export function normalizeHostname(hostname: string): string {
 }
 
 export function isTrustedImageHost(hostname: string): boolean {
-  const normalized = normalizeHostname(hostname);
-  if (!normalized) return false;
-
-  return (
-    TRUSTED_IMAGE_HOSTS.includes(normalized) ||
-    TRUSTED_IMAGE_HOST_SUFFIXES.some((suffix) => normalized.endsWith(suffix))
-  );
+  return isTrustedImageHostname(normalizeHostname(hostname));
 }
 
 function parseIpv4Octets(value: string): number[] | null {
@@ -258,17 +321,26 @@ export function isPrivateOrReservedAddress(value: string): boolean {
   }
 
   if (ipVersion === 6) {
-    const ipv4MappedMatch = normalized.match(/^::ffff(?::0{1,4})?:(\d+\.\d+\.\d+\.\d+)$/i);
-    if (ipv4MappedMatch?.[1]) {
-      return isPrivateOrReservedAddress(ipv4MappedMatch[1]);
-    }
-
     const segments = parseIpv6Segments(normalized);
     if (!segments) return true;
     const numeric = ipv6SegmentsToBigInt(segments);
 
+    const isIpv4Mapped =
+      segments.slice(0, 5).every((segment) => segment === 0) && segments[5] === 0xffff;
+    const isIpv4Translated =
+      segments.slice(0, 4).every((segment) => segment === 0) &&
+      segments[4] === 0xffff &&
+      segments[5] === 0;
+    if (isIpv4Mapped || isIpv4Translated) {
+      const high = segments[6];
+      const low = segments[7];
+      return isPrivateOrReservedAddress(`${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`);
+    }
+
     if (numeric === 0n) return true;
     if (numeric === 1n) return true;
+    if (matchesIpv6Cidr(numeric, '100::', 64)) return true;
+    if (matchesIpv6Cidr(numeric, '2001:db8::', 32)) return true;
     if (matchesIpv6Cidr(numeric, 'fc00::', 7)) return true;
     if (matchesIpv6Cidr(numeric, 'fe80::', 10)) return true;
     if (matchesIpv6Cidr(numeric, 'ff00::', 8)) return true;
@@ -283,7 +355,7 @@ export function hasOnlyPublicResolvedAddresses(addresses: string[]): boolean {
 }
 
 export async function isAllowedRemoteUrl(url: URL): Promise<boolean> {
-  if (!['http:', 'https:'].includes(url.protocol)) return false;
+  if (!isProxyableImageUrl(url.toString())) return false;
   const host = normalizeHostname(url.hostname);
   if (
     !host ||

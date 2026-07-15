@@ -2,6 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ImageBlockData } from '@/lib/ai/response-schema';
+import {
+  parseImageSearchPayload,
+  type ImageSearchCandidate,
+} from '@/lib/images/image-search-contract';
+import {
+  getImageSourceCandidates,
+  matchImageFallbackDiagram,
+  selectUsableImageCandidates,
+  shouldRestoreLoadedThumbnail,
+  shouldUpgradeToFullImage,
+} from '@/lib/ui/image-sources';
 
 /**
  * Dual-mode image block:
@@ -35,7 +46,7 @@ export function ImageBlock({ data }: { data: ImageBlockData }) {
 
       {/* Caption + description + notes in a compact footer */}
       <div className="border-border border-t px-4 py-3 sm:px-5 sm:py-4">
-        <h3 className="text-accent text-sm font-semibold sm:text-base">{caption}</h3>
+        <h2 className="text-accent text-sm font-semibold sm:text-base">{caption}</h2>
         {data.description && (
           <p className="text-text-secondary mt-1 text-xs leading-relaxed sm:text-sm">
             {data.description}
@@ -78,17 +89,6 @@ interface PhotoRendererProps {
   description?: string;
 }
 
-const QUERY_HISTORY_LIMIT = 12;
-const SEEN_IMAGES_BY_QUERY = new Map<string, string[]>();
-
-function normalizeImageUrl(url?: string | null): string | null {
-  if (!url) return null;
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith('http://')) return `https://${trimmed.slice('http://'.length)}`;
-  return trimmed;
-}
-
 const SEARCH_MESSAGES = [
   'Searching electronics image sources...',
   'Checking component names and labels...',
@@ -100,31 +100,17 @@ const SEARCH_MESSAGES = [
 function PhotoRenderer({ searchQuery, imageCount, caption, description }: PhotoRendererProps) {
   const query = searchQuery || caption || '';
   const count = Math.min(Math.max(Math.floor(imageCount ?? 1), 1), 6);
-  const queryKey = query.trim().toLowerCase();
 
-  const [state, setState] = useState<'loading' | 'loaded' | 'error'>(query ? 'loading' : 'error');
-  const [images, setImages] = useState<
-    { url: string; thumbnail?: string; attribution?: string | null }[]
-  >([]);
+  const [state, setState] = useState<'loading' | 'ready' | 'possible' | 'empty' | 'unavailable'>(
+    query ? 'loading' : 'empty'
+  );
+  const [images, setImages] = useState<ImageSearchCandidate[]>([]);
+  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(() => new Set());
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [msgIndex, setMsgIndex] = useState(0);
   const msgRef = useRef(0);
-
-  const readSeenForQuery = useCallback((): string[] => {
-    return queryKey ? (SEEN_IMAGES_BY_QUERY.get(queryKey) ?? []) : [];
-  }, [queryKey]);
-
-  const recordSeenForQuery = useCallback(
-    (urls: string[]) => {
-      if (!queryKey || urls.length === 0) return;
-      const existing = SEEN_IMAGES_BY_QUERY.get(queryKey) ?? [];
-      const next = [...existing];
-      for (const url of urls) {
-        if (!next.includes(url)) next.push(url);
-      }
-      SEEN_IMAGES_BY_QUERY.set(queryKey, next.slice(-QUERY_HISTORY_LIMIT));
-    },
-    [queryKey]
-  );
+  const retryExcludedUrlsRef = useRef<string[]>([]);
+  const requestIdentityRef = useRef('');
 
   // Rotate fun messages while loading
   useEffect(() => {
@@ -137,73 +123,47 @@ function PhotoRenderer({ searchQuery, imageCount, caption, description }: PhotoR
   }, [state]);
 
   useEffect(() => {
-    if (!query) return;
-
     let cancelled = false;
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 4500);
+    // The server may run two sequential provider rounds (2s + 2.5s budgets).
+    const timeoutId = window.setTimeout(() => controller.abort(), 6500);
+
+    const requestIdentity = `${query}\u0000${caption}\u0000${description ?? ''}`;
+    if (requestIdentityRef.current !== requestIdentity) {
+      requestIdentityRef.current = requestIdentity;
+      retryExcludedUrlsRef.current = [];
+    }
 
     const params = new URLSearchParams({ q: query, caption });
     const fetchCount = Math.max(count, 4);
     params.set('count', String(fetchCount));
+    if (retryAttempt > 0) params.set('attempt', String(retryAttempt));
     if (description) {
       params.set('description', description);
     }
-    const excludedUrls = readSeenForQuery().slice(-6);
+    const excludedUrls = retryExcludedUrlsRef.current.slice(-6);
     for (const excludedUrl of excludedUrls) {
       params.append('exclude', excludedUrl);
     }
+
     fetch(`/api/image-search?${params.toString()}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error('fetch failed');
-        return res.json();
+        return res.json() as Promise<unknown>;
       })
-      .then(
-        (data: {
-          url?: string | null;
-          thumbnail?: string;
-          attribution?: string;
-          images?: { url?: string; thumbnail?: string; attribution?: string }[];
-          confident?: boolean;
-        }) => {
-          if (cancelled) return;
-          const candidates = (data.images ?? [])
-            .map((item) => ({
-              url: normalizeImageUrl(item.url) ?? '',
-              thumbnail: normalizeImageUrl(item.thumbnail) ?? undefined,
-              attribution: item.attribution ?? null,
-            }))
-            .filter((item) => Boolean(item.url));
-
-          const full = normalizeImageUrl(data.url);
-          const thumb = normalizeImageUrl(data.thumbnail);
-          const unseenCandidates = candidates.filter((item) => !excludedUrls.includes(item.url));
-          const selectedCandidates = (
-            unseenCandidates.length > 0 ? unseenCandidates : candidates
-          ).slice(0, count);
-
-          if (selectedCandidates.length > 0) {
-            setImages(selectedCandidates);
-            recordSeenForQuery(selectedCandidates.map((item) => item.url));
-            setState('loaded');
-          } else if (full || thumb) {
-            const fallbackItems = [
-              {
-                url: full ?? thumb!,
-                thumbnail: thumb ?? undefined,
-                attribution: data.attribution ?? null,
-              },
-            ];
-            setImages(fallbackItems);
-            recordSeenForQuery(fallbackItems.map((item) => item.url));
-            setState('loaded');
-          } else {
-            setState('error');
-          }
+      .then((payload) => {
+        if (cancelled) return;
+        const result = parseImageSearchPayload(payload);
+        if (result.status === 'empty') {
+          setState('empty');
+          return;
         }
-      )
+
+        setImages([...result.candidates]);
+        setState(result.status);
+      })
       .catch(() => {
-        if (!cancelled) setState('error');
+        if (!cancelled) setState('unavailable');
       });
 
     return () => {
@@ -211,53 +171,122 @@ function PhotoRenderer({ searchQuery, imageCount, caption, description }: PhotoR
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [caption, count, description, query, readSeenForQuery, recordSeenForQuery]);
+  }, [caption, count, description, query, retryAttempt]);
+
+  const retry = useCallback(() => {
+    retryExcludedUrlsRef.current = [
+      ...new Set([...retryExcludedUrlsRef.current, ...failedImageUrls]),
+    ].slice(-6);
+    setState('loading');
+    setImages([]);
+    setFailedImageUrls(new Set());
+    msgRef.current = 0;
+    setMsgIndex(0);
+    setRetryAttempt((attempt) => attempt + 1);
+  }, [failedImageUrls]);
+
+  const handleImageExhausted = useCallback((url: string) => {
+    setFailedImageUrls((previous) => {
+      if (previous.has(url)) return previous;
+      const next = new Set(previous);
+      next.add(url);
+      return next;
+    });
+  }, []);
 
   if (state === 'loading') {
     return (
-      <div className="bg-surface-2/60 relative h-40 w-full overflow-hidden rounded-xl sm:h-52">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        aria-busy="true"
+        className="bg-surface-2/60 relative h-40 w-full overflow-hidden rounded-xl sm:h-52"
+      >
         <div className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent" />
         <div className="flex h-full flex-col items-center justify-center gap-3">
           <div className="bg-accent/20 h-5 w-5 animate-pulse rounded-full" />
           <div
             key={msgIndex}
+            aria-hidden="true"
             className="text-text-muted animate-fade-in-up px-4 text-center font-mono text-[11px]"
           >
             {SEARCH_MESSAGES[msgIndex]}
           </div>
+          <span className="sr-only">Searching trusted electronics image sources.</span>
         </div>
       </div>
     );
   }
 
-  if (state === 'error' || images.length === 0) {
+  const visibleImages = selectUsableImageCandidates(images, failedImageUrls, count);
+
+  if (state === 'empty' || state === 'unavailable' || visibleImages.length === 0) {
     // Smart fallback: if a matching built-in diagram exists, show that instead of an error
-    const diagramType = matchDiagramType(query);
+    const diagramType = matchImageFallbackDiagram(query);
     if (diagramType) {
-      return <DiagramRenderer type={diagramType} />;
+      return (
+        <div className="w-full">
+          <p className="text-text-muted mb-2 text-center text-[11px]">
+            {state === 'empty'
+              ? 'No reliable photo found — showing a built-in reference.'
+              : 'Photos are temporarily unavailable — showing a built-in reference.'}
+          </p>
+          <DiagramRenderer type={diagramType} />
+          <div className="mt-2 text-center">
+            <button
+              type="button"
+              onClick={retry}
+              className="border-border text-text-muted hover:border-accent/40 hover:text-text-primary rounded-full border px-3 py-1.5 text-xs transition"
+            >
+              Retry photos
+            </button>
+          </div>
+        </div>
+      );
     }
 
     return (
-      <div className="border-border bg-surface-2/40 flex h-32 w-full items-center justify-center rounded-xl border sm:h-40">
+      <div className="border-border bg-surface-2/40 flex h-36 w-full items-center justify-center rounded-xl border sm:h-44">
         <div className="text-text-muted text-center text-sm">
           <div className="mb-1 text-xl opacity-30">{'{ ? }'}</div>
-          <p className="text-xs">No confident image match found.</p>
+          <p className="text-xs">
+            {state === 'empty' ? 'No reliable image match found.' : 'Image search is unavailable.'}
+          </p>
+          <button
+            type="button"
+            onClick={retry}
+            className="border-border hover:border-accent/40 hover:text-text-primary mt-3 rounded-full border px-3 py-1.5 text-xs transition"
+          >
+            Try again
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`grid w-full gap-2 ${images.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
-      {images.map((item, idx) => (
-        <PhotoTile
-          key={`${item.url}-${idx}`}
-          url={item.url}
-          thumbnail={item.thumbnail}
-          alt={`${caption} ${idx + 1}`}
-          attribution={item.attribution}
-        />
-      ))}
+    <div className="w-full">
+      {state === 'possible' && (
+        <p role="status" className="text-warning mb-2 text-center text-[11px]">
+          Possible matches — verify the component markings before relying on these images.
+        </p>
+      )}
+      <div
+        className={`grid w-full gap-2 ${visibleImages.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}
+      >
+        {visibleImages.map((item, idx) => (
+          <PhotoTile
+            key={item.url}
+            url={item.url}
+            thumbnail={item.thumbnail}
+            alt={`${caption} ${idx + 1}`}
+            attribution={item.attribution}
+            priority={idx === 0}
+            onExhausted={handleImageExhausted}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -267,17 +296,43 @@ function PhotoTile({
   thumbnail,
   alt,
   attribution,
+  priority,
+  onExhausted,
 }: {
   url: string;
   thumbnail?: string;
   alt: string;
   attribution?: string | null;
+  priority: boolean;
+  onExhausted: (url: string) => void;
 }) {
-  const candidateSources = [url, thumbnail].filter((value): value is string => Boolean(value));
+  const candidateSources = getImageSourceCandidates(url, thumbnail);
   const [srcIndex, setSrcIndex] = useState(0);
   const [src, setSrc] = useState(candidateSources[0] ?? url);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [allowFullUpgrade, setAllowFullUpgrade] = useState(true);
+  const thumbnailLoadedRef = useRef(false);
+  const exhaustedReportedRef = useRef(false);
+
+  useEffect(() => {
+    if (!allowFullUpgrade || !shouldUpgradeToFullImage(src, url, thumbnail, loaded)) return;
+
+    let cancelled = false;
+    const fullImage = new Image();
+    fullImage.decoding = 'async';
+    fullImage.onload = () => {
+      if (cancelled) return;
+      setSrcIndex(thumbnail && thumbnail !== url ? 1 : 0);
+      setSrc(url);
+    };
+    fullImage.src = toProxyUrl(url);
+
+    return () => {
+      cancelled = true;
+      fullImage.onload = null;
+    };
+  }, [allowFullUpgrade, loaded, src, thumbnail, url]);
 
   if (failed) {
     return (
@@ -288,6 +343,14 @@ function PhotoTile({
   }
 
   const advanceToNextSource = () => {
+    if (shouldRestoreLoadedThumbnail(src, url, thumbnail, thumbnailLoadedRef.current)) {
+      setAllowFullUpgrade(false);
+      setSrcIndex(0);
+      setSrc(thumbnail!);
+      setLoaded(true);
+      return;
+    }
+
     const nextIndex = srcIndex + 1;
     if (nextIndex < candidateSources.length) {
       setSrcIndex(nextIndex);
@@ -296,10 +359,20 @@ function PhotoTile({
       return;
     }
     setFailed(true);
+    if (!exhaustedReportedRef.current) {
+      exhaustedReportedRef.current = true;
+      onExhausted(url);
+    }
   };
 
   return (
-    <div className="relative flex w-full justify-center">
+    <div className="bg-surface-2/40 relative flex min-h-36 w-full items-center justify-center overflow-hidden rounded-xl sm:min-h-44">
+      {!loaded && (
+        <div
+          aria-hidden="true"
+          className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
+        />
+      )}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={toProxyUrl(src)}
@@ -314,13 +387,16 @@ function PhotoTile({
             return;
           }
           setLoaded(true);
+          if (thumbnail && src === thumbnail) thumbnailLoadedRef.current = true;
         }}
         onError={advanceToNextSource}
-        loading="eager"
+        loading={priority ? 'eager' : 'lazy'}
+        fetchPriority={priority ? 'high' : 'auto'}
+        decoding="async"
         referrerPolicy="no-referrer"
       />
       {attribution && (
-        <div className="text-text-muted absolute right-1 bottom-1 rounded bg-black/40 px-1.5 py-0.5 text-[9px] opacity-70">
+        <div className="text-text-secondary absolute right-1.5 bottom-1.5 max-w-[calc(100%-0.75rem)] truncate rounded bg-black/75 px-2 py-1 text-[11px]">
           {attribution}
         </div>
       )}
@@ -331,26 +407,6 @@ function PhotoTile({
 function toProxyUrl(rawUrl: string): string {
   const params = new URLSearchParams({ url: rawUrl });
   return `/api/image-proxy?${params.toString()}`;
-}
-
-/* ── Diagram type matcher for photo fallback ── */
-
-const DIAGRAM_KEYWORDS: [string[], string][] = [
-  [['breadboard'], 'breadboard'],
-  [['voltage', 'divider'], 'voltage-divider'],
-  [['led', 'circuit'], 'led-circuit'],
-  [['pull', 'up'], 'pull-up'],
-  [['pull', 'down'], 'pull-down'],
-  [['pwm', 'pulse', 'width'], 'pwm'],
-  [['capacitor', 'charge', 'rc'], 'capacitor-charge'],
-];
-
-function matchDiagramType(query: string): string | null {
-  const lower = query.toLowerCase();
-  for (const [keywords, type] of DIAGRAM_KEYWORDS) {
-    if (keywords.some((kw) => lower.includes(kw))) return type;
-  }
-  return null;
 }
 
 /* ── Diagram Renderer ── */

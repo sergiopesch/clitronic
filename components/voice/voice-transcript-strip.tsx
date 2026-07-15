@@ -147,7 +147,6 @@ export function VoiceTranscriptStrip({
 
   return (
     <div
-      aria-live="polite"
       className={`relative w-full overflow-hidden transition-all duration-400 ease-out ${
         collapsed
           ? 'max-h-0 translate-y-1 opacity-0 blur-[2px]'
@@ -155,6 +154,10 @@ export function VoiceTranscriptStrip({
       } ${stripTone}`}
     >
       <div className="from-accent/8 via-accent/0 pointer-events-none absolute inset-0 bg-gradient-to-r to-transparent opacity-70" />
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {!userStreaming && userText.trim() ? `You said: ${userText}` : ''}
+        {!agentStreaming && agentText.trim() ? ` Clitronic said: ${agentText}` : ''}
+      </div>
       <div className="flex flex-col gap-2.5 py-1">
         {showUserLine && (
           <StreamLine

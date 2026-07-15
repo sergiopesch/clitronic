@@ -141,15 +141,15 @@ User asks to see a component → LLM returns imageBlock with imageMode: "photo"
 → Image fades in with shimmer loading state
 ```
 
-**Env vars**: `OPENAI_API_KEY` (required), `BRAVE_API_KEY` (optional, upgrades image search)
+**Env vars**: `.env.example` is the canonical list. API keys remain server-only.
 
 ## API Tuning
 
 - Model: `gpt-4o-mini`
-- Temperature: 0.4
+- Temperature: 0.2
 - Max tokens: 1200
 - Context window: last 10 messages, 2000 chars each
-- Response format: `json_object`
+- Response format: JSON Schema (`strict: false`) plus strict runtime Zod validation
 
 ## UI Philosophy
 

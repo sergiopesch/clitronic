@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { POST as chatPost } from '@/app/api/chat/route';
-import { validateStructuredResponse } from '@/app/api/chat/response-validator';
+import { validateStructuredResponse } from '@/lib/ai/response-contract';
 import { searchImages } from '@/app/api/image-search/service';
 import type { ImageSearchResponse } from '@/app/api/image-search/types';
 import type { StructuredResponse } from '@/lib/ai/response-schema';

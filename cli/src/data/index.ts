@@ -237,7 +237,7 @@ export const electronicsComponents: ElectronicsComponent[] = [
       { label: 'Forward Drop', value: '0.7 V' },
     ],
     circuitExample:
-      'Place a 1N4007 diode in series with a DC motor, with the stripe facing the positive supply. This protects your Arduino from voltage spikes when the motor turns off.',
+      'Place a 1N4007 reverse-biased across a DC motor: connect the stripe/cathode to the positive supply and the anode (unbanded end) to the switched side. It conducts only when motor turn-off creates an inductive voltage spike.',
     datasheetInfo: {
       maxRatings: [
         { parameter: 'Peak Reverse Voltage', value: '1000 V' },
@@ -253,7 +253,7 @@ export const electronicsComponents: ElectronicsComponent[] = [
         { parameter: 'Reverse Recovery Time', typical: '30', unit: 'μs' },
         { parameter: 'Junction Capacitance', typical: '15', unit: 'pF' },
       ],
-      partNumbers: ['1N4007', '1N4001', '1N4148', 'UF4007'],
+      partNumbers: ['1N4007'],
       tips: 'Use 1N4007 as a general-purpose rectifier — it handles up to 1000V reverse. For fast switching circuits (>100kHz), use 1N4148 or Schottky diodes instead (lower forward drop and faster recovery). As a flyback diode across relay/motor coils, orient the stripe toward the positive rail.',
     },
   },
@@ -270,7 +270,7 @@ export const electronicsComponents: ElectronicsComponent[] = [
       { label: 'Gain (hFE)', value: '100 – 300' },
     ],
     circuitExample:
-      'Connect the emitter to GND, the collector to one motor terminal (other terminal to 5V), and the base through a 1kΩ resistor to Arduino pin 9. Use digitalWrite(9, HIGH) to turn the motor on.',
+      'For a motor whose measured stall current is safely below the chosen transistor current and power limits, connect the emitter to GND, the collector to the motor, and the base through a calculated resistor to the control pin. Add a flyback diode across the motor, with its cathode/stripe toward the positive supply.',
     datasheetInfo: {
       maxRatings: [
         { parameter: 'Collector-Emitter Voltage (Vce)', value: '40 V' },
@@ -286,8 +286,8 @@ export const electronicsComponents: ElectronicsComponent[] = [
         { parameter: 'Collector-Emitter Sat. (Vce sat)', max: '0.3', unit: 'V' },
         { parameter: 'Transition Frequency (ft)', typical: '300', unit: 'MHz' },
       ],
-      partNumbers: ['2N2222A', 'PN2222A', 'BC547', 'BC337', '2N3904'],
-      tips: 'Always use a base resistor (1kΩ–10kΩ) to limit current from Arduino pins. For saturated switching (fully on), ensure Ib × hFE > Ic. For loads over 500mA, consider a MOSFET (like IRLZ44N) instead — they handle more current with less heat. Never exceed the max collector current or the transistor will fail.',
+      partNumbers: ['2N2222A', 'PN2222A'],
+      tips: 'Always use a base resistor and stay within the controller pin-current limit. Do not size saturated switching from typical hFE alone; use the datasheet VCE(sat) test conditions and check transistor power dissipation. A motor can draw its full stall current at startup or when jammed, so prefer a logic-level MOSFET or motor driver rated above that current when the margin is uncertain. Inductive loads also need a correctly oriented flyback diode.',
     },
   },
   {
@@ -336,7 +336,7 @@ export const electronicsComponents: ElectronicsComponent[] = [
       { label: 'Type', value: 'Brushed DC' },
     ],
     circuitExample:
-      'Use an NPN transistor as a switch: connect the motor between 5V and the collector, emitter to GND, and base through a 1kΩ resistor to Arduino pin 9. Add a flyback diode across the motor.',
+      'Use a logic-level N-channel MOSFET or motor driver rated above the motor stall current. Add a flyback diode across the motor, with the cathode/stripe toward the positive motor supply and the anode toward the switched side.',
     datasheetInfo: {
       maxRatings: [
         { parameter: 'Operating Voltage', value: '3 – 6 V DC' },
@@ -353,7 +353,7 @@ export const electronicsComponents: ElectronicsComponent[] = [
         { parameter: 'Starting Voltage', min: '1.0', typical: '1.5', unit: 'V' },
       ],
       partNumbers: ['FA-130', 'RE-140RA', 'RF-300CA', 'RE-260RA'],
-      tips: 'NEVER drive a motor directly from an Arduino pin — it can only source 40mA and will damage the pin. Use a transistor (2N2222 for small motors) or a motor driver (L298N, L293D). ALWAYS add a flyback diode across the motor to absorb voltage spikes. Use PWM (analogWrite) for speed control.',
+      tips: 'Never drive a motor directly from a microcontroller pin. Size the power supply, wiring, switch, and protection for the measured or worst-case stall current, not only the no-load current. Use a logic-level MOSFET at the actual gate voltage or a suitably rated motor driver. Add a flyback diode across a one-direction motor, cathode/stripe toward positive, and use PWM for speed control.',
     },
   },
   {
@@ -363,8 +363,8 @@ export const electronicsComponents: ElectronicsComponent[] = [
     description:
       'A photoresistor (Light Dependent Resistor) changes its resistance based on how much light hits it. In bright light, resistance drops low; in darkness, it rises high. It is a simple and fun way to make your project respond to light.',
     specs: [
-      { label: 'Light Resistance', value: '~200 Ω' },
-      { label: 'Dark Resistance', value: '~10 kΩ' },
+      { label: 'Light Resistance (10 lux)', value: '3 – 20 kΩ' },
+      { label: 'Dark Resistance', value: '≥ 10 MΩ' },
       { label: 'Peak Wavelength', value: '540 nm (green)' },
       { label: 'Type', value: 'CdS Photocell' },
     ],
@@ -381,16 +381,15 @@ export const electronicsComponents: ElectronicsComponent[] = [
       characteristics: [
         {
           parameter: 'Light Resistance (10 lux)',
-          min: '100',
-          typical: '200',
-          max: '400',
-          unit: 'Ω',
+          min: '3',
+          max: '20',
+          unit: 'kΩ',
         },
-        { parameter: 'Dark Resistance', min: '1', typical: '10', unit: 'MΩ' },
+        { parameter: 'Dark Resistance', min: '10', unit: 'MΩ' },
         { parameter: 'Peak Spectral Response', typical: '540', unit: 'nm' },
         { parameter: 'Response Time (rise)', typical: '20', unit: 'ms' },
       ],
-      partNumbers: ['GL5528', 'GL5537', 'PDV-P8103', 'NSL-19M51'],
+      partNumbers: ['GL5528'],
       tips: 'LDRs are slow (20ms response) — not suitable for fast light detection. For that, use a photodiode. Match the voltage divider resistor to the LDR range: use 10kΩ for general lighting, 1MΩ for very dim environments. CdS sensors contain cadmium (toxic) — RoHS-compliant alternatives exist.',
     },
   },
@@ -403,28 +402,40 @@ export const electronicsComponents: ElectronicsComponent[] = [
     specs: [
       { label: 'Type', value: 'TMP36 Analog' },
       { label: 'Range', value: '−40°C to +125°C' },
-      { label: 'Accuracy', value: '± 1°C' },
+      { label: 'Accuracy', value: '± 2°C typical over rated range' },
       { label: 'Output Scale', value: '10 mV/°C' },
     ],
     circuitExample:
-      'Connect the left pin to 5V, the right pin to GND, and the middle pin to Arduino analog pin A0. Convert the reading: tempC = (analogRead(A0) * 5.0 / 1024.0 - 0.5) * 100.',
+      'Connect the TO-92 supply pin to 2.7-5.5V, GND to GND, and Vout to analog input A0 after verifying the package pinout. Convert the reading with the measured ADC reference: tempC = (analogRead(A0) * measuredAref / 1024.0 - 0.5) * 100.',
     datasheetInfo: {
       maxRatings: [
-        { parameter: 'Supply Voltage', value: '2.7 – 5.5 V' },
-        { parameter: 'Max Output Current', value: '50 μA' },
-        { parameter: 'Operating Range', value: '-40°C to +125°C' },
-        { parameter: 'Storage Temperature', value: '-60°C to +150°C' },
+        { parameter: 'Operating Supply Range', value: '2.7 – 5.5 V' },
+        { parameter: 'Absolute Max Supply Voltage', value: '7 V' },
+        { parameter: 'Specified Temperature Range', value: '-40°C to +125°C' },
+        { parameter: 'Storage Temperature', value: '-65°C to +160°C' },
       ],
       pinout:
         'TO-92 package (flat side facing you, left to right): Pin 1 = VCC (2.7-5.5V), Pin 2 = Vout (analog voltage), Pin 3 = GND. Looks like a transistor — check the markings!',
       characteristics: [
         { parameter: 'Scale Factor', typical: '10', unit: 'mV/°C' },
         { parameter: 'Output at 25°C', typical: '750', unit: 'mV' },
-        { parameter: 'Accuracy (25°C)', max: '±1', unit: '°C' },
-        { parameter: 'Supply Current', typical: '50', unit: 'μA' },
+        {
+          parameter: 'Accuracy at 25°C (F grade)',
+          typical: '±1',
+          max: '±2',
+          unit: '°C',
+        },
+        {
+          parameter: 'Accuracy over rated range (F grade)',
+          typical: '±2',
+          max: '±3',
+          unit: '°C',
+        },
+        { parameter: 'Output Load Current', min: '0', max: '50', unit: 'μA' },
+        { parameter: 'Quiescent Supply Current', max: '50', unit: 'μA' },
       ],
-      partNumbers: ['TMP36GT9Z', 'TMP36GRT', 'LM35DZ', 'MCP9700A'],
-      tips: 'The TMP36 output is: Vout = (Temperature × 0.01) + 0.5V. At 0°C it outputs 500mV, at 25°C it outputs 750mV. For better accuracy, use the Arduino 3.3V as the analog reference (analogReference(EXTERNAL)) and wire 3.3V to the AREF pin. The TMP36 looks exactly like a transistor — always read the part marking.',
+      partNumbers: ['TMP36GT9Z', 'TMP36GRTZ-REEL7', 'TMP36FSZ'],
+      tips: 'The TMP36 output is Vout = (Temperature × 0.01) + 0.5V: 500mV at 0°C and 750mV at 25°C. ADC conversion accuracy depends on the measured ADC reference, sensor tolerance, and wiring. If using an external AREF, follow the board manufacturer procedure and voltage limits. The TMP36 resembles a transistor, so verify the part marking and package pinout.',
     },
   },
   {
@@ -498,24 +509,30 @@ export const electronicsComponents: ElectronicsComponent[] = [
     name: 'Relay',
     category: 'active',
     description:
-      'A relay is an electrically-controlled switch. A small signal from your Arduino activates an electromagnet inside, which flips a mechanical switch to control high-power devices like lamps, fans, or appliances safely.',
+      'A relay is an electrically controlled switch. A bare relay has only a coil and contacts; it is not a ready-to-use microcontroller relay module, and its contact rating alone does not make mains wiring safe.',
     specs: [
-      { label: 'Control Voltage', value: '5 V DC' },
-      { label: 'Switching Capacity', value: '10 A @ 250 V AC' },
-      { label: 'Trigger Current', value: '~ 70 mA' },
-      { label: 'Type', value: 'SPDT (Single Pole Double Throw)' },
+      { label: 'Coil Voltage', value: '5 V DC (example part)' },
+      { label: 'Published Contact Rating', value: 'Part- and load-specific' },
+      { label: 'Coil Current', value: '~ 72–90 mA; requires a driver' },
+      { label: 'Type', value: 'SPDT PCB relay or relay module' },
     ],
     circuitExample:
-      'Connect the relay VCC to 5V, GND to GND, and IN to Arduino pin 7. Use digitalWrite(7, HIGH) to activate the relay. The COM and NO terminals form a switch for your high-power circuit.',
+      'For an extra-low-voltage DC load only, use a relay module whose input and supply requirements match the controller, then verify whether its input is active-high or active-low. Do not use a solderless breadboard for mains wiring.',
     datasheetInfo: {
       maxRatings: [
-        { parameter: 'Max AC Switching', value: '10 A @ 250 V AC' },
-        { parameter: 'Max DC Switching', value: '10 A @ 30 V DC' },
+        {
+          parameter: 'Published AC Contact Rating (relay only)',
+          value: 'Verify exact part and load',
+        },
+        {
+          parameter: 'Published DC Contact Rating (relay only)',
+          value: 'Verify exact part and load',
+        },
         { parameter: 'Coil Voltage', value: '5 V DC' },
         { parameter: 'Mechanical Life', value: '10,000,000 operations' },
       ],
       pinout:
-        'Control side: VCC, GND, IN (signal). Switching side: COM (common), NO (normally open — connected when relay is ON), NC (normally closed — connected when relay is OFF). Module usually includes indicator LED and flyback diode.',
+        'A bare relay typically exposes two coil pins plus COM, NO, and NC contacts; it needs an external driver and flyback diode. A relay module may instead expose VCC, GND, and IN and may include a driver, diode, indicator, or optocoupler. Verify the exact board schematic and pin labels.',
       characteristics: [
         { parameter: 'Coil Current', typical: '70', unit: 'mA' },
         { parameter: 'Contact Resistance', max: '100', unit: 'mΩ' },
@@ -523,7 +540,7 @@ export const electronicsComponents: ElectronicsComponent[] = [
         { parameter: 'Release Time', max: '5', unit: 'ms' },
       ],
       partNumbers: ['SRD-05VDC-SL-C', 'JQC-3FF-S-Z', 'HK4100F-DC5V-SHG'],
-      tips: 'DANGER: If switching mains voltage (120/240V), ensure proper insulation and use a relay module with optocoupler isolation. The relay coil draws ~70mA — too much for an Arduino pin directly. Relay modules include a driver transistor. For solid-state switching without mechanical wear, consider an SSR (Solid State Relay). Active-low relay modules turn ON when the signal is LOW.',
+      tips: 'Never drive a bare relay coil directly from a microcontroller pin. A relay or optocoupler does not by itself make exposed mains wiring safe. Do not switch or breadboard mains unless the complete design uses appropriately certified components, fusing, clearances, strain relief, earthing, and a closed enclosure; have mains work designed or checked by a licensed electrician. Contact ratings depend on the exact load type and do not automatically transfer to a relay module or PCB.',
     },
   },
   {
@@ -556,7 +573,7 @@ export const electronicsComponents: ElectronicsComponent[] = [
         { parameter: 'Viewing Angle', typical: '25', unit: '°' },
       ],
       partNumbers: ['LEDRGB-CC-5MM', 'YSL-R596CR3G4B5C-C10', 'COM-00105'],
-      tips: 'Each color needs its own resistor calculated from its forward voltage. Red uses 150Ω (5V), Green/Blue use 56Ω (5V) for equal brightness. For common anode, use analogWrite(pin, 255 - value) to invert the logic. WS2812B (NeoPixel) addressable LEDs are more practical for multi-LED projects — they need only one data pin for unlimited LEDs.',
+      tips: 'Each color needs its own resistor calculated from R = (Vsupply - Vf) / current. At 5V and a 20mA maximum, a 3.2V green or blue channel needs at least 100Ω (90Ω calculated, rounded up); 220Ω on every channel is a safe, lower-current starting point. Tune brightness with PWM rather than undersizing resistors. For common anode, use analogWrite(pin, 255 - value) to invert the logic.',
     },
   },
 ];

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { extractClientIp } from '../chat/client-ip';
 import { checkRateLimit, RATE_LIMIT_PRESETS } from '../chat/rate-limit';
+import { isTrustedBrowserRequest } from '../request-security';
 import { searchImages } from './service';
+import { parseImageSearchPayload } from '@/lib/images/image-search-contract';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,6 +20,13 @@ function trimToLimit(value: string | undefined, limit: number): string | undefin
 }
 
 export async function GET(req: Request) {
+  if (!isTrustedBrowserRequest(req)) {
+    return NextResponse.json(
+      { error: 'Cross-site requests are not allowed.' },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
   const ip = extractClientIp(req.headers);
   const rateCheck = checkRateLimit(ip, RATE_LIMIT_PRESETS.imageSearch);
   if (rateCheck.limited) {
@@ -48,18 +57,41 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing query parameter.' }, { status: 400 });
   }
 
-  const payload = await searchImages({
-    query: rawQuery,
-    caption: rawCaption || undefined,
-    description: rawDescription || undefined,
-    excludeUrls: rawExclude,
-    requestedCount,
-    braveKey: process.env.BRAVE_API_KEY,
-  });
+  let payload: Awaited<ReturnType<typeof searchImages>>;
+  try {
+    payload = await searchImages({
+      query: rawQuery,
+      caption: rawCaption || undefined,
+      description: rawDescription || undefined,
+      excludeUrls: rawExclude,
+      requestedCount,
+      braveKey: process.env.BRAVE_API_KEY,
+      signal: req.signal,
+    });
+  } catch {
+    if (req.signal.aborted) {
+      return new Response(null, { status: 499, headers: { 'Cache-Control': 'no-store' } });
+    }
+    return NextResponse.json(
+      { error: 'Image search failed.' },
+      { status: 502, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
+  try {
+    parseImageSearchPayload(payload);
+  } catch {
+    return NextResponse.json(
+      { error: 'Image search returned an invalid result.' },
+      { status: 502, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
 
   return NextResponse.json(payload, {
     headers: {
-      'Cache-Control': 'public, max-age=300, stale-while-revalidate=900',
+      'Cache-Control': payload.confident
+        ? 'public, max-age=300, stale-while-revalidate=900'
+        : 'no-store',
     },
   });
 }

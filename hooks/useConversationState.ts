@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { serializeStructuredResponseContext } from '@/lib/ai/conversation-context';
 import { DAILY_LIMIT_DEFAULT, DAILY_LIMIT_MESSAGE } from '@/lib/ai/rate-limit';
-import type { StructuredResponse, UIBlock } from '@/lib/ai/response-schema';
+import { decodeStructuredResponse } from '@/lib/ai/response-contract';
+import type { StructuredResponse } from '@/lib/ai/response-schema';
+import { isActiveRequest } from './conversation-request-state';
 
 export type ConversationEntry = {
   role: 'user' | 'assistant';
@@ -34,6 +37,9 @@ function buildDailyLimitResponse(): StructuredResponse {
 }
 
 function getDailyUsage(): { count: number; date: string } {
+  if (typeof window === 'undefined') {
+    return { count: 0, date: new Date().toDateString() };
+  }
   try {
     const raw = localStorage.getItem(RATE_LIMIT_KEY);
     if (raw) {
@@ -47,6 +53,7 @@ function getDailyUsage(): { count: number; date: string } {
 function incrementDailyUsage(): number {
   const usage = getDailyUsage();
   usage.count++;
+  if (typeof window === 'undefined') return usage.count;
   try {
     localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(usage));
   } catch {}
@@ -54,76 +61,10 @@ function incrementDailyUsage(): number {
 }
 
 function clearDailyUsage(): void {
+  if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(RATE_LIMIT_KEY);
   } catch {}
-}
-
-/**
- * Summarize an assistant response for conversation history.
- * Instead of sending the full JSON blob, send a compact summary.
- */
-function summarizeItems(items: string[] | { name: string }[]): string[] {
-  return items
-    .map((item) => (typeof item === 'string' ? item : item.name))
-    .filter((value) => Boolean(value));
-}
-
-function summarizeUIBlock(ui: UIBlock): string {
-  const parts: string[] = [`[Showed ${ui.component}]`];
-
-  switch (ui.component) {
-    case 'specCard':
-      parts.push(ui.data.title);
-      break;
-    case 'comparisonCard': {
-      const itemNames = summarizeItems(ui.data.items);
-      if (itemNames.length > 0) parts.push(`Items: ${itemNames.join(', ')}`);
-      break;
-    }
-    case 'explanationCard':
-      parts.push(ui.data.title);
-      break;
-    case 'recommendationCard': {
-      const itemNames = summarizeItems(ui.data.items);
-      if (itemNames.length > 0) parts.push(`Items: ${itemNames.join(', ')}`);
-      break;
-    }
-    case 'troubleshootingCard':
-      parts.push(ui.data.issue);
-      break;
-    case 'calculationCard':
-      parts.push(ui.data.title);
-      break;
-    case 'pinoutCard':
-      parts.push(ui.data.component);
-      break;
-    case 'chartCard':
-      parts.push(ui.data.title);
-      break;
-    case 'wiringCard':
-      parts.push(ui.data.title);
-      break;
-    case 'imageBlock':
-      parts.push(ui.data.caption);
-      if (ui.data.searchQuery) {
-        parts.push(`(searched: ${ui.data.searchQuery})`);
-      }
-      break;
-  }
-
-  return parts.join(' — ');
-}
-
-function summarizeAssistantResponse(structured: StructuredResponse): string {
-  if (structured.mode === 'text' || !structured.ui) {
-    return structured.text || '(responded with text)';
-  }
-
-  const parts = [summarizeUIBlock(structured.ui)];
-
-  if (structured.text) parts.push(structured.text);
-  return parts.join(' — ');
 }
 
 export function useConversationState() {
@@ -132,6 +73,7 @@ export function useConversationState() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [responseKey, setResponseKey] = useState(0);
+  const [displayedAssistantIndex, setDisplayedAssistantIndex] = useState<number | null>(null);
   const [isDailyLimitReached, setIsDailyLimitReached] = useState(
     () => getDailyUsage().count >= DAILY_LIMIT_DEFAULT
   );
@@ -141,6 +83,7 @@ export function useConversationState() {
     const limitResponse = buildDailyLimitResponse();
     setError(null);
     setCurrentResponse(limitResponse);
+    setDisplayedAssistantIndex(null);
     setResponseKey((k) => k + 1);
     setIsDailyLimitReached(true);
     return limitResponse;
@@ -162,31 +105,32 @@ export function useConversationState() {
       transcriptMeta,
     }: SubmitInput): Promise<StructuredResponse | null> => {
       const trimmedText = text.trim();
-      if (!trimmedText || isLoading) return null;
+      if (!trimmedText || abortControllerRef.current) return null;
 
       const usage = getDailyUsage();
       if (isDailyLimitReached || usage.count >= DAILY_LIMIT_DEFAULT) {
         return showDailyLimitResponse();
       }
 
-      setError(null);
-      setCurrentResponse(null);
-      setIsLoading(true);
-
       const messages = [
         ...history.map((entry) => ({
           role: entry.role,
           content:
             entry.role === 'assistant' && entry.structured
-              ? summarizeAssistantResponse(entry.structured)
+              ? serializeStructuredResponseContext(entry.structured)
               : entry.content,
         })),
         { role: 'user' as const, content: trimmedText },
       ];
 
       const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setError(null);
+      setCurrentResponse(null);
+      setDisplayedAssistantIndex(null);
+      setIsLoading(true);
+
       try {
-        abortControllerRef.current = controller;
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -197,15 +141,21 @@ export function useConversationState() {
           }),
           signal: controller.signal,
         });
+        if (!isActiveRequest(abortControllerRef.current, controller)) return null;
 
         if (!res.ok) {
           const payload = (await res.json()) as { error?: string };
+          if (!isActiveRequest(abortControllerRef.current, controller)) return null;
           throw new Error(payload.error ?? 'Request failed.');
         }
 
-        const structured = (await res.json()) as StructuredResponse;
+        const payload: unknown = await res.json().catch(() => null);
+        if (!isActiveRequest(abortControllerRef.current, controller)) return null;
+        const structured = decodeStructuredResponse(payload);
+        if (!isActiveRequest(abortControllerRef.current, controller)) return null;
         if (structured.intent === 'rate_limit') {
           setCurrentResponse(structured);
+          setDisplayedAssistantIndex(null);
           setResponseKey((k) => k + 1);
           setIsDailyLimitReached(true);
           return structured;
@@ -214,6 +164,7 @@ export function useConversationState() {
         const nextCount = incrementDailyUsage();
         setIsDailyLimitReached(nextCount >= DAILY_LIMIT_DEFAULT);
         setCurrentResponse(structured);
+        setDisplayedAssistantIndex(history.length + 1);
         setResponseKey((k) => k + 1);
         setHistory((prev) => [
           ...prev,
@@ -223,7 +174,10 @@ export function useConversationState() {
 
         return structured;
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
+        if (
+          (err instanceof Error && err.name === 'AbortError') ||
+          !isActiveRequest(abortControllerRef.current, controller)
+        ) {
           return null;
         }
         setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -231,11 +185,11 @@ export function useConversationState() {
       } finally {
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
+          setIsLoading(false);
         }
-        setIsLoading(false);
       }
     },
-    [history, isDailyLimitReached, isLoading, showDailyLimitResponse]
+    [history, isDailyLimitReached, showDailyLimitResponse]
   );
 
   const cancelActiveRequest = useCallback(() => {
@@ -247,6 +201,7 @@ export function useConversationState() {
 
   const clearDisplayedResponse = useCallback(() => {
     setCurrentResponse(null);
+    setDisplayedAssistantIndex(null);
     setError(null);
   }, []);
 
@@ -257,6 +212,7 @@ export function useConversationState() {
 
       setError(null);
       setCurrentResponse(entry.structured);
+      setDisplayedAssistantIndex(historyIndex);
       setResponseKey((k) => k + 1);
       return true;
     },
@@ -273,6 +229,7 @@ export function useConversationState() {
     abortControllerRef.current = null;
     setHistory([]);
     setCurrentResponse(null);
+    setDisplayedAssistantIndex(null);
     setError(null);
     setIsLoading(false);
   }, []);
@@ -284,6 +241,7 @@ export function useConversationState() {
     responseKey,
     isDailyLimitReached,
     displayedResponse: currentResponse,
+    displayedAssistantIndex,
     guardDailyLimit,
     showDailyLimitResponse,
     resetDailyUsage,

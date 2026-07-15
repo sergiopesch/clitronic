@@ -6,7 +6,7 @@ import {
   sanitizeVisibleResponse,
 } from '@/app/api/chat/route';
 import { parseAndNormalizeResponse } from '@/app/api/chat/response-normalizer';
-import { validateStructuredResponse } from '@/app/api/chat/response-validator';
+import { validateStructuredResponse } from '@/lib/ai/response-contract';
 import { detectInjection } from '@/app/api/chat/security';
 
 test('normalizes flat root response into ui.data', () => {

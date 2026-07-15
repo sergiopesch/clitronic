@@ -145,7 +145,7 @@ export const CURATED_PROFILES: CuratedProfile[] = [
   {
     id: 'oled-ssd1306',
     intent: 'display',
-    aliases: ['oled display', 'ssd1306', '0.96 oled'],
+    aliases: ['oled', 'oled display', 'ssd1306', '0.96 oled'],
     preferredQuery: 'ssd1306 oled display module electronics closeup',
     fallbackQuery: 'oled display module',
     relevanceTokens: ['oled', 'ssd1306', 'display', 'module'],

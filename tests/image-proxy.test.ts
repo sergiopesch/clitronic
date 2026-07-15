@@ -1,11 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  detectRasterImageMimeType,
   hasOnlyPublicResolvedAddresses,
   isPrivateOrReservedAddress,
   isTrustedImageHost,
   normalizeHostname,
 } from '@/app/api/image-proxy/route';
+
+test('accepts known raster signatures and rejects active or spoofed content', () => {
+  const png = new Uint8Array(128);
+  png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const jpeg = new Uint8Array(128);
+  jpeg.set([0xff, 0xd8, 0xff]);
+  const webp = new Uint8Array(128);
+  webp.set(new TextEncoder().encode('RIFF'), 0);
+  webp.set(new TextEncoder().encode('WEBP'), 8);
+  const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>');
+  const spoofedHtml = new TextEncoder().encode('<!doctype html><script>alert(1)</script>');
+
+  assert.equal(detectRasterImageMimeType(png), 'image/png');
+  assert.equal(detectRasterImageMimeType(jpeg), 'image/jpeg');
+  assert.equal(detectRasterImageMimeType(webp), 'image/webp');
+  assert.equal(detectRasterImageMimeType(svg), null);
+  assert.equal(detectRasterImageMimeType(spoofedHtml), null);
+});
 
 test('normalizeHostname strips brackets and trailing dots', () => {
   assert.equal(normalizeHostname('[::1]'), '::1');
@@ -40,6 +59,10 @@ test('rejects private, loopback, link-local, and reserved IP ranges', () => {
     'fe80::1',
     'ff02::1',
     '::ffff:127.0.0.1',
+    '::ffff:7f00:1',
+    '::ffff:0:7f00:1',
+    '100::1',
+    '2001:db8::1',
   ];
 
   for (const address of blocked) {

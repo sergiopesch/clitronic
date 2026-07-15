@@ -46,6 +46,11 @@ export const RATE_LIMIT_PRESETS = {
     minuteLimit: envNumber('IMAGE_SEARCH_MINUTE_LIMIT', 30),
     dailyLimit: envNumber('IMAGE_SEARCH_DAILY_LIMIT', 300),
   },
+  imageProxy: {
+    scope: 'image-proxy',
+    minuteLimit: envNumber('IMAGE_PROXY_MINUTE_LIMIT', 120),
+    dailyLimit: envNumber('IMAGE_PROXY_DAILY_LIMIT', 1_000),
+  },
 } as const;
 
 export function checkRateLimit(
