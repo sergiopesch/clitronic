@@ -9,6 +9,7 @@ export const OPENAI_CHAT_MAX_RETRIES = 1;
 export const OPENAI_SPEECH_MODEL = 'tts-1';
 export const OPENAI_SPEECH_VOICE = 'alloy';
 export const OPENAI_SPEECH_MAX_CHARACTERS = 600;
+export const OPENAI_SPEECH_PCM_SAMPLE_RATE = 24_000;
 
 export const OPENAI_REALTIME_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 export const OPENAI_REALTIME_TRANSPORT = 'openai-realtime-webrtc';
@@ -25,7 +26,7 @@ export const OPENAI_REALTIME_SERVER_VAD_CONFIG = {
   type: 'server_vad',
   threshold: 0.5,
   prefix_padding_ms: 300,
-  silence_duration_ms: 550,
+  silence_duration_ms: 450,
   create_response: false,
   interrupt_response: false,
 } as const;

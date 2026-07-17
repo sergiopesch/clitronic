@@ -5,6 +5,7 @@ import { isTrustedBrowserRequest } from '@/app/api/request-security';
 import {
   OPENAI_SPEECH_MAX_CHARACTERS,
   OPENAI_SPEECH_MODEL,
+  OPENAI_SPEECH_PCM_SAMPLE_RATE,
   OPENAI_SPEECH_VOICE,
 } from '@/lib/ai/openai-config';
 import {
@@ -153,7 +154,7 @@ export async function POST(req: Request): Promise<Response> {
         input: parsedRequest.text,
         model: OPENAI_SPEECH_MODEL,
         voice: OPENAI_SPEECH_VOICE,
-        response_format: 'mp3',
+        response_format: 'pcm',
         stream_format: 'audio',
       },
       {
@@ -172,7 +173,8 @@ export async function POST(req: Request): Promise<Response> {
       status: 200,
       headers: {
         ...RESPONSE_HEADERS,
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': 'audio/pcm',
+        'X-Audio-Sample-Rate': String(OPENAI_SPEECH_PCM_SAMPLE_RATE),
       },
     });
   } catch (error) {

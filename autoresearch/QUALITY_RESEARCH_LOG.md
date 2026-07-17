@@ -1,5 +1,169 @@
 # Quality Research Log
 
+## Realtime Voice Baseline — 2026-07-17
+
+Run directory: `autoresearch/runs/20260717T170319Z`
+
+This is the untouched quality baseline before the realtime voice optimization pass. No product,
+prompt, model, schema, safety, or rendering changes were made before this run.
+
+- `overall_score`: 4.34
+- `answer_quality_score`: 3.89
+- `image_quality_score`: 3.81
+- `component_selection_score`: 4.91
+- `safety_score`: 4.09
+- `schema_valid_rate`: 1
+- `model_parse_success_rate`: 1
+- `model_validation_success_rate`: 1
+- `final_response_schema_valid_rate`: 1
+- All 41 tasks completed with zero task failures; validation, 165 tests, and the production build
+  passed.
+
+Measured voice-path baseline:
+
+- A representative model-backed voice answer took 3.89 seconds before the structured response was
+  available.
+- The speech route began streaming a representative MP3 at 3.18 seconds and completed at 5.71
+  seconds, but the client called `response.blob()` and therefore did not start playback until the
+  complete file arrived.
+- The resulting sequential model-plus-full-audio path was approximately 9.6 seconds after the end of
+  the utterance in the sampled request, excluding turn-detection and transcription time.
+- Browser reproduction also exposed an empty-transcription alert that remained visible after the
+  control returned to `Ready`.
+
+First optimization hypothesis: stream raw PCM into Web Audio as chunks arrive so playback begins at
+the first audio bytes instead of after the full MP3 download, while keeping the validated structured
+answer as the single source of truth.
+
+## Realtime Voice Iteration 1 — Retained transport improvement — 2026-07-17
+
+Verification run: `autoresearch/runs/20260717T172506Z`
+
+Hypothesis: the speech route already streams, but converting the response to a complete Blob in the
+browser prevents playback until all audio has arrived. Streaming raw PCM chunks directly into Web
+Audio should remove that client-side gate without changing answer content.
+
+Change:
+
+- Switched the fixed `tts-1` speech response from MP3 to raw 24 kHz PCM.
+- Added a boundary-safe signed 16-bit little-endian PCM decoder that preserves samples split across
+  network chunks.
+- Scheduled decoded chunks through the existing AudioContext with an 80 ms initial buffer.
+- Kept cancellation ownership per voice turn and stopped/disconnected every queued source during
+  interruption or teardown.
+- Preserved the chat model, prompt, structured response schema, visual-card architecture, canonical
+  spoken summary, rate limits, request security, and safety behavior.
+
+Measured result:
+
+- Matched route sample before: first MP3 bytes at 3.18 seconds, full transfer at 5.71 seconds, with
+  playback gated on the full transfer.
+- Matched route sample after: first PCM bytes at 2.95 seconds, full transfer at 5.41 seconds, with
+  playback scheduled approximately 80 ms after first bytes.
+- Avoidable post-answer silence reduced by approximately 2.38 seconds in the matched sample.
+
+Verification:
+
+- Validation, 167 tests, and the production build passed.
+- All 41 tasks completed with zero task failures.
+- `schema_valid_rate`, `model_parse_success_rate`, `model_validation_success_rate`, and
+  `final_response_schema_valid_rate` remained 1; `render_fallback_rate` and `broken_image_rate`
+  remained 0.
+- The stochastic judge scored 4.32 overall, answer quality 3.87, image quality 3.81, component
+  selection 4.95, and safety 4.04 versus the untouched 4.34 / 3.89 / 3.81 / 4.91 / 4.09 run. The
+  evaluated chat path is unchanged by this browser/speech transport diff, so this run is recorded as
+  a non-promoted operational guard rather than a new answer-quality baseline.
+
+Decision: retained for the direct, repeatable voice latency improvement. The accepted quality
+baseline remains the untouched 4.34 run.
+
+## Realtime Voice Iteration 2 — Retained reliability improvement — 2026-07-17
+
+Verification run: `autoresearch/runs/20260717T174034Z`
+
+Hypothesis: empty ambient-noise VAD turns are normal recoverable transport events, but the hook
+treats them as user-facing failures and leaves that alert visible even after listening stops.
+
+Change:
+
+- Resolved completed transcript text through one tested final-or-buffered boundary.
+- Returned empty VAD turns to listening without displaying a false transcription failure.
+- Cleared stale voice errors and speech warnings when the user stops the voice session.
+- Kept explicit realtime transcription failure events user-visible.
+
+Verification:
+
+- Browser reproduction before the change displayed “I could not hear a complete request” while the
+  state said `Live listening`, and retained the alert after returning to `Ready`.
+- After the change, repeated silent cycles remained in `Live listening` without an alert, and Stop
+  returned to `Ready` without stale error UI or console warnings.
+- Validation, 168 tests, and the production build passed; all 41 quality tasks completed.
+- `overall_score`: 4.35; `answer_quality_score`: 3.91; `image_quality_score`: 3.79;
+  `component_selection_score`: 4.93; `safety_score`: 4.12.
+- All schema/model validation rates remained 1; `render_fallback_rate` and `broken_image_rate`
+  remained 0. The 0.02 image-score movement occurred on an unchanged image path, so this operational
+  run is not promoted over the accepted quality baseline.
+
+Decision: retained for the directly reproduced reliability and UX correction. The accepted quality
+baseline remains the untouched 4.34 run.
+
+## Realtime Voice Iteration 3 — Retained interruption improvement — 2026-07-17
+
+Verification run: `autoresearch/runs/20260717T175547Z`
+
+Hypothesis: the primary Stop control tears down the microphone and WebRTC session while an answer is
+processing or speaking, so a normal interruption unnecessarily pays the full cold-start cost on the
+next turn.
+
+Change:
+
+- Routed Stop during `processing` and `speaking` to answer/playback interruption while preserving the
+  established realtime input session.
+- Kept full microphone/WebRTC teardown for Stop during listening, capture, and transcription.
+- Changed the active control label to `Cancel answer` or `Stop speaking` so the action is explicit.
+
+Verification:
+
+- Focused state and component tests passed, including the interruption-versus-session-stop boundary.
+- Browser verification confirmed the listening control still performs a complete privacy stop and
+  returns to `Ready` without alerts or console errors.
+- Validation, 169 tests, and the production build passed.
+- The model-backed judge scored 4.26 overall, but two stochastic quality tasks failed and one emitted
+  an invalid final schema, so `schema_valid_rate` was 0.9756 and the scorer correctly reported
+  `pass: false`. This diff does not touch the chat route, model, prompt, schema, visual cards, or
+  safety path; the result is recorded without promoting it as a quality baseline.
+
+Decision: retained as a tested operational interaction fix. The accepted quality baseline remains
+the untouched 4.34 run, and the last fully valid operational run remains Iteration 2.
+
+## Realtime Voice Iteration 4 — Retained turn-boundary improvement — 2026-07-17
+
+Verification run: `autoresearch/runs/20260717T181222Z`
+
+Hypothesis: waiting for 550 ms of silence after every utterance adds deterministic latency before
+transcription can complete; 450 ms preserves a practical pause while removing 100 ms from every
+voice turn.
+
+Change:
+
+- Reduced only Realtime server VAD `silence_duration_ms` from 550 to 450.
+- Preserved the transcription model, input format, VAD threshold, 300 ms prefix padding,
+  non-generating session behavior, chat model, prompt, schema, cards, and safety rules.
+- Added a config-contract assertion for the latency-sensitive boundary.
+
+Verification:
+
+- Validation, 169 tests, and the production build passed.
+- All schema/model validity rates remained 1; `render_fallback_rate` and `broken_image_rate`
+  remained 0.
+- `overall_score`: 4.31; `answer_quality_score`: 3.87; `image_quality_score`: 3.46;
+  `component_selection_score`: 4.95; `safety_score`: 4.04.
+- One unrelated image-quality task caused `tasks_failed: 1` and `pass: false`. The VAD-only diff
+  cannot affect chat or image outputs, so this run is recorded as a non-promoted operational guard.
+
+Decision: retained for the direct 100 ms end-of-turn latency reduction. The accepted quality
+baseline remains the untouched 4.34 run.
+
 ## Deterministic Release Verification — 2026-07-15
 
 This is a post-experiment release gate, not another scored quality iteration. It preserves the final

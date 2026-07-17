@@ -8,6 +8,7 @@ import { VoiceOrb } from '@/components/voice/voice-orb';
 import { VoiceTranscriptStrip } from '@/components/voice/voice-transcript-strip';
 import { useConversationState } from '@/hooks/useConversationState';
 import { useVoiceInteraction } from '@/hooks/useVoiceInteraction';
+import { getVoicePrimaryStopAction } from '@/hooks/voice-realtime-state';
 import {
   resolveDraftAfterSubmission,
   selectRecentAssistantIndexes,
@@ -375,6 +376,7 @@ export function ConversationShell() {
     startCapture,
     stopCapture,
     cancelCapture,
+    stopSpeaking,
   } = useVoiceInteraction({
     onFinalTranscript: handleFinalTranscript,
     onTurnStart: handleVoiceTurnStart,
@@ -440,6 +442,10 @@ export function ConversationShell() {
   const handleStopVoiceAction = () => {
     setHasStartedSession(true);
     cancelActiveRequest();
+    if (getVoicePrimaryStopAction(voiceState) === 'interrupt-output') {
+      stopSpeaking();
+      return;
+    }
     stopCapture();
   };
 

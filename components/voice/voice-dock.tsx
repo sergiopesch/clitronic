@@ -31,11 +31,11 @@ function primaryLabel(state: VoiceState, isLocked: boolean): string {
   if (isLocked) return 'Limit reached';
   if (state === 'requesting_mic') return 'Cancel';
   if (state === 'connecting_realtime') return 'Cancel';
-  if (state === 'listening') return 'Stop';
-  if (state === 'capturing') return 'Stop';
-  if (state === 'transcribing') return 'Stop';
-  if (state === 'processing') return 'Stop';
-  if (state === 'speaking') return 'Stop';
+  if (state === 'listening') return 'Stop voice';
+  if (state === 'capturing') return 'Stop voice';
+  if (state === 'transcribing') return 'Stop voice';
+  if (state === 'processing') return 'Cancel answer';
+  if (state === 'speaking') return 'Stop speaking';
   if (state === 'error') return 'Try again';
   return 'Press to talk';
 }

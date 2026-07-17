@@ -35,6 +35,7 @@ test('realtime session keeps transcription and non-generating VAD under audio in
   assert.equal(session.audio.input.format.rate, 24000);
   assert.equal(session.audio.input.transcription.model, 'gpt-4o-mini-transcribe');
   assert.equal(session.audio.input.turn_detection.type, 'server_vad');
+  assert.equal(session.audio.input.turn_detection.silence_duration_ms, 450);
   assert.equal(session.audio.input.turn_detection.create_response, false);
   assert.equal(session.audio.input.turn_detection.interrupt_response, false);
 });

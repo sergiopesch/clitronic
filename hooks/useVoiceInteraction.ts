@@ -7,7 +7,13 @@ import {
   OPENAI_REALTIME_SDP_TIMEOUT_MS,
   OPENAI_REALTIME_SDP_URL,
   OPENAI_REALTIME_SESSION_TIMEOUT_MS,
+  OPENAI_SPEECH_PCM_SAMPLE_RATE,
 } from '@/lib/ai/openai-config';
+import {
+  createPcm16LeDecodeState,
+  decodePcm16LeChunk,
+  hasPendingPcm16LeByte,
+} from '@/lib/ai/pcm-stream';
 import type { StructuredResponse } from '@/lib/ai/response-schema';
 import { getCanonicalSpeechText } from '@/lib/ai/voice-presentation';
 import { cleanTranscriptLight } from '@/lib/ai/transcript-utils';
@@ -27,6 +33,7 @@ import {
   invalidateVoiceTurn,
   isActiveVoiceStartAttempt,
   isActiveVoiceTurn,
+  resolveCompletedVoiceTranscript,
   shouldIgnoreVoiceStartFailure,
   startVoiceTurn,
   trySendRealtimeEvent,
@@ -67,6 +74,9 @@ const USER_TRANSCRIPT_DONE_EVENTS = new Set([
   'conversation.item.input_audio_transcript.completed',
   'input_audio_transcription.completed',
 ]);
+
+const PCM_PLAYBACK_START_BUFFER_SECONDS = 0.08;
+const PCM_PLAYBACK_MIN_LEAD_SECONDS = 0.02;
 
 function subscribeToClientSnapshot() {
   return () => {};
@@ -130,9 +140,9 @@ export function useVoiceInteraction({
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioTrackRef = useRef<MediaStreamTrack | null>(null);
-  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechControllerRef = useRef<AbortController | null>(null);
-  const speechObjectUrlRef = useRef<string | null>(null);
+  const speechSourcesRef = useRef(new Set<AudioBufferSourceNode>());
+  const speechPlaybackTimerRef = useRef<number | null>(null);
   const speechItemIdRef = useRef<string | null>(null);
   const turnTrackerRef = useRef(createVoiceTurnTracker());
   const finalBufferRef = useRef('');
@@ -157,23 +167,34 @@ export function useVoiceInteraction({
     typeof RTCPeerConnection !== 'undefined' &&
     Boolean(navigator.mediaDevices?.getUserMedia);
 
+  const ensureAudioContext = useCallback(async () => {
+    const existing = audioContextRef.current;
+    if (existing) {
+      if (existing.state === 'suspended') {
+        await existing.resume().catch(() => {});
+      }
+      return existing;
+    }
+    const ctx = new AudioContext();
+    audioContextRef.current = ctx;
+    return ctx;
+  }, []);
+
   const stopSpeechPlayback = useCallback((restoreVoiceState = true) => {
     speechControllerRef.current?.abort();
     speechControllerRef.current = null;
     speechItemIdRef.current = null;
 
-    const audio = speechAudioRef.current;
-    speechAudioRef.current = null;
-    if (audio) {
-      audio.onended = null;
-      audio.onerror = null;
-      safelyCleanup(() => audio.pause());
-      safelyCleanup(() => audio.removeAttribute('src'));
+    if (speechPlaybackTimerRef.current !== null) {
+      window.clearTimeout(speechPlaybackTimerRef.current);
+      speechPlaybackTimerRef.current = null;
     }
-
-    const objectUrl = speechObjectUrlRef.current;
-    speechObjectUrlRef.current = null;
-    if (objectUrl) safelyCleanup(() => URL.revokeObjectURL(objectUrl));
+    speechSourcesRef.current.forEach((source) => {
+      source.onended = null;
+      safelyCleanup(() => source.stop());
+      safelyCleanup(() => source.disconnect());
+    });
+    speechSourcesRef.current.clear();
 
     setAssistantPartialTranscript('');
     setIsSpeaking(false);
@@ -195,6 +216,7 @@ export function useVoiceInteraction({
       const controller = new AbortController();
       speechControllerRef.current = controller;
       speechItemIdRef.current = itemId;
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
       try {
         const response = await fetch('/api/speech', {
@@ -204,9 +226,15 @@ export function useVoiceInteraction({
           signal: controller.signal,
         });
         if (!response.ok) throw new Error('Speech request failed.');
-        const audioBlob = await response.blob();
+        if (!response.body) throw new Error('Speech response was empty.');
+
+        const sampleRate = Number(response.headers.get('x-audio-sample-rate'));
+        if (sampleRate !== OPENAI_SPEECH_PCM_SAMPLE_RATE) {
+          throw new Error('Speech response sample rate was invalid.');
+        }
+
+        const audioContext = await ensureAudioContext();
         if (
-          audioBlob.size === 0 ||
           controller.signal.aborted ||
           speechControllerRef.current !== controller ||
           !isActiveVoiceTurn(turnTrackerRef.current, itemId)
@@ -214,36 +242,69 @@ export function useVoiceInteraction({
           return false;
         }
 
-        const objectUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(objectUrl);
-        speechObjectUrlRef.current = objectUrl;
-        speechAudioRef.current = audio;
+        reader = response.body.getReader();
+        const decoderState = createPcm16LeDecodeState();
+        let scheduledEnd = audioContext.currentTime;
+        let playbackStarted = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (
+            controller.signal.aborted ||
+            speechControllerRef.current !== controller ||
+            !isActiveVoiceTurn(turnTrackerRef.current, itemId)
+          ) {
+            return false;
+          }
+
+          const samples = decodePcm16LeChunk(value, decoderState);
+          if (samples.length === 0) continue;
+
+          const audioBuffer = audioContext.createBuffer(1, samples.length, sampleRate);
+          audioBuffer.copyToChannel(samples, 0);
+          const source = audioContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioContext.destination);
+          speechSourcesRef.current.add(source);
+          source.onended = () => {
+            speechSourcesRef.current.delete(source);
+            safelyCleanup(() => source.disconnect());
+          };
+
+          const minimumStart =
+            audioContext.currentTime +
+            (playbackStarted ? PCM_PLAYBACK_MIN_LEAD_SECONDS : PCM_PLAYBACK_START_BUFFER_SECONDS);
+          const startsAt = Math.max(scheduledEnd, minimumStart);
+          source.start(startsAt);
+          scheduledEnd = startsAt + audioBuffer.duration;
+
+          if (!playbackStarted) {
+            playbackStarted = true;
+            setAssistantFinalTranscript(speechText);
+            setAssistantPartialTranscript('');
+            setIsSpeaking(true);
+            setOutputLevel(0.55);
+            setVoiceState('speaking');
+          }
+        }
+
+        if (!playbackStarted || hasPendingPcm16LeByte(decoderState)) {
+          throw new Error('Speech response contained invalid PCM audio.');
+        }
 
         await new Promise<void>((resolve, reject) => {
-          const handleAbort = () => reject(new DOMException('Speech cancelled.', 'AbortError'));
-          controller.signal.addEventListener('abort', handleAbort, { once: true });
-          audio.onended = () => {
+          const handleAbort = () => {
+            reject(new DOMException('Speech cancelled.', 'AbortError'));
+          };
+          const remainingMs = Math.max(0, (scheduledEnd - audioContext.currentTime) * 1000);
+          speechPlaybackTimerRef.current = window.setTimeout(() => {
+            speechPlaybackTimerRef.current = null;
             controller.signal.removeEventListener('abort', handleAbort);
             resolve();
-          };
-          audio.onerror = () => {
-            controller.signal.removeEventListener('abort', handleAbort);
-            reject(new Error('Speech playback failed.'));
-          };
-          void audio.play().then(
-            () => {
-              if (controller.signal.aborted) return;
-              setAssistantFinalTranscript(speechText);
-              setAssistantPartialTranscript('');
-              setIsSpeaking(true);
-              setOutputLevel(0.55);
-              setVoiceState('speaking');
-            },
-            (error: unknown) => {
-              controller.signal.removeEventListener('abort', handleAbort);
-              reject(error);
-            }
-          );
+          }, remainingMs);
+          controller.signal.addEventListener('abort', handleAbort, { once: true });
+          if (controller.signal.aborted) handleAbort();
         });
         return true;
       } catch {
@@ -252,6 +313,9 @@ export function useVoiceInteraction({
         }
         return false;
       } finally {
+        if (reader && controller.signal.aborted) {
+          void reader.cancel().catch(() => {});
+        }
         if (speechControllerRef.current === controller) {
           stopSpeechPlayback(false);
           if (isActiveVoiceTurn(turnTrackerRef.current, itemId)) {
@@ -260,7 +324,7 @@ export function useVoiceInteraction({
         }
       }
     },
-    [stopSpeechPlayback]
+    [ensureAudioContext, stopSpeechPlayback]
   );
 
   const finalizeTurn = useCallback(
@@ -459,18 +523,22 @@ export function useVoiceInteraction({
 
       if (USER_TRANSCRIPT_DONE_EVENTS.has(event.type)) {
         if (!completeVoiceTurn(turnTrackerRef.current, event.item_id) || !event.item_id) return;
-        const transcript = (event.transcript || '').trim();
-        const resolvedTranscript = transcript || finalBufferRef.current.trim();
+        const resolvedTranscript = resolveCompletedVoiceTranscript(
+          event.transcript,
+          finalBufferRef.current
+        );
         if (resolvedTranscript) {
           finalBufferRef.current = resolvedTranscript;
-        }
-        if (resolvedTranscript) {
           setPartialTranscript(resolvedTranscript);
           if (audioTrackRef.current?.enabled) {
             void finalizeTurn(event.item_id, resolvedTranscript);
           }
         } else {
-          setError('I could not hear a complete request. Please try again.');
+          // VAD can occasionally produce an empty ambient-noise turn. It is not
+          // actionable for the user, so return to listening without a stale alert.
+          finalBufferRef.current = '';
+          setPartialTranscript('');
+          setError(null);
           setVoiceState(audioTrackRef.current?.enabled ? 'listening' : 'idle');
         }
         return;
@@ -515,19 +583,6 @@ export function useVoiceInteraction({
       window.clearInterval(meterTimerRef.current);
       meterTimerRef.current = null;
     }
-  }, []);
-
-  const ensureAudioContext = useCallback(async () => {
-    const existing = audioContextRef.current;
-    if (existing) {
-      if (existing.state === 'suspended') {
-        await existing.resume().catch(() => {});
-      }
-      return existing;
-    }
-    const ctx = new AudioContext();
-    audioContextRef.current = ctx;
-    return ctx;
   }, []);
 
   const attachMicAnalyser = useCallback(
@@ -909,6 +964,8 @@ export function useVoiceInteraction({
       interruptAssistant();
     } finally {
       teardownRealtimeSession();
+      setError(null);
+      setSpeechWarning(null);
       setVoiceState('idle');
     }
   }, [interruptAssistant, sendRealtimeEvent, teardownRealtimeSession]);

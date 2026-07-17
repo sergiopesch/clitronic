@@ -123,12 +123,30 @@ export function canStartVoiceInputTurn(isMuted: boolean, trackEnabled: boolean):
   return !isMuted && trackEnabled;
 }
 
+export function resolveCompletedVoiceTranscript(
+  completedTranscript: string | undefined,
+  bufferedTranscript: string
+): string | null {
+  const completed = completedTranscript?.trim();
+  if (completed) return completed;
+  const buffered = bufferedTranscript.trim();
+  return buffered || null;
+}
+
 export type VoiceMuteAction = 'discard-input' | 'go-idle' | 'preserve-output';
 
 export function getVoiceMuteAction(voiceState: string): VoiceMuteAction {
   if (voiceState === 'capturing' || voiceState === 'transcribing') return 'discard-input';
   if (voiceState === 'listening') return 'go-idle';
   return 'preserve-output';
+}
+
+export type VoicePrimaryStopAction = 'interrupt-output' | 'stop-session';
+
+export function getVoicePrimaryStopAction(voiceState: string): VoicePrimaryStopAction {
+  return voiceState === 'processing' || voiceState === 'speaking'
+    ? 'interrupt-output'
+    : 'stop-session';
 }
 
 export function completeVoiceTurn(tracker: VoiceTurnTracker, itemId: string | undefined): boolean {

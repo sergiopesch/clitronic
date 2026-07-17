@@ -14,9 +14,11 @@ import {
   decodeRealtimeSessionSecret,
   decodeRealtimeVoiceEvent,
   getVoiceMuteAction,
+  getVoicePrimaryStopAction,
   isActiveVoiceStartAttempt,
   isActiveVoiceTurn,
   invalidateVoiceTurn,
+  resolveCompletedVoiceTranscript,
   shouldIgnoreVoiceStartFailure,
   startVoiceTurn,
   trySendRealtimeEvent,
@@ -141,6 +143,16 @@ test('late speech-start events cannot create a turn while capture is muted or di
   assert.equal(canStartVoiceInputTurn(true, false), false);
 });
 
+test('completed transcripts prefer the authoritative final and ignore empty ambient turns', () => {
+  assert.equal(
+    resolveCompletedVoiceTranscript('  Use 330 ohms.  ', 'partial text'),
+    'Use 330 ohms.'
+  );
+  assert.equal(resolveCompletedVoiceTranscript('', '  buffered fallback  '), 'buffered fallback');
+  assert.equal(resolveCompletedVoiceTranscript('   ', '  '), null);
+  assert.equal(resolveCompletedVoiceTranscript(undefined, ''), null);
+});
+
 test('microphone mute discards open input without cancelling processing or speech output', () => {
   assert.equal(getVoiceMuteAction('listening'), 'go-idle');
   assert.equal(getVoiceMuteAction('capturing'), 'discard-input');
@@ -148,6 +160,14 @@ test('microphone mute discards open input without cancelling processing or speec
   assert.equal(getVoiceMuteAction('processing'), 'preserve-output');
   assert.equal(getVoiceMuteAction('speaking'), 'preserve-output');
   assert.equal(getVoiceMuteAction('error'), 'preserve-output');
+});
+
+test('stopping model output preserves the hot voice session', () => {
+  assert.equal(getVoicePrimaryStopAction('processing'), 'interrupt-output');
+  assert.equal(getVoicePrimaryStopAction('speaking'), 'interrupt-output');
+  assert.equal(getVoicePrimaryStopAction('listening'), 'stop-session');
+  assert.equal(getVoicePrimaryStopAction('capturing'), 'stop-session');
+  assert.equal(getVoicePrimaryStopAction('connecting_realtime'), 'stop-session');
 });
 
 test('realtime event sending is non-throwing when the channel closes during send', () => {

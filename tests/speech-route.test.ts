@@ -41,9 +41,9 @@ function restoreGlobals(): void {
 
 test.after(restoreGlobals);
 
-test('speech route forwards the exact text with fixed TTS settings and streams protected MP3', async () => {
+test('speech route forwards the exact text with fixed TTS settings and streams protected PCM', async () => {
   process.env.OPENAI_API_KEY = 'test-key-one';
-  const audio = Uint8Array.from([0x49, 0x44, 0x33, 0x01, 0x02]);
+  const audio = Uint8Array.from([0x00, 0x80, 0x00, 0x00, 0xff, 0x7f]);
   let capturedUrl = '';
   let capturedBody: unknown;
   let capturedHeaders = new Headers();
@@ -54,7 +54,7 @@ test('speech route forwards the exact text with fixed TTS settings and streams p
     capturedHeaders = new Headers(init?.headers);
     return new Response(audio, {
       status: 200,
-      headers: { 'Content-Type': 'audio/mpeg' },
+      headers: { 'Content-Type': 'audio/pcm' },
     });
   };
 
@@ -64,14 +64,15 @@ test('speech route forwards the exact text with fixed TTS settings and streams p
   );
 
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get('content-type'), 'audio/mpeg');
+  assert.equal(response.headers.get('content-type'), 'audio/pcm');
+  assert.equal(response.headers.get('x-audio-sample-rate'), '24000');
   assertProtectedResponse(response);
   assert.match(capturedUrl, /\/v1\/audio\/speech$/);
   assert.deepEqual(capturedBody, {
     input: text,
     model: 'tts-1',
     voice: 'alloy',
-    response_format: 'mp3',
+    response_format: 'pcm',
     stream_format: 'audio',
   });
   assert.match(capturedHeaders.get('openai-safety-identifier') ?? '', /^[a-f0-9]{64}$/);
