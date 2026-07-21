@@ -7,6 +7,7 @@ import {
   OPENAI_REALTIME_SDP_TIMEOUT_MS,
   OPENAI_REALTIME_SDP_URL,
   OPENAI_REALTIME_SESSION_TIMEOUT_MS,
+  OPENAI_SPEECH_PLAYBACK_START_BUFFER_SECONDS,
   OPENAI_SPEECH_PCM_SAMPLE_RATE,
 } from '@/lib/ai/openai-config';
 import {
@@ -75,7 +76,6 @@ const USER_TRANSCRIPT_DONE_EVENTS = new Set([
   'input_audio_transcription.completed',
 ]);
 
-const PCM_PLAYBACK_START_BUFFER_SECONDS = 0.08;
 const PCM_PLAYBACK_MIN_LEAD_SECONDS = 0.02;
 
 function subscribeToClientSnapshot() {
@@ -274,7 +274,9 @@ export function useVoiceInteraction({
 
           const minimumStart =
             audioContext.currentTime +
-            (playbackStarted ? PCM_PLAYBACK_MIN_LEAD_SECONDS : PCM_PLAYBACK_START_BUFFER_SECONDS);
+            (playbackStarted
+              ? PCM_PLAYBACK_MIN_LEAD_SECONDS
+              : OPENAI_SPEECH_PLAYBACK_START_BUFFER_SECONDS);
           const startsAt = Math.max(scheduledEnd, minimumStart);
           source.start(startsAt);
           scheduledEnd = startsAt + audioBuffer.duration;

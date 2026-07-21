@@ -1,4 +1,9 @@
-import { OPENAI_CHAT_MAX_TOKENS, OPENAI_CHAT_MODEL } from '@/lib/ai/openai-config';
+import {
+  OPENAI_CHAT_MAX_TOKENS,
+  OPENAI_CHAT_MODEL,
+  OPENAI_CHAT_REASONING_EFFORT,
+  OPENAI_CHAT_VERBOSITY,
+} from '@/lib/ai/openai-config';
 import { validateStructuredResponseWithDiagnostics } from '@/lib/ai/response-contract';
 import {
   createOpenAIClient,
@@ -911,6 +916,32 @@ export function derivePhotoQueryFromContext(
   return null;
 }
 
+export function derivePhotoReferenceDescription(source: string): string {
+  if (
+    /\b(structured media panels?|network closets?|low-voltage wiring panels?|patch panels?)\b/i.test(
+      source
+    )
+  ) {
+    return 'Use these references to plan a rack or structured-media enclosure with patch panels above the Ethernet or PoE switch, readable cable labels, cable management, service loops, and physical separation from mains wiring.';
+  }
+
+  if (
+    /\b(electronics workbench|electronics bench|soldering station|bench power supply|oscilloscope|component drawers|sensor prototyping station)\b/i.test(
+      source
+    )
+  ) {
+    return 'Plan separate soldering, ESP32 prototyping, small-repair, and battery-test zones. Put LED task lighting overhead, pegboard and parts drawers within reach, the bench power supply and oscilloscope at eye level, fume extraction behind the soldering area, and battery work on a non-combustible surface.';
+  }
+
+  return 'Requested visual reference.';
+}
+
+function asksForPlanWithPhotos(source: string): boolean {
+  return /\b(what should i (?:build|use)|how should i (?:build|design|lay out)|help me (?:build|design|plan)|plan .{0,30}(?:photos?|images?)|build .{0,30}(?:photos?|images?))\b/i.test(
+    source
+  );
+}
+
 function maybeBuildPhotoFallback(
   userText: string | undefined,
   preferredTranscript: string | undefined,
@@ -925,6 +956,7 @@ function maybeBuildPhotoFallback(
   const searchQuery = derivePhotoQueryFromContext(source, historyMessages);
   if (!searchQuery) return null;
   const caption = `Photo of ${searchQuery}`;
+  const description = derivePhotoReferenceDescription(source);
 
   return {
     intent: 'show_image',
@@ -937,7 +969,7 @@ function maybeBuildPhotoFallback(
         searchQuery,
         imageCount: requestedImageCount,
         caption,
-        description: 'Requested visual reference.',
+        description,
       },
     },
     text: null,
@@ -948,8 +980,9 @@ function maybeBuildPhotoFallback(
     voice:
       inputMode === 'voice'
         ? {
-            spokenSummary:
-              requestedImageCount > 1
+            spokenSummary: asksForPlanWithPhotos(source)
+              ? 'Plan separate soldering, ESP32, repair, and battery-test zones, with fume extraction, current limiting, fusing, and fire-safe battery handling.'
+              : requestedImageCount > 1
                 ? `Showing ${requestedImageCount} images for ${searchQuery}.`
                 : `Showing an image for ${searchQuery}.`,
           }
@@ -1339,8 +1372,9 @@ export async function POST(req: Request) {
             content: buildUntrustedConversationRequest(trimmed),
           },
         ],
-        temperature: 0.2,
-        max_tokens: OPENAI_CHAT_MAX_TOKENS,
+        reasoning_effort: OPENAI_CHAT_REASONING_EFFORT,
+        verbosity: OPENAI_CHAT_VERBOSITY,
+        max_completion_tokens: OPENAI_CHAT_MAX_TOKENS,
         safety_identifier: createOpenAISafetyIdentifier(ip),
       },
       { signal: req.signal }

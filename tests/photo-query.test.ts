@@ -5,11 +5,34 @@ import {
   deriveDisplaySubject,
   derivePhotoQuery,
   derivePhotoQueryFromContext,
+  derivePhotoReferenceDescription,
   extractNamedOptions,
   isPhotoRequest,
   refineStructuredResponseForRequest,
   stabilizeStructuredResponseForRequest,
 } from '@/app/api/chat/route';
+
+test('photo references carry practical scene guidance for mixed planning requests', () => {
+  const description = derivePhotoReferenceDescription(
+    'What should I build for an electronics workbench with ESP32 projects, parts drawers, and a bench power supply, and show me images?'
+  );
+
+  assert.match(description, /separate soldering, ESP32 prototyping/i);
+  assert.match(description, /LED task lighting/i);
+  assert.match(description, /parts drawers/i);
+  assert.match(description, /non-combustible surface/i);
+});
+
+test('network photo references preserve cable-management and mains-separation context', () => {
+  const description = derivePhotoReferenceDescription(
+    'Show real low-voltage wiring panels with patch panels, a PoE switch, labels, and loops.'
+  );
+
+  assert.match(description, /PoE switch/i);
+  assert.match(description, /cable labels/i);
+  assert.match(description, /service loops/i);
+  assert.match(description, /separation from mains/i);
+});
 
 test('derivePhotoQuery removes generic image wording from direct requests', () => {
   assert.equal(derivePhotoQuery('show me an Arduino image'), 'arduino');

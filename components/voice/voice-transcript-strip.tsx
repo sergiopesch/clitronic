@@ -105,9 +105,9 @@ function useProgressiveText(source: string, streaming: boolean, pace: StreamPace
     if (visibleWords >= targetWordCount) return;
 
     const backlog = targetWordCount - visibleWords;
-    const baseDelay = 170;
-    const delay =
-      backlog > 12 ? Math.max(60, baseDelay - 30) : backlog > 6 ? baseDelay : baseDelay + 55;
+    // Streaming TTS currently averages roughly 2.5 spoken words per second.
+    // Keep captions close to that cadence instead of racing several words ahead.
+    const delay = backlog > 12 ? 360 : backlog > 6 ? 380 : 400;
     const id = window.setTimeout(() => {
       setVisibleWords((prev) => Math.min(prev + 1, targetWordCount));
     }, delay);

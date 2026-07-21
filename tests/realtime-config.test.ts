@@ -29,13 +29,19 @@ test('realtime client secret payload wraps a transcription-only session', () => 
   });
 });
 
-test('realtime session keeps transcription and non-generating VAD under audio input', () => {
+test('realtime session keeps transcription and semantic VAD under audio input', () => {
   const session = OPENAI_REALTIME_CLIENT_SECRET_CONFIG.session;
   assert.equal(session.audio.input.format.type, 'audio/pcm');
   assert.equal(session.audio.input.format.rate, 24000);
   assert.equal(session.audio.input.transcription.model, 'gpt-4o-mini-transcribe');
-  assert.equal(session.audio.input.turn_detection.type, 'server_vad');
-  assert.equal(session.audio.input.turn_detection.silence_duration_ms, 450);
-  assert.equal(session.audio.input.turn_detection.create_response, false);
-  assert.equal(session.audio.input.turn_detection.interrupt_response, false);
+  assert.match(session.audio.input.transcription.prompt, /ESP32/);
+  assert.match(session.audio.input.transcription.prompt, /MOSFET/);
+  assert.match(session.audio.input.transcription.prompt, /3\.3 V/);
+  assert.deepEqual(session.audio.input.noise_reduction, { type: 'far_field' });
+  assert.deepEqual(session.audio.input.turn_detection, {
+    type: 'semantic_vad',
+    eagerness: 'high',
+  });
+  assert.equal('create_response' in session.audio.input.turn_detection, false);
+  assert.equal('interrupt_response' in session.audio.input.turn_detection, false);
 });

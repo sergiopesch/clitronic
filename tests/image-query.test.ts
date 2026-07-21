@@ -25,11 +25,11 @@ test('multi-object scene queries are not collapsed into one component profile', 
   );
   assert.equal(
     getSceneProfile('esp32 breadboard jumper wires oscilloscope')?.preferredQuery,
-    'electronics workbench'
+    'electronics workbench oscilloscope soldering'
   );
   assert.equal(
     getSceneProfile('patch panel poe switch cable labels service loops')?.preferredQuery,
-    'network patch panel'
+    'network rack ethernet switch patch panel'
   );
 
   assert.equal(getSceneProfile('show an ESP32 development board'), null);

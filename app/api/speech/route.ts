@@ -4,6 +4,7 @@ import { checkRateLimit } from '@/app/api/chat/rate-limit';
 import { isTrustedBrowserRequest } from '@/app/api/request-security';
 import {
   OPENAI_SPEECH_MAX_CHARACTERS,
+  OPENAI_SPEECH_INSTRUCTIONS,
   OPENAI_SPEECH_MODEL,
   OPENAI_SPEECH_PCM_SAMPLE_RATE,
   OPENAI_SPEECH_VOICE,
@@ -152,6 +153,7 @@ export async function POST(req: Request): Promise<Response> {
     const speech = await createOpenAIClient().audio.speech.create(
       {
         input: parsedRequest.text,
+        instructions: OPENAI_SPEECH_INSTRUCTIONS,
         model: OPENAI_SPEECH_MODEL,
         voice: OPENAI_SPEECH_VOICE,
         response_format: 'pcm',

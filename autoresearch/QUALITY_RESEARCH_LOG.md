@@ -1,5 +1,114 @@
 # Quality Research Log
 
+## Realtime Voice Iteration 6 — Retained turn-taking and retrieval upgrade — 2026-07-21
+
+Baseline: `/tmp/clitronic-candidate.Qq6TFA`
+
+Candidate run: `/tmp/clitronic-iteration6-final.Wg7FIt`
+
+Hypothesis: fixed-silence VAD can split a natural technical question at a hesitation, the initial PCM
+lead is larger than the measured stream requires, and broad scene-level provider queries discard the
+specific information already present in visual requests.
+
+Change:
+
+- Replaced the 450 ms silence boundary with Realtime semantic VAD at high eagerness. The session
+  remains transcription-only and keeps response generation, cards, and speech under the existing
+  validated owner.
+- Reduced the PCM playback start buffer from 80 ms to 40 ms. Across ten direct speech streams, 200
+  ms of audio arrived within 20 ms of the first byte in every sample.
+- Preserved multi-object image intent in executed provider queries for electronics workbenches and
+  network racks instead of collapsing them to `electronics workbench` or `network patch panel`.
+- Added practical layout context to mixed plan-plus-photo results, including workbench zones,
+  lighting, storage, fume extraction, battery handling, rack layout, cable management, service
+  loops, and mains separation.
+
+Measured result:
+
+- `overall_score`: 4.75, up from 4.68.
+- `answer_quality_score`: 4.61, up from 4.49.
+- `image_quality_score`: 4.06, up from 3.79.
+- `component_selection_score`: 4.95, unchanged.
+- `safety_score`: 4.71, up from 4.65.
+- `generic_answer_rate`: 0.0244, down from 0.0488.
+- Chat p50 remained effectively flat at 3.917 seconds versus 3.861 seconds; maximum chat latency
+  improved from 5.335 to 4.867 seconds. Image-search p50 improved from 483 ms to 424 ms.
+- All 41 tasks completed without failure and every schema/model/final validation rate remained 1.
+
+Voice and rendered verification:
+
+- Four electronics phrases were transcribed correctly by `gpt-4o-mini-transcribe` across clean,
+  moderate-noise, and echoed far-field synthetic audio. The larger offline transcription model did
+  not improve the deliberately extreme-noise cases, so the live model was not changed.
+- OpenAI accepted the semantic-VAD client-secret configuration in a live request returning 200 in
+  0.96 seconds.
+- In-app browser verification rendered three relevant attributed workbench images with the new
+  layout and safety guidance and no console errors. Browser microphone permission did not complete,
+  so a real human-mic semantic-turn test remains a manual QA item.
+- Validation, 171 tests, and the production build passed.
+
+The strict aggregate `pass` remains false because three of six image-expected cases are still judged
+as shallow (`0.5` versus the `0.2` threshold), improved from four of six. These remaining cases are
+limited by available Wikimedia scene metadata without a configured Brave provider; irrelevant,
+duplicate, broken, and render-fallback rates are all zero.
+
+Decision: retained as the new measured quality high-water. Structured JSON, visual cards, exact
+validated speech, schema validation, and safety constraints remain intact.
+
+## Realtime Voice Iteration 5 — Retained quality and speech upgrade — 2026-07-21
+
+Paired baseline: `/tmp/clitronic-baseline.jWPtHJ`
+
+Candidate run: `/tmp/clitronic-candidate.Qq6TFA`
+
+Hypothesis: the existing chained voice architecture is structurally sound, but weak domain
+transcription hints, low-quality TTS, a fast caption reveal, and the small chat engine make the
+conversation feel inaccurate and artificial. Upgrading those bounded stages should improve
+recognition, answer depth, speech quality, and perceived synchronization without weakening the
+validated visual-card contract.
+
+Change:
+
+- Added far-field Realtime input noise reduction and a compact electronics vocabulary prompt while
+  preserving transcription-only WebRTC, server VAD, and turn ownership.
+- Upgraded structured answers from `gpt-4o-mini` to `gpt-5.6-luna` with explicit `none` reasoning,
+  low verbosity, and the same system prompt, JSON Schema, normalizer, safety augmentation, and final
+  validation.
+- Upgraded exact-text PCM speech from `tts-1`/`alloy` to `gpt-4o-mini-tts`/`marin` with fixed
+  server-side delivery instructions.
+- Slowed progressive assistant captions to approximately 2.5 words per second so they track speech
+  instead of revealing the answer well ahead of the audio.
+
+Measured result:
+
+- The paired 41-task score improved from 4.34 to 4.68 overall, 3.91 to 4.49 for answer quality, and
+  4.05 to 4.65 for safety. Component selection remained effectively flat at 4.94 to 4.95 and image
+  quality remained flat at 3.80 to 3.79.
+- Generic answers fell from 31.71% to 4.88%. All 41 candidate tasks completed with zero failures;
+  every schema, model-parse, model-validation, and final-schema rate remained 1.
+- In three matched direct PCM samples, median first speech bytes improved from 1.317 seconds to
+  0.498 seconds, a 62% reduction, and median full transfer improved from 3.191 seconds to 1.860
+  seconds.
+- Chat latency moved from 2.958 to 3.861 seconds at p50, 4.658 to 4.629 seconds at p90, and 9.998 to
+  5.335 seconds maximum. The faster TTS start nearly offsets the median model increase in the
+  measured components while the model tail is materially tighter.
+- A live `/api/realtime/session` request returned 200 in 0.98 seconds, confirming that OpenAI accepts
+  the new transcription prompt and noise-reduction configuration.
+
+Verification:
+
+- Candidate validation, all 169 tests, and the production build passed; the final route-setting
+  regression assertions also pass.
+- The strict aggregate `pass` remains false only because 4 of 6 image-expected cases use shallow
+  image queries (`0.6667` versus the `0.2` threshold), an unchanged image-path limitation outside
+  this voice iteration. Broken and duplicate image rates remain zero.
+- In-app browser bootstrap failed with `Cannot redefine property: process`, so rendered microphone,
+  playback, and caption synchronization remain a manual QA item; no alternate browser harness was
+  substituted for the required one.
+
+Decision: retained. This is the new measured quality high-water while preserving structured JSON,
+visual cards, schema validation, and safety constraints.
+
 ## Realtime Voice Baseline — 2026-07-17
 
 Run directory: `autoresearch/runs/20260717T170319Z`

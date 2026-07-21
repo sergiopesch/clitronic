@@ -5,7 +5,7 @@ const ELECTRONICS_WORKBENCH_SCENE: CuratedProfile = {
   id: 'electronics-workbench-scene',
   intent: 'tool',
   aliases: [],
-  preferredQuery: 'electronics workbench',
+  preferredQuery: 'electronics workbench oscilloscope soldering',
   relevanceTokens: [
     'electronics',
     'workbench',
@@ -20,7 +20,7 @@ const NETWORK_PATCH_PANEL_SCENE: CuratedProfile = {
   id: 'network-patch-panel-scene',
   intent: 'connector',
   aliases: [],
-  preferredQuery: 'network patch panel',
+  preferredQuery: 'network rack ethernet switch patch panel',
   relevanceTokens: ['network', 'patch', 'panel', 'ethernet', 'poe', 'cable'],
 };
 

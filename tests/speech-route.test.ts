@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { POST } from '@/app/api/speech/route';
+import { OPENAI_SPEECH_PLAYBACK_START_BUFFER_SECONDS } from '@/lib/ai/openai-config';
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.OPENAI_API_KEY;
@@ -42,6 +43,7 @@ function restoreGlobals(): void {
 test.after(restoreGlobals);
 
 test('speech route forwards the exact text with fixed TTS settings and streams protected PCM', async () => {
+  assert.equal(OPENAI_SPEECH_PLAYBACK_START_BUFFER_SECONDS, 0.04);
   process.env.OPENAI_API_KEY = 'test-key-one';
   const audio = Uint8Array.from([0x00, 0x80, 0x00, 0x00, 0xff, 0x7f]);
   let capturedUrl = '';
@@ -70,8 +72,10 @@ test('speech route forwards the exact text with fixed TTS settings and streams p
   assert.match(capturedUrl, /\/v1\/audio\/speech$/);
   assert.deepEqual(capturedBody, {
     input: text,
-    model: 'tts-1',
-    voice: 'alloy',
+    instructions:
+      'Speak like a calm, knowledgeable maker at a workbench: warm, direct, and natural. Use a conversational pace and pronounce electronics terms, units, pin labels, and numbers clearly.',
+    model: 'gpt-4o-mini-tts',
+    voice: 'marin',
     response_format: 'pcm',
     stream_format: 'audio',
   });

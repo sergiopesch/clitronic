@@ -60,6 +60,12 @@ test('voice transcript metadata never gains system-role authority', async () => 
 
     assert.equal(response.status, 200);
     assert.ok(upstreamBody);
+    assert.equal(upstreamBody.model, 'gpt-5.6-luna');
+    assert.equal(upstreamBody.reasoning_effort, 'none');
+    assert.equal(upstreamBody.verbosity, 'low');
+    assert.equal(upstreamBody.max_completion_tokens, 1200);
+    assert.equal('temperature' in upstreamBody, false);
+    assert.equal('max_tokens' in upstreamBody, false);
     assert.match(String(upstreamBody.safety_identifier), /^[a-f0-9]{64}$/);
     const messages = upstreamBody.messages as Array<{ role?: string; content?: string }>;
     assert.equal(messages.filter((message) => message.role === 'system').length, 1);

@@ -334,8 +334,8 @@ test('routes multi-object scenes through the scene-level provider query', async 
     };
 
     assert.equal(response.status, 200);
-    assert.deepEqual(providerQueries, ['electronics workbench']);
-    assert.equal(payload.queryUsed, 'electronics workbench');
+    assert.deepEqual(providerQueries, ['electronics workbench oscilloscope soldering']);
+    assert.equal(payload.queryUsed, 'electronics workbench oscilloscope soldering');
     assert.equal(payload.confident, true);
     assert.equal(payload.images?.[0]?.url, 'https://upload.wikimedia.org/scene-service-probe.jpg');
   } finally {

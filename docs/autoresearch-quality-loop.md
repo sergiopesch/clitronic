@@ -5,7 +5,11 @@ Clitronic is measured with an AutoResearch loop before optimization. The loop fo
 ## Verified Architecture
 
 - `/api/chat` is called from `hooks/useConversationState.ts` with `fetch('/api/chat')`, `POST`, JSON headers, and a body containing `messages`, `inputMode`, and optional `transcriptMeta`.
-- `app/api/chat/route.ts` builds the OpenAI chat-completions request with `OPENAI_CHAT_MODEL`, a JSON Schema response format, the system prompt from `lib/ai/system-prompt.ts`, recent sanitized messages, `temperature: 0.2`, and `OPENAI_CHAT_MAX_TOKENS`.
+- `hooks/useVoiceInteraction.ts` keeps one WebRTC transcription session warm across turns, uses
+  far-field noise reduction plus semantic VAD, reconciles transcript events by `item_id`, and sends
+  only the completed cleaned transcript to `/api/chat`. Validated response speech is streamed as
+  raw PCM and remains independently interruptible.
+- `app/api/chat/route.ts` builds the OpenAI chat-completions request with `OPENAI_CHAT_MODEL`, explicit latency-oriented reasoning and verbosity settings, a JSON Schema response format, the system prompt from `lib/ai/system-prompt.ts`, recent sanitized messages, and `OPENAI_CHAT_MAX_TOKENS`.
 - `lib/ai/system-prompt.ts` controls component selection through intent rules and component data shapes. It instructs the model to choose `imageBlock`, `recommendationCard`, `wiringCard`, `troubleshootingCard`, and other visual-card components based on question shape.
 - Photo requests are detected in `app/api/chat/route.ts` by `maybeBuildPhotoFallback`. Explicit
   image/photo language and a narrow set of named real technical scenes can return an `imageBlock`

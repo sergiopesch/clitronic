@@ -17,7 +17,8 @@ Ask "What resistor for a red LED on 5V?" and get a calculation card with the for
 ## Latest Update
 
 - Realtime voice remains the primary interaction path, with text input available from the welcome screen and during active sessions.
-- Realtime now owns microphone transport, VAD, and transcription only; one validated response owns
+- Realtime now uses semantic turn detection for more natural pauses and owns microphone transport
+  and transcription only; one validated response owns
   cards, history, captions, and speech.
 - Barge-in and turn replacement cancel stale requests and speech playback. Mic mute is input-only;
   stop and tab hiding perform full privacy teardown.
@@ -26,6 +27,7 @@ Ask "What resistor for a red LED on 5V?" and get a calculation card with the for
 - Safety notes are surfaced consistently across electronics cards without weakening schema validation.
 - Visual cards now share consistent headers, count badges, copy actions, and progressive disclosure for long wiring/troubleshooting lists.
 - Image follow-ups like "show me one" resolve from recent context instead of collapsing into generic searches.
+- Multi-object inspiration searches preserve workbench and network-rack context through retrieval.
 
 ### 10 Visual Components
 
@@ -45,9 +47,9 @@ Ask "What resistor for a red LED on 5V?" and get a calculation card with the for
 ## Stack
 
 - **Frontend**: Next.js 16 (App Router) + React 19 + Tailwind CSS 4
-- **Structured UI generation**: OpenAI `gpt-4o-mini` with structured JSON output
+- **Structured UI generation**: OpenAI `gpt-5.6-luna` with structured JSON output
 - **Realtime input**: OpenAI Realtime over WebRTC with `gpt-4o-mini-transcribe`
-- **Canonical speech**: exact-text OpenAI `tts-1` audio generated from the validated card response
+- **Canonical speech**: exact-text OpenAI `gpt-4o-mini-tts` audio generated from the validated card response
 - **Image Search**: Brave Search API + Wikimedia Commons fallback
 - **Design**: Dark-only, Apple/Tesla-inspired, animation-first
 
