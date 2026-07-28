@@ -38,9 +38,7 @@ export interface EmptyImageSearchResult extends ImageSearchResultBase {
 }
 
 export type ImageSearchResult =
-  | ReadyImageSearchResult
-  | PossibleImageSearchResult
-  | EmptyImageSearchResult;
+  ReadyImageSearchResult | PossibleImageSearchResult | EmptyImageSearchResult;
 
 export class ImageSearchPayloadError extends TypeError {
   override readonly name = 'ImageSearchPayloadError';

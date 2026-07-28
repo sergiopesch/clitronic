@@ -88,7 +88,7 @@ function boundContext(value: string): string {
   if (value.length <= CONVERSATION_CONTEXT_MAX_CHARS) return value;
   const boundary = value.lastIndexOf(' ', CONVERSATION_CONTEXT_MAX_CHARS - 1);
   const end = boundary > 0 ? boundary : CONVERSATION_CONTEXT_MAX_CHARS - 1;
-  return `${value.slice(0, end).replace(/[,:;\-]+$/u, '')}…`;
+  return `${value.slice(0, end).replace(/[,:;-]+$/u, '')}…`;
 }
 
 /**

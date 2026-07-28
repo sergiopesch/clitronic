@@ -275,7 +275,7 @@ function truncateAtWordBoundary(value: string, limit: number): string {
   const boundary = normalized.lastIndexOf(' ', limit - 1);
   if (boundary <= 0) return '';
 
-  return `${normalized.slice(0, boundary).replace(/[,:;\-]+$/u, '')}…`;
+  return `${normalized.slice(0, boundary).replace(/[,:;-]+$/u, '')}…`;
 }
 
 function fitSpeechWithPriority(base: string, priorityDetails: string[]): string {
