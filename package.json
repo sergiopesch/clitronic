@@ -33,7 +33,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "brace-expansion": "file:vendor/brace-expansion-compat",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-next": "^16.2.6",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.9",
