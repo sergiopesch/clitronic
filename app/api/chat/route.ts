@@ -181,12 +181,7 @@ async function readChatRequestBody(
 }
 
 type FallbackKind =
-  | 'none'
-  | 'forced_photo'
-  | 'parse_fallback'
-  | 'render_fallback'
-  | 'recovered_text'
-  | 'error';
+  'none' | 'forced_photo' | 'parse_fallback' | 'render_fallback' | 'recovered_text' | 'error';
 
 interface ChatAutoresearchDiagnostics {
   raw_model_output_present: boolean;

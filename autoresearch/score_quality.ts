@@ -66,12 +66,7 @@ type ChatDiagnostics = {
     code?: string;
   }>;
   fallback_kind?:
-    | 'none'
-    | 'forced_photo'
-    | 'parse_fallback'
-    | 'render_fallback'
-    | 'recovered_text'
-    | 'error';
+    'none' | 'forced_photo' | 'parse_fallback' | 'render_fallback' | 'recovered_text' | 'error';
   final_component?: string | null;
   final_mode?: string | null;
 };

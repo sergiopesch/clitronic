@@ -46,7 +46,9 @@ function getDailyUsage(): { count: number; date: string } {
       const parsed = JSON.parse(raw) as { count: number; date: string };
       if (parsed.date === new Date().toDateString()) return parsed;
     }
-  } catch {}
+  } catch {
+    // Ignore malformed or unavailable browser storage and use the safe default.
+  }
   return { count: 0, date: new Date().toDateString() };
 }
 
@@ -56,7 +58,9 @@ function incrementDailyUsage(): number {
   if (typeof window === 'undefined') return usage.count;
   try {
     localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(usage));
-  } catch {}
+  } catch {
+    // A storage failure must not block the current conversation.
+  }
   return usage.count;
 }
 
@@ -64,7 +68,9 @@ function clearDailyUsage(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(RATE_LIMIT_KEY);
-  } catch {}
+  } catch {
+    // Clearing optional browser storage is best-effort.
+  }
 }
 
 export function useConversationState() {

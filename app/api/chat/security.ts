@@ -33,12 +33,15 @@ export function buildUntrustedConversationRequest(messages: ChatMessage[]): stri
 }
 
 export function sanitizeInput(text: string): string {
-  return text
-    .replace(/\0/g, '')
-    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .replace(/\n{4,}/g, '\n\n\n')
-    .replace(/ {4,}/g, '   ')
-    .trim();
+  return (
+    text
+      .replace(/\0/g, '')
+      // eslint-disable-next-line no-control-regex -- Strip unsafe C0 control bytes while preserving newlines and tabs.
+      .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      .replace(/\n{4,}/g, '\n\n\n')
+      .replace(/ {4,}/g, '   ')
+      .trim()
+  );
 }
 
 export function detectInjection(text: string): boolean {
